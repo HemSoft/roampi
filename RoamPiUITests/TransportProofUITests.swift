@@ -26,7 +26,14 @@ final class TransportProofUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 5))
         app.swipeUp()
         XCTAssertTrue(app.buttons["trust-host-key"].waitForExistence(timeout: 2))
+        let reject = app.buttons["reject-host-key"]
+        XCTAssertTrue(reject.exists)
         captureScreenshot(named: "ssh-host-key-confirmation")
+
+        reject.tap()
+        XCTAssertTrue(app.staticTexts["No connection attempted"].waitForExistence(timeout: 2))
+        app.swipeDown()
+        XCTAssertTrue(app.textFields["connection-string"].isEnabled)
     }
 
     @MainActor

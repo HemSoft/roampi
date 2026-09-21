@@ -119,6 +119,10 @@ struct TransportProofView: View {
                     model.confirmHostKeyAndReconnect()
                 }
                 .accessibilityIdentifier("trust-host-key")
+                Button("Reject and edit connection", role: .cancel) {
+                    model.rejectHostKey()
+                }
+                .accessibilityIdentifier("reject-host-key")
             }
         case let .succeeded(result):
             Section("Probe passed") {

@@ -80,6 +80,13 @@ final class TransportProofModel: ObservableObject {
         }
     }
 
+    func rejectHostKey() {
+        currentTask?.cancel()
+        currentTask = nil
+        pendingEndpoint = nil
+        state = .idle
+    }
+
     func confirmHostKeyAndReconnect() {
         guard case let .awaitingConfirmation(fingerprint) = state,
               let endpoint = pendingEndpoint
