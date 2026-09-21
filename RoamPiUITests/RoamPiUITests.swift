@@ -19,6 +19,21 @@ final class RoamPiUITests: XCTestCase {
     }
 
     @MainActor
+    func testSummaryFitsAtAccessibilityTextSize() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--demo",
+            "-UIPreferredContentSizeCategoryName",
+            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+        ]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["available"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["active"].exists)
+        XCTAssertTrue(app.staticTexts["jobs"].exists)
+    }
+
+    @MainActor
     func testSwitchesBetweenFictionalMachines() {
         let app = XCUIApplication()
         app.launchArguments = ["--demo"]

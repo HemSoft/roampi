@@ -124,12 +124,23 @@ private struct SummaryStrip: View {
     let snapshot: DashboardSnapshot
 
     var body: some View {
-        HStack(spacing: 10) {
-            SummaryPill(value: "\(snapshot.availableMachineCount)", label: "available", icon: "network")
-            SummaryPill(value: "\(snapshot.activeSessionCount)", label: "active", icon: "sparkles")
-            SummaryPill(value: "\(snapshot.pendingJobCount)", label: "jobs", icon: "clock.arrow.circlepath")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                pills
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                pills
+            }
         }
         .accessibilityIdentifier("dashboard-summary")
+    }
+
+    @ViewBuilder
+    private var pills: some View {
+        SummaryPill(value: "\(snapshot.availableMachineCount)", label: "available", icon: "network")
+        SummaryPill(value: "\(snapshot.activeSessionCount)", label: "active", icon: "sparkles")
+        SummaryPill(value: "\(snapshot.pendingJobCount)", label: "jobs", icon: "clock.arrow.circlepath")
     }
 }
 
@@ -153,6 +164,7 @@ private struct SummaryPill: View {
         .padding(.vertical, 9)
         .background(.thinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.12)))
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
