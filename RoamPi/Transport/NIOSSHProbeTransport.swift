@@ -57,7 +57,8 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
 
         let channel: Channel
         do {
-            channel = try await bootstrap.connect(host: endpoint.host, port: endpoint.port).get()
+            let connectionFuture = bootstrap.connect(host: endpoint.host, port: endpoint.port)
+            channel = try await PendingConnection().wait(for: connectionFuture)
         } catch let error as TransportError {
             throw error
         } catch is CancellationError {
@@ -123,10 +124,6 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
                     elapsedMilliseconds: Self.milliseconds(elapsed),
                     authentication: authentication.lastOffer ?? .publicKey
                 )
-            } catch let error as TransportError {
-                throw error
-            } catch is CancellationError {
-                throw TransportError.diagnostic(.cancelled)
             } catch {
                 if let validationError = hostKeys.validationError {
                     throw validationError
@@ -137,8 +134,11 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
                 if deadline.didExpire {
                     throw TransportError.diagnostic(.timedOut)
                 }
-                if Task.isCancelled {
+                if Task.isCancelled || error is CancellationError {
                     throw TransportError.diagnostic(.cancelled)
+                }
+                if let transportError = error as? TransportError {
+                    throw transportError
                 }
                 throw TransportError.diagnostic(.connectionFailed)
             }
@@ -152,6 +152,68 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
         let seconds = components.seconds * 1000
         let attoseconds = components.attoseconds / 1_000_000_000_000_000
         return Int(seconds + attoseconds)
+    }
+}
+
+private final class PendingConnection: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    private var continuation: CheckedContinuation<Channel, Error>?
+    private var finished = false
+    private var resolvedChannel: Channel?
+
+    func wait(for future: EventLoopFuture<Channel>) async throws -> Channel {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let wasCancelled = lock.withLock {
+                    if cancelled {
+                        return true
+                    }
+                    self.continuation = continuation
+                    return false
+                }
+
+                future.whenComplete { [self] result in
+                    complete(with: result)
+                }
+                if wasCancelled {
+                    continuation.resume(throwing: CancellationError())
+                }
+            }
+        } onCancel: {
+            cancel()
+        }
+    }
+
+    private func cancel() {
+        let (continuation, channel) = lock.withLock {
+            cancelled = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return (continuation, resolvedChannel)
+        }
+        continuation?.resume(throwing: CancellationError())
+        channel?.close(promise: nil)
+    }
+
+    private func complete(with result: Result<Channel, Error>) {
+        let action: (CheckedContinuation<Channel, Error>?, Channel?) = lock.withLock {
+            guard !finished else { return (nil, nil) }
+            finished = true
+
+            if case let .success(channel) = result {
+                resolvedChannel = channel
+                if cancelled {
+                    return (nil, channel)
+                }
+            }
+
+            let continuation = self.continuation
+            self.continuation = nil
+            return (continuation, nil)
+        }
+        action.1?.close(promise: nil)
+        action.0?.resume(with: result)
     }
 }
 
