@@ -1,0 +1,568 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0AA1EE3FC28F6942702EF724 /* RoamPiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */; };
+		27B5A8687A760E206ADCA9CA /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97A10EF06169FF6DC17DB2DA /* RootView.swift */; };
+		4359A90234E1A17521AD20FB /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C827D0B3B14DA72A49B39098 /* DashboardView.swift */; };
+		529333D81C124C20A43E226D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BBB9437080F154EC8602CBB8 /* Assets.xcassets */; };
+		6DD613E959035A6B06B0C2F3 /* DemoFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */; };
+		86F3F89F951C31C2047F071F /* DashboardSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1307D1238D2E80DF406E439 /* DashboardSnapshot.swift */; };
+		E8572D18B33C22AA8E4516D7 /* DemoFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2DF968D5B0E11477719BEA /* DemoFixture.swift */; };
+		F64057BEA1905DF95F8F5F62 /* RoamPiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD89385D1E4C2D36CE2CF51 /* RoamPiUITests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9A80FA9BA9599A035370EA71 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E960F8CA8F78584C63DCBD2A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A91528E00F6A2C5735EEEB46;
+			remoteInfo = RoamPi;
+		};
+		A9AF41BFC5CEEF789448E737 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E960F8CA8F78584C63DCBD2A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A91528E00F6A2C5735EEEB46;
+			remoteInfo = RoamPi;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		402DE9719F984718551AD026 /* RoamPiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoamPiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4FD4068C81BC4F06190C3AEF /* RoamPiUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoamPiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiApp.swift; sourceTree = "<group>"; };
+		7535689ECF53E4CDB1936B9C /* RoamPi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoamPi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFixtureTests.swift; sourceTree = "<group>"; };
+		97A10EF06169FF6DC17DB2DA /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A1307D1238D2E80DF406E439 /* DashboardSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSnapshot.swift; sourceTree = "<group>"; };
+		BBB9437080F154EC8602CBB8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BFD89385D1E4C2D36CE2CF51 /* RoamPiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiUITests.swift; sourceTree = "<group>"; };
+		C827D0B3B14DA72A49B39098 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		DF2DF968D5B0E11477719BEA /* DemoFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFixture.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1AC724B6A4D59E09710B900F /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C827D0B3B14DA72A49B39098 /* DashboardView.swift */,
+				97A10EF06169FF6DC17DB2DA /* RootView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		5789497BA4D9E8A1ADB2F517 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A1307D1238D2E80DF406E439 /* DashboardSnapshot.swift */,
+				DF2DF968D5B0E11477719BEA /* DemoFixture.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		5FC74E0949007AB221A64CA2 /* RoamPiTests */ = {
+			isa = PBXGroup;
+			children = (
+				81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */,
+			);
+			path = RoamPiTests;
+			sourceTree = "<group>";
+		};
+		679BE7E3C95776F3A9F97104 /* RoamPi */ = {
+			isa = PBXGroup;
+			children = (
+				BBB9437080F154EC8602CBB8 /* Assets.xcassets */,
+				6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */,
+				5789497BA4D9E8A1ADB2F517 /* Models */,
+				1AC724B6A4D59E09710B900F /* Views */,
+			);
+			path = RoamPi;
+			sourceTree = "<group>";
+		};
+		6FA6D9E59878543AC34D5CC2 = {
+			isa = PBXGroup;
+			children = (
+				679BE7E3C95776F3A9F97104 /* RoamPi */,
+				5FC74E0949007AB221A64CA2 /* RoamPiTests */,
+				8B4D05DBB0BE768C8856B35F /* RoamPiUITests */,
+				B0D092237A68793DCBA0FE18 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		8B4D05DBB0BE768C8856B35F /* RoamPiUITests */ = {
+			isa = PBXGroup;
+			children = (
+				BFD89385D1E4C2D36CE2CF51 /* RoamPiUITests.swift */,
+			);
+			path = RoamPiUITests;
+			sourceTree = "<group>";
+		};
+		B0D092237A68793DCBA0FE18 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7535689ECF53E4CDB1936B9C /* RoamPi.app */,
+				402DE9719F984718551AD026 /* RoamPiTests.xctest */,
+				4FD4068C81BC4F06190C3AEF /* RoamPiUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4C4A12476900BBAAAFFBD3AD /* RoamPiUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CDF5A4562761995147D9497B /* Build configuration list for PBXNativeTarget "RoamPiUITests" */;
+			buildPhases = (
+				7DDC2F0A329F19D4E660F79A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5A251CBE76C25F20FEDA74BD /* PBXTargetDependency */,
+			);
+			name = RoamPiUITests;
+			packageProductDependencies = (
+			);
+			productName = RoamPiUITests;
+			productReference = 4FD4068C81BC4F06190C3AEF /* RoamPiUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		7179853EBB3A1D9938D964B3 /* RoamPiTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 880367C76EEF8756EA52D85A /* Build configuration list for PBXNativeTarget "RoamPiTests" */;
+			buildPhases = (
+				56CABD907DB65D39C8E5638B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				74A43CF38FCD2DAD56199D32 /* PBXTargetDependency */,
+			);
+			name = RoamPiTests;
+			packageProductDependencies = (
+			);
+			productName = RoamPiTests;
+			productReference = 402DE9719F984718551AD026 /* RoamPiTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A91528E00F6A2C5735EEEB46 /* RoamPi */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DE74CE8D8ED56F534E733744 /* Build configuration list for PBXNativeTarget "RoamPi" */;
+			buildPhases = (
+				5C9281A4128D7BA2A6AA5383 /* Sources */,
+				68AC0CD90F0592727774D18F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RoamPi;
+			packageProductDependencies = (
+			);
+			productName = RoamPi;
+			productReference = 7535689ECF53E4CDB1936B9C /* RoamPi.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E960F8CA8F78584C63DCBD2A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					4C4A12476900BBAAAFFBD3AD = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = A91528E00F6A2C5735EEEB46;
+					};
+					7179853EBB3A1D9938D964B3 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					A91528E00F6A2C5735EEEB46 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = B35F05DCE5A82206F89A84D2 /* Build configuration list for PBXProject "RoamPi" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6FA6D9E59878543AC34D5CC2;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B0D092237A68793DCBA0FE18 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A91528E00F6A2C5735EEEB46 /* RoamPi */,
+				7179853EBB3A1D9938D964B3 /* RoamPiTests */,
+				4C4A12476900BBAAAFFBD3AD /* RoamPiUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		68AC0CD90F0592727774D18F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				529333D81C124C20A43E226D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		56CABD907DB65D39C8E5638B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6DD613E959035A6B06B0C2F3 /* DemoFixtureTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5C9281A4128D7BA2A6AA5383 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				86F3F89F951C31C2047F071F /* DashboardSnapshot.swift in Sources */,
+				4359A90234E1A17521AD20FB /* DashboardView.swift in Sources */,
+				E8572D18B33C22AA8E4516D7 /* DemoFixture.swift in Sources */,
+				0AA1EE3FC28F6942702EF724 /* RoamPiApp.swift in Sources */,
+				27B5A8687A760E206ADCA9CA /* RootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7DDC2F0A329F19D4E660F79A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F64057BEA1905DF95F8F5F62 /* RoamPiUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5A251CBE76C25F20FEDA74BD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A91528E00F6A2C5735EEEB46 /* RoamPi */;
+			targetProxy = A9AF41BFC5CEEF789448E737 /* PBXContainerItemProxy */;
+		};
+		74A43CF38FCD2DAD56199D32 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A91528E00F6A2C5735EEEB46 /* RoamPi */;
+			targetProxy = 9A80FA9BA9599A035370EA71 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		22A198131FA1F2A7A0162FEF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hemsoft.RoamPiTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoamPi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RoamPi";
+			};
+			name = Release;
+		};
+		29AEE5107B623D1BBE81E17F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		3E3BB29362DFE0D50357BEFC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		43EC30C66FCB691B14A6A8C6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = RoamPi;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hemsoft.RoamPi;
+				PRODUCT_NAME = RoamPi;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		52F0C2BB7287FD8B8693887F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hemsoft.RoamPiUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RoamPi;
+			};
+			name = Debug;
+		};
+		621D9F7789CB91ED39D84E16 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hemsoft.RoamPiUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RoamPi;
+			};
+			name = Release;
+		};
+		91310BDDFC5B1D42C710BEC0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hemsoft.RoamPiTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoamPi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RoamPi";
+			};
+			name = Debug;
+		};
+		9A42EEBFE870CBA59EF12076 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = RoamPi;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hemsoft.RoamPi;
+				PRODUCT_NAME = RoamPi;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		880367C76EEF8756EA52D85A /* Build configuration list for PBXNativeTarget "RoamPiTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				91310BDDFC5B1D42C710BEC0 /* Debug */,
+				22A198131FA1F2A7A0162FEF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B35F05DCE5A82206F89A84D2 /* Build configuration list for PBXProject "RoamPi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				29AEE5107B623D1BBE81E17F /* Debug */,
+				3E3BB29362DFE0D50357BEFC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CDF5A4562761995147D9497B /* Build configuration list for PBXNativeTarget "RoamPiUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				52F0C2BB7287FD8B8693887F /* Debug */,
+				621D9F7789CB91ED39D84E16 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DE74CE8D8ED56F534E733744 /* Build configuration list for PBXNativeTarget "RoamPi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				43EC30C66FCB691B14A6A8C6 /* Debug */,
+				9A42EEBFE870CBA59EF12076 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E960F8CA8F78584C63DCBD2A /* Project object */;
+}

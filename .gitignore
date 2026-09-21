@@ -2,7 +2,10 @@
 .DS_Store
 
 # Xcode
-DerivedData/
+DerivedData*/
+TestResults/
+ValidationMedia/
+*.xcresult
 *.xcuserstate
 xcuserdata/
 
