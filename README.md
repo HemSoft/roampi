@@ -1,6 +1,6 @@
 # RoamPi
 
-RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. This repository currently contains the application foundation and a network-free demo dashboard. SSH, Tailscale, tmux, and Pi RPC support are tracked as later work.
+RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. This repository contains the application foundation, a network-free demo dashboard, and a bounded SSH transport proof. Tailscale routing comes from the installed iOS app. tmux and Pi RPC support remain later work.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ cd roampi
 open RoamPi.xcodeproj
 ```
 
-The app has no third-party runtime dependencies and requires no credentials to build.
+The app requires no credentials to build. SwiftNIO SSH, SwiftNIO, and Swift Crypto are pinned through Swift Package Manager for the transport proof.
 
 ## Build and test
 
@@ -61,7 +61,15 @@ For command-line launches:
 xcrun simctl launch booted com.hemsoft.RoamPi --demo
 ```
 
-The default launch displays a placeholder until connection onboarding is implemented.
+The default launch opens the SSH transport proof. It accepts `user@host`, an optional advanced port, and either standard Ed25519 authentication or Tailscale SSH `none` with key fallback. It shows a first-use host fingerprint before authentication and blocks changed keys.
+
+Launch deterministic transport states for simulator and UI-test validation without network access:
+
+```bash
+xcrun simctl launch booted com.hemsoft.RoamPi --transport-proof-demo
+```
+
+The proof uses one fixed non-mutating command and discards its output after checking the expected response. See [`docs/SSH_TRANSPORT_DECISION.md`](docs/SSH_TRANSPORT_DECISION.md) for the library comparison and [`docs/SSH_PHYSICAL_DEVICE_RESULTS.md`](docs/SSH_PHYSICAL_DEVICE_RESULTS.md) for the physical test matrix.
 
 ## Formatting and dependency audit
 
