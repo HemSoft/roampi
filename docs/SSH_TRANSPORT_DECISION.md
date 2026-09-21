@@ -4,7 +4,7 @@ Status: accepted for the Phase 0 proof
 
 ## Decision
 
-Use [SwiftNIO SSH 0.15.0](https://github.com/apple/swift-nio-ssh/releases/tag/0.15.0) directly for the bounded transport proof. Keep it behind `SSHProbeTransporting` so a later physical-device result can change the implementation without changing the onboarding model.
+Use [SwiftNIO SSH 0.15.0](https://github.com/apple/swift-nio-ssh/releases/tag/0.15.0) directly for the bounded transport proof. Keep it behind `SSHProbeTransporting` so later transport work can change the implementation without changing the onboarding model.
 
 The project pins SwiftNIO SSH 0.15.0, SwiftNIO 2.103.0, and Swift Crypto 4.5.2. Swift Package Manager records exact transitive revisions in `Package.resolved`. SwiftNIO SSH uses the [Apache 2.0 license](https://github.com/apple/swift-nio-ssh/blob/0.15.0/LICENSE.txt).
 
@@ -25,7 +25,15 @@ The project pins SwiftNIO SSH 0.15.0, SwiftNIO 2.103.0, and Swift Crypto 4.5.2. 
 
 Tailscale SSH interoperability and host identity are the two risks this issue must measure. SwiftNIO SSH exposes both decisions without relying on a wrapper's defaults. It also avoids Citadel 0.12.1's dependency on `Wellz26/swift-nio-ssh` while the proof is deciding a long-term security boundary.
 
-Citadel remains a reasonable fallback if physical testing shows that direct channel ownership costs more than expected. Its command and PTY APIs are useful, but they do not remove RoamPi's trust, Keychain, cancellation, or redaction work.
+Citadel remains a reasonable fallback if later terminal work shows that direct channel ownership costs more than expected. Its command and PTY APIs are useful, but they do not remove RoamPi's trust, Keychain, cancellation, or redaction work.
+
+## Physical outcome
+
+The physical iPhone proof confirmed the selection for this phase. SwiftNIO SSH completed verified Ed25519 exec probes over Wi-Fi and cellular, exposed first-use and changed host keys before authentication, cancelled a pending connection, and detected an active server disconnect. Standard OpenSSH rejected the Tailscale SSH `none` offer and the explicit Ed25519 fallback succeeded.
+
+The test also exposed an ownership requirement hidden by fast local authentication: RoamPi must wait for `UserAuthSuccessEvent` before opening a session channel. Opening it at TCP-connect time made `none`-then-key authentication race the command request. The transport now sequences authentication, session creation, and exec explicitly.
+
+A true Tailscale SSH `none` acceptance and DERP relay remain unverified environment limitations. See [`SSH_PHYSICAL_DEVICE_RESULTS.md`](SSH_PHYSICAL_DEVICE_RESULTS.md).
 
 ## Source evidence
 

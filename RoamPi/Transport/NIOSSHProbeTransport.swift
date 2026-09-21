@@ -48,7 +48,11 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: nil
                     )
-                    try channel.pipeline.syncOperations.addHandlers(handler, ConnectionErrorHandler())
+                    try channel.pipeline.syncOperations.addHandlers(
+                        handler,
+                        AuthenticationCompletionHandler(),
+                        ConnectionErrorHandler()
+                    )
                 }
             }
             .connectTimeout(.seconds(15))
@@ -89,9 +93,11 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
             }
             do {
                 try Task.checkCancellation()
-                let commandFuture: EventLoopFuture<Void> = channel.pipeline.handler(type: NIOSSHHandler.self)
+                let commandFuture: EventLoopFuture<Void> = channel.pipeline
+                    .handler(type: AuthenticationCompletionHandler.self)
+                    .flatMap(\.completionFuture)
+                    .flatMap { channel.pipeline.handler(type: NIOSSHHandler.self) }
                     .flatMap { handler in
-                        let completion = channel.eventLoop.makePromise(of: Void.self)
                         let child = channel.eventLoop.makePromise(of: Channel.self)
                         handler.createChannel(child) { childChannel, type in
                             guard type == .session else {
@@ -103,15 +109,15 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
                                 try childChannel.pipeline.syncOperations.addHandlers(
                                     ProbeCommandHandler(
                                         command: Self.harmlessCommand,
-                                        expectedOutput: Self.expectedOutput,
-                                        completion: completion
+                                        expectedOutput: Self.expectedOutput
                                     ),
                                     ConnectionErrorHandler()
                                 )
                             }
                         }
                         return child.futureResult.flatMap { childChannel in
-                            completion.futureResult
+                            childChannel.pipeline.handler(type: ProbeCommandHandler.self)
+                                .flatMap(\.completionFuture)
                                 .flatMap { childChannel.close() }
                                 .flatMapError { error in
                                     childChannel.close().flatMapThrowing { throw error }
@@ -357,6 +363,47 @@ private final class HostKeyDelegate: NIOSSHClientServerAuthenticationDelegate, @
     }
 }
 
+private final class AuthenticationCompletionHandler: ChannelInboundHandler, @unchecked Sendable {
+    typealias InboundIn = Any
+
+    private var completion: EventLoopPromise<Void>?
+    private var future: EventLoopFuture<Void>?
+
+    var completionFuture: EventLoopFuture<Void> {
+        precondition(future != nil, "Authentication handler must be added before awaiting completion")
+        return future!
+    }
+
+    func handlerAdded(context: ChannelHandlerContext) {
+        precondition(completion == nil, "Authentication handler cannot be added twice")
+        let promise = context.eventLoop.makePromise(of: Void.self)
+        completion = promise
+        future = promise.futureResult
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is UserAuthSuccessEvent {
+            completion?.succeed(())
+            completion = nil
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        fail()
+        context.fireChannelInactive()
+    }
+
+    func handlerRemoved(context _: ChannelHandlerContext) {
+        fail()
+    }
+
+    private func fail() {
+        completion?.fail(TransportError.diagnostic(.authenticationFailed))
+        completion = nil
+    }
+}
+
 private final class ProbeCommandHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
 
@@ -364,14 +411,23 @@ private final class ProbeCommandHandler: ChannelInboundHandler, @unchecked Senda
     private let expectedOutput: String
     private var output = ByteBuffer()
     private var completion: EventLoopPromise<Void>?
+    private var future: EventLoopFuture<Void>?
 
-    init(command: String, expectedOutput: String, completion: EventLoopPromise<Void>) {
+    var completionFuture: EventLoopFuture<Void> {
+        precondition(future != nil, "Probe handler must be added before awaiting completion")
+        return future!
+    }
+
+    init(command: String, expectedOutput: String) {
         self.command = command
         self.expectedOutput = expectedOutput
-        self.completion = completion
     }
 
     func handlerAdded(context: ChannelHandlerContext) {
+        precondition(completion == nil, "Probe handler cannot be added twice")
+        let promise = context.eventLoop.makePromise(of: Void.self)
+        completion = promise
+        future = promise.futureResult
         let loopBoundContext = NIOLoopBound(context, eventLoop: context.eventLoop)
         context.channel.setOption(ChannelOptions.allowRemoteHalfClosure, value: true).whenFailure {
             loopBoundContext.value.fireErrorCaught($0)
@@ -423,6 +479,11 @@ private final class ProbeCommandHandler: ChannelInboundHandler, @unchecked Senda
     func channelInactive(context: ChannelHandlerContext) {
         fail(context: context)
         context.fireChannelInactive()
+    }
+
+    func handlerRemoved(context _: ChannelHandlerContext) {
+        completion?.fail(TransportError.diagnostic(.commandFailed))
+        completion = nil
     }
 
     private func succeed() {

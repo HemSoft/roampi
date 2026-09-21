@@ -11,6 +11,7 @@
 		0E0C8894513502938ED99B94 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 65A580876ADF9DDF626DA1B7 /* Crypto */; };
 		11DBE124394BCBB40E176ECD /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 2DF0599CA70167C7597814DE /* NIOSSH */; };
 		13D137583D644D49A42125BF /* HostKeyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0788966107FFD16843F71456 /* HostKeyPolicy.swift */; };
+		1984B01290835E866914E315 /* DevelopmentTransportProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739FBC45BF1DF075BF785ADA /* DevelopmentTransportProfile.swift */; };
 		25311819407070496EDE8E23 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = BC17F638BDBF87DF4E81A418 /* NIOCore */; };
 		27B5A8687A760E206ADCA9CA /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97A10EF06169FF6DC17DB2DA /* RootView.swift */; };
 		2AA3D56BB7123833E9EAD091 /* TransportProofModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A997FC5E9196B229713D75E /* TransportProofModel.swift */; };
@@ -60,6 +61,7 @@
 		6C30C9A8DAF1CC1E089F4ADD /* TransportDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportDiagnostics.swift; sourceTree = "<group>"; };
 		6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiApp.swift; sourceTree = "<group>"; };
 		6F93C32DF31713AA6E142155 /* SSHAuthenticationPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHAuthenticationPlan.swift; sourceTree = "<group>"; };
+		739FBC45BF1DF075BF785ADA /* DevelopmentTransportProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentTransportProfile.swift; sourceTree = "<group>"; };
 		7535689ECF53E4CDB1936B9C /* RoamPi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoamPi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFixtureTests.swift; sourceTree = "<group>"; };
 		8A997FC5E9196B229713D75E /* TransportProofModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProofModel.swift; sourceTree = "<group>"; };
@@ -102,6 +104,7 @@
 		51DCB0A8C08F1ACF329C2F2A /* Transport */ = {
 			isa = PBXGroup;
 			children = (
+				739FBC45BF1DF075BF785ADA /* DevelopmentTransportProfile.swift */,
 				0788966107FFD16843F71456 /* HostKeyPolicy.swift */,
 				23B88C8854F52B5EF1465A25 /* NIOSSHProbeTransport.swift */,
 				1383A990ADB88A4D77AA8793 /* ProbeCoordinator.swift */,
@@ -313,6 +316,7 @@
 				86F3F89F951C31C2047F071F /* DashboardSnapshot.swift in Sources */,
 				4359A90234E1A17521AD20FB /* DashboardView.swift in Sources */,
 				E8572D18B33C22AA8E4516D7 /* DemoFixture.swift in Sources */,
+				1984B01290835E866914E315 /* DevelopmentTransportProfile.swift in Sources */,
 				13D137583D644D49A42125BF /* HostKeyPolicy.swift in Sources */,
 				702F93DD09F79F8D92824F3D /* NIOSSHProbeTransport.swift in Sources */,
 				638F3415D850FAE3FB5BBD04 /* ProbeCoordinator.swift in Sources */,

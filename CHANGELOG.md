@@ -13,7 +13,8 @@ RoamPi records notable changes here. Releases follow semantic versioning once pu
 
 ### Developer experience
 
-- Selected and pinned SwiftNIO SSH after comparing it with Citadel, and documented the physical-device validation matrix.
+- Selected and pinned SwiftNIO SSH after comparing it with Citadel, and documented physical Wi-Fi, cellular, authentication fallback, cancellation, disconnect, and changed-host-key results.
+- Added a guarded one-time debug profile for redacted physical-device UI automation; release builds cannot consume it.
 - Added transport tests for endpoint parsing, host-key transitions, authentication fallback, cancellation, duplicate-command prevention, and diagnostic redaction.
 - Added Swift Testing unit tests and an isolated UI test target.
 - Added public GitHub Actions checks for build, test, Swift formatting, and resolved dependency sources.

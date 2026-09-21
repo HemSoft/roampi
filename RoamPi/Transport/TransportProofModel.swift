@@ -25,13 +25,27 @@ final class TransportProofModel: ObservableObject {
         }
     }
 
+    var usesDevelopmentProfile: Bool {
+        !expectedFingerprints.isEmpty
+    }
+
     private let coordinator: ProbeCoordinator
+    private let developmentEndpoint: RemoteEndpoint?
+    private let expectedFingerprints: Set<String>
     private var currentTask: Task<Void, Never>?
     private var pendingEndpoint: RemoteEndpoint?
 
-    init(coordinator: ProbeCoordinator, demoMode: Bool = false) {
+    init(
+        coordinator: ProbeCoordinator,
+        demoMode: Bool = false,
+        developmentProfile: DevelopmentTransportProfile? = nil
+    ) {
         self.coordinator = coordinator
-        if demoMode {
+        developmentEndpoint = developmentProfile?.endpoint
+        expectedFingerprints = developmentProfile?.expectedFingerprints ?? []
+        if developmentProfile != nil {
+            connectionString = "operator@staged-test-host"
+        } else if demoMode {
             connectionString = "operator@studio-mini"
         }
     }
@@ -45,6 +59,9 @@ final class TransportProofModel: ObservableObject {
         Task {
             do {
                 publicKey = try await coordinator.publicKey()
+                if usesDevelopmentProfile {
+                    DevelopmentTransportProfile.exportPublicKey(publicKey)
+                }
             } catch {
                 state = .failed(TransportDiagnostic.keyUnavailable.userMessage)
             }
@@ -53,11 +70,15 @@ final class TransportProofModel: ObservableObject {
 
     func runProbe() {
         let endpoint: RemoteEndpoint
-        do {
-            endpoint = try RemoteEndpoint(connectionString: connectionString, advancedPort: advancedPort)
-        } catch {
-            state = .failed(TransportDiagnostic.invalidEndpoint.userMessage)
-            return
+        if let developmentEndpoint {
+            endpoint = developmentEndpoint
+        } else {
+            do {
+                endpoint = try RemoteEndpoint(connectionString: connectionString, advancedPort: advancedPort)
+            } catch {
+                state = .failed(TransportDiagnostic.invalidEndpoint.userMessage)
+                return
+            }
         }
 
         pendingEndpoint = endpoint
@@ -80,6 +101,10 @@ final class TransportProofModel: ObservableObject {
         }
     }
 
+    func isExpectedFingerprint(_ fingerprint: String) -> Bool {
+        !usesDevelopmentProfile || expectedFingerprints.contains(fingerprint)
+    }
+
     func rejectHostKey() {
         currentTask?.cancel()
         currentTask = nil
@@ -94,13 +119,15 @@ final class TransportProofModel: ObservableObject {
             return
         }
 
-        guard let displayedEndpoint = try? RemoteEndpoint(
-            connectionString: connectionString,
-            advancedPort: advancedPort
-        ), displayedEndpoint == endpoint else {
-            pendingEndpoint = nil
-            state = .failed(TransportDiagnostic.invalidEndpoint.userMessage)
-            return
+        if developmentEndpoint == nil {
+            guard let displayedEndpoint = try? RemoteEndpoint(
+                connectionString: connectionString,
+                advancedPort: advancedPort
+            ), displayedEndpoint == endpoint else {
+                pendingEndpoint = nil
+                state = .failed(TransportDiagnostic.invalidEndpoint.userMessage)
+                return
+            }
         }
 
         currentTask?.cancel()

@@ -6,12 +6,16 @@ struct TransportProofView: View {
     @State private var showsAdvanced = false
     @State private var showsPublicKey = false
 
-    init(demoMode: Bool = false) {
+    init(
+        demoMode: Bool = false,
+        developmentProfile: DevelopmentTransportProfile? = nil
+    ) {
         let transport: any SSHProbeTransporting = demoMode ? DemoProbeTransport() : NIOSSHProbeTransport()
         _model = StateObject(
             wrappedValue: TransportProofModel(
                 coordinator: ProbeCoordinator(transport: transport),
-                demoMode: demoMode
+                demoMode: demoMode,
+                developmentProfile: developmentProfile
             )
         )
     }
@@ -39,6 +43,7 @@ struct TransportProofView: View {
                         }
                     }
                     .disabled(model.isEndpointLocked)
+                    .accessibilityIdentifier("authentication-mode")
                 } header: {
                     Text("Test host")
                 } footer: {
@@ -75,6 +80,7 @@ struct TransportProofView: View {
                         Button("Cancel probe", role: .cancel) {
                             model.cancel()
                         }
+                        .accessibilityIdentifier("cancel-transport-probe")
                     } else {
                         Button("Inspect host key and run probe") {
                             model.runProbe()
@@ -118,7 +124,12 @@ struct TransportProofView: View {
                 Button("Trust fingerprint and reconnect") {
                     model.confirmHostKeyAndReconnect()
                 }
-                .accessibilityIdentifier("trust-host-key")
+                .disabled(!model.isExpectedFingerprint(fingerprint))
+                .accessibilityIdentifier(trustButtonIdentifier(fingerprint))
+                if model.usesDevelopmentProfile, !model.isExpectedFingerprint(fingerprint) {
+                    Label("Fingerprint does not match the staged test host", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
                 Button("Reject and edit connection", role: .cancel) {
                     model.rejectHostKey()
                 }
@@ -137,6 +148,11 @@ struct TransportProofView: View {
                     .foregroundStyle(.red)
             }
         }
+    }
+
+    private func trustButtonIdentifier(_ fingerprint: String) -> String {
+        guard model.usesDevelopmentProfile else { return "trust-host-key" }
+        return model.isExpectedFingerprint(fingerprint) ? "verified-trust-host-key" : "unverified-trust-host-key"
     }
 
     private func authenticationLabel(_ offer: SSHAuthenticationOffer) -> String {
