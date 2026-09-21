@@ -30,14 +30,21 @@ failures = []
 repositories = []
 for index, pin in enumerate(pins, start=1):
     location = pin.get("location") or pin.get("repositoryURL", "")
-    parsed = urlparse(location)
-    parts = [part for part in parsed.path.split("/") if part]
+    try:
+        parsed = urlparse(location)
+        hostname = parsed.hostname
+        username = parsed.username
+        password = parsed.password
+    except (TypeError, ValueError):
+        failures.append(f"pin {index}: location could not be parsed safely")
+        continue
 
+    parts = [part for part in parsed.path.split("/") if part]
     if (
         parsed.scheme != "https"
-        or parsed.hostname != "github.com"
-        or parsed.username is not None
-        or parsed.password is not None
+        or hostname != "github.com"
+        or username is not None
+        or password is not None
         or parsed.query
         or parsed.fragment
         or len(parts) != 2
