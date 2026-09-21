@@ -24,13 +24,18 @@ final class RoamPiUITests: XCTestCase {
         app.launchArguments = [
             "--demo",
             "-UIPreferredContentSizeCategoryName",
-            "UICTContentSizeCategoryAccessibilityExtraExtraExtraLarge",
+            "UICTContentSizeCategoryAccessibilityXXXL",
         ]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["available"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["active"].exists)
-        XCTAssertTrue(app.staticTexts["jobs"].exists)
+        let available = app.staticTexts["available"]
+        let active = app.staticTexts["active"]
+        let jobs = app.staticTexts["jobs"]
+        XCTAssertTrue(available.waitForExistence(timeout: 5))
+        XCTAssertTrue(active.exists)
+        XCTAssertTrue(jobs.exists)
+        XCTAssertGreaterThan(active.frame.minY, available.frame.maxY)
+        XCTAssertGreaterThan(jobs.frame.minY, active.frame.maxY)
     }
 
     @MainActor
