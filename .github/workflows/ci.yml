@@ -39,17 +39,17 @@ jobs:
           xcrun simctl list runtimes
           xcrun simctl list devicetypes | grep 'iPhone 17'
 
-      - name: Build and test iPhone 17
-        run: |
-          xcodebuild -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build
-          xcodebuild -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
-
-      - name: Check Swift formatting
-        run: swiftformat --lint .
-
-      - name: Resolve and audit dependencies
+      - name: Audit and lock dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          xcodebuild -resolvePackageDependencies -project RoamPi.xcodeproj -scheme RoamPi
           ./scripts/audit-dependencies.sh
+          xcodebuild -resolvePackageDependencies -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
+
+      - name: Build and test iPhone 17
+        run: |
+          xcodebuild -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build
+          xcodebuild -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
+
+      - name: Check Swift formatting
+        run: swiftformat --lint .

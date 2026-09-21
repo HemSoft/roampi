@@ -4,6 +4,10 @@ set -euo pipefail
 resolved_file="RoamPi.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 
 if [[ ! -f "$resolved_file" ]]; then
+  if grep -q "XCRemoteSwiftPackageReference" RoamPi.xcodeproj/project.pbxproj; then
+    echo "Dependency audit failed: Package.resolved is missing for declared dependencies."
+    exit 1
+  fi
   echo "Dependency audit passed: the project has no Swift package dependencies."
   exit 0
 fi
