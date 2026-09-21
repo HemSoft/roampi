@@ -56,10 +56,11 @@ struct TransportFoundationTests {
         #expect(HostKeyPolicy.evaluate(storedFingerprint: "key-a", presentedFingerprint: "key-b") == .changed)
     }
 
-    @Test("Tailscale authentication falls back to a key")
+    @Test("Tailscale authentication falls back to a key for the connection service")
     func tailscaleFallback() {
         var plan = SSHAuthenticationPlan(mode: .tailscaleSSHThenKey)
 
+        #expect(SSHAuthenticationPlan.serviceName == "ssh-connection")
         #expect(plan.nextOffer(serverAllowsPublicKey: true) == SSHAuthenticationOffer.none)
         #expect(plan.nextOffer(serverAllowsPublicKey: true) == SSHAuthenticationOffer.publicKey)
         #expect(plan.nextOffer(serverAllowsPublicKey: true) == nil)
@@ -88,6 +89,28 @@ struct TransportFoundationTests {
         ] {
             #expect(sensitiveValues.allSatisfy { !diagnostic.userMessage.contains($0) })
         }
+    }
+
+    @Test("Fingerprint confirmation stays bound to its endpoint")
+    @MainActor
+    func fingerprintConfirmationEndpointBinding() async {
+        let transport = ConfirmationProbeTransport()
+        let model = TransportProofModel(coordinator: ProbeCoordinator(transport: transport))
+        model.connectionString = "person@machine-a"
+
+        model.runProbe()
+        while case .running = model.state {
+            await Task.yield()
+        }
+
+        #expect(model.state == .awaitingConfirmation("SHA256:test"))
+        #expect(model.isEndpointLocked)
+
+        model.connectionString = "person@machine-b"
+        model.confirmHostKeyAndReconnect()
+
+        #expect(model.state == .failed(TransportDiagnostic.invalidEndpoint.userMessage))
+        #expect(await transport.trustCount == 0)
     }
 
     @Test("Coordinator rejects a duplicate command")
@@ -120,6 +143,22 @@ struct TransportFoundationTests {
             try await task.value
         }
         #expect(await transport.wasCancelled)
+    }
+}
+
+private actor ConfirmationProbeTransport: SSHProbeTransporting {
+    private(set) var trustCount = 0
+
+    func publicKey() -> String {
+        "public"
+    }
+
+    func runProbe(endpoint _: RemoteEndpoint, mode _: SSHAuthenticationMode) throws -> ProbeResult {
+        throw TransportError.hostKeyConfirmationRequired(fingerprint: "SHA256:test")
+    }
+
+    func trust(fingerprint _: String, endpoint _: RemoteEndpoint) {
+        trustCount += 1
     }
 }
 

@@ -24,6 +24,8 @@ enum SSHAuthenticationOffer: Equatable, Sendable {
 }
 
 struct SSHAuthenticationPlan: Sendable {
+    static let serviceName = "ssh-connection"
+
     private(set) var remainingOffers: [SSHAuthenticationOffer]
 
     init(mode: SSHAuthenticationMode) {

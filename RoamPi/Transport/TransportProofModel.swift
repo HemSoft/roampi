@@ -16,6 +16,15 @@ final class TransportProofModel: ObservableObject {
     @Published private(set) var publicKey = ""
     @Published private(set) var state = State.idle
 
+    var isEndpointLocked: Bool {
+        switch state {
+        case .running, .awaitingConfirmation:
+            true
+        case .idle, .succeeded, .failed:
+            false
+        }
+    }
+
     private let coordinator: ProbeCoordinator
     private var currentTask: Task<Void, Never>?
     private var pendingEndpoint: RemoteEndpoint?
@@ -75,6 +84,15 @@ final class TransportProofModel: ObservableObject {
         guard case let .awaitingConfirmation(fingerprint) = state,
               let endpoint = pendingEndpoint
         else {
+            return
+        }
+
+        guard let displayedEndpoint = try? RemoteEndpoint(
+            connectionString: connectionString,
+            advancedPort: advancedPort
+        ), displayedEndpoint == endpoint else {
+            pendingEndpoint = nil
+            state = .failed(TransportDiagnostic.invalidEndpoint.userMessage)
             return
         }
 

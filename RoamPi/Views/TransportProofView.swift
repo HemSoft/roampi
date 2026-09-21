@@ -23,6 +23,7 @@ struct TransportProofView: View {
                     TextField("user@host", text: $model.connectionString)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .disabled(model.isEndpointLocked)
                         .accessibilityIdentifier("connection-string")
 
                     DisclosureGroup("Advanced", isExpanded: $showsAdvanced) {
@@ -30,12 +31,14 @@ struct TransportProofView: View {
                             .keyboardType(.numberPad)
                             .accessibilityIdentifier("advanced-port")
                     }
+                    .disabled(model.isEndpointLocked)
 
                     Picker("Authentication", selection: $model.authenticationMode) {
                         ForEach(SSHAuthenticationMode.allCases) { mode in
                             Text(mode.title).tag(mode)
                         }
                     }
+                    .disabled(model.isEndpointLocked)
                 } header: {
                     Text("Test host")
                 } footer: {

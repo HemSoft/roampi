@@ -166,13 +166,17 @@ private final class AuthenticationDelegate: NIOSSHClientUserAuthenticationDelega
         switch next {
         case .some(.none):
             nextChallengePromise.succeed(
-                NIOSSHUserAuthenticationOffer(username: username, serviceName: "", offer: .none)
+                NIOSSHUserAuthenticationOffer(
+                    username: username,
+                    serviceName: SSHAuthenticationPlan.serviceName,
+                    offer: .none
+                )
             )
         case .some(.publicKey):
             nextChallengePromise.succeed(
                 NIOSSHUserAuthenticationOffer(
                     username: username,
-                    serviceName: "",
+                    serviceName: SSHAuthenticationPlan.serviceName,
                     offer: .privateKey(.init(privateKey: privateKey))
                 )
             )
@@ -262,7 +266,12 @@ private final class ProbeCommandHandler: ChannelInboundHandler, @unchecked Senda
 
     func channelActive(context: ChannelHandlerContext) {
         let request = SSHChannelRequestEvent.ExecRequest(command: command, wantReply: true)
-        context.triggerUserOutboundEvent(request, promise: nil)
+        let reply = context.eventLoop.makePromise(of: Void.self)
+        let loopBoundContext = NIOLoopBound(context, eventLoop: context.eventLoop)
+        reply.futureResult.whenFailure { [weak self] _ in
+            self?.fail(context: loopBoundContext.value)
+        }
+        context.triggerUserOutboundEvent(request, promise: reply)
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -278,6 +287,13 @@ private final class ProbeCommandHandler: ChannelInboundHandler, @unchecked Senda
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is ChannelFailureEvent {
+            fail(context: context)
+            return
+        }
+        if event is ChannelSuccessEvent {
+            return
+        }
         if let status = event as? SSHChannelRequestEvent.ExitStatus {
             let text = output.readString(length: output.readableBytes)
             if status.exitStatus == 0, text == expectedOutput {
