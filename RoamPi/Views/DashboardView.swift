@@ -489,7 +489,7 @@ private extension JobStatus {
 
     var icon: String {
         switch self {
-        case .working: "arrow.trianglehead.2.clockwise.rotate.90"
+        case .working: "arrow.triangle.2.circlepath"
         case .queued: "clock"
         case .complete: "checkmark.circle.fill"
         }

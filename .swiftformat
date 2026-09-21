@@ -4,4 +4,4 @@
 --wraparguments before-first
 --wrapcollections before-first
 --disable redundantInit,redundantSelf
---exclude RoamPi.xcodeproj
+--exclude DerivedData,DerivedDataStable,RoamPi.xcodeproj,TestResults,ValidationMedia
