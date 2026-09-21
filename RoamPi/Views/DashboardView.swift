@@ -309,6 +309,9 @@ private struct SessionsCard: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
+                    Text(session.status.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(session.status.color)
                 }
                 .accessibilityElement(children: .combine)
 

@@ -14,6 +14,7 @@ final class RoamPiUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Good evening"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["machine-studio-mini"].exists)
         XCTAssertTrue(app.staticTexts["Review offline sync"].exists)
+        XCTAssertTrue(app.staticTexts["Running"].exists)
         XCTAssertFalse(app.staticTexts["Remote connection setup is coming next."].exists)
     }
 
