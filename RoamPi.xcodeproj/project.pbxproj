@@ -8,12 +8,28 @@
 
 /* Begin PBXBuildFile section */
 		0AA1EE3FC28F6942702EF724 /* RoamPiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */; };
+		0E0C8894513502938ED99B94 /* Crypto in Frameworks */ = {isa = PBXBuildFile; productRef = 65A580876ADF9DDF626DA1B7 /* Crypto */; };
+		11DBE124394BCBB40E176ECD /* NIOSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 2DF0599CA70167C7597814DE /* NIOSSH */; };
+		13D137583D644D49A42125BF /* HostKeyPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0788966107FFD16843F71456 /* HostKeyPolicy.swift */; };
+		1984B01290835E866914E315 /* DevelopmentTransportProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739FBC45BF1DF075BF785ADA /* DevelopmentTransportProfile.swift */; };
+		25311819407070496EDE8E23 /* NIOCore in Frameworks */ = {isa = PBXBuildFile; productRef = BC17F638BDBF87DF4E81A418 /* NIOCore */; };
 		27B5A8687A760E206ADCA9CA /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97A10EF06169FF6DC17DB2DA /* RootView.swift */; };
+		2AA3D56BB7123833E9EAD091 /* TransportProofModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A997FC5E9196B229713D75E /* TransportProofModel.swift */; };
+		39C9D764D6FBD8657D80F6A1 /* SecureTransportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27A298281A4A953C5E73B301 /* SecureTransportStore.swift */; };
 		4359A90234E1A17521AD20FB /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C827D0B3B14DA72A49B39098 /* DashboardView.swift */; };
 		529333D81C124C20A43E226D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BBB9437080F154EC8602CBB8 /* Assets.xcassets */; };
+		638F3415D850FAE3FB5BBD04 /* ProbeCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1383A990ADB88A4D77AA8793 /* ProbeCoordinator.swift */; };
+		6A7B00138246CF9628E88562 /* NIOPosix in Frameworks */ = {isa = PBXBuildFile; productRef = AA5E214DFF38ED1BF5CD9341 /* NIOPosix */; };
 		6DD613E959035A6B06B0C2F3 /* DemoFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */; };
+		702F93DD09F79F8D92824F3D /* NIOSSHProbeTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B88C8854F52B5EF1465A25 /* NIOSSHProbeTransport.swift */; };
+		72A34DA1A463EAA34225682C /* SSHAuthenticationPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F93C32DF31713AA6E142155 /* SSHAuthenticationPlan.swift */; };
+		7914404EFD09F2607E19BA27 /* TransportProofUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02161DF0FAEBEE91EE19E9DD /* TransportProofUITests.swift */; };
 		86F3F89F951C31C2047F071F /* DashboardSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1307D1238D2E80DF406E439 /* DashboardSnapshot.swift */; };
+		8F63EDC68393A7B9A61815C8 /* TransportDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C30C9A8DAF1CC1E089F4ADD /* TransportDiagnostics.swift */; };
+		D152AFF820FD5BC5D183A029 /* TransportProofView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E2A7545CC9ACBAAAAF4752 /* TransportProofView.swift */; };
+		E45F208C01602F0D61B26975 /* TransportFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6384C71C53CECC1B7E6031C /* TransportFoundationTests.swift */; };
 		E8572D18B33C22AA8E4516D7 /* DemoFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF2DF968D5B0E11477719BEA /* DemoFixture.swift */; };
+		E8B3E836FB10494A11EDE7E4 /* RemoteEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B05FA85768CC785392B746 /* RemoteEndpoint.swift */; };
 		F64057BEA1905DF95F8F5F62 /* RoamPiUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD89385D1E4C2D36CE2CF51 /* RoamPiUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -35,18 +51,44 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		02161DF0FAEBEE91EE19E9DD /* TransportProofUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProofUITests.swift; sourceTree = "<group>"; };
+		0788966107FFD16843F71456 /* HostKeyPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostKeyPolicy.swift; sourceTree = "<group>"; };
+		1383A990ADB88A4D77AA8793 /* ProbeCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProbeCoordinator.swift; sourceTree = "<group>"; };
+		23B88C8854F52B5EF1465A25 /* NIOSSHProbeTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NIOSSHProbeTransport.swift; sourceTree = "<group>"; };
+		27A298281A4A953C5E73B301 /* SecureTransportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureTransportStore.swift; sourceTree = "<group>"; };
 		402DE9719F984718551AD026 /* RoamPiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoamPiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FD4068C81BC4F06190C3AEF /* RoamPiUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoamPiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C30C9A8DAF1CC1E089F4ADD /* TransportDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportDiagnostics.swift; sourceTree = "<group>"; };
 		6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiApp.swift; sourceTree = "<group>"; };
+		6F93C32DF31713AA6E142155 /* SSHAuthenticationPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHAuthenticationPlan.swift; sourceTree = "<group>"; };
+		739FBC45BF1DF075BF785ADA /* DevelopmentTransportProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentTransportProfile.swift; sourceTree = "<group>"; };
 		7535689ECF53E4CDB1936B9C /* RoamPi.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoamPi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFixtureTests.swift; sourceTree = "<group>"; };
+		8A997FC5E9196B229713D75E /* TransportProofModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProofModel.swift; sourceTree = "<group>"; };
 		97A10EF06169FF6DC17DB2DA /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A1307D1238D2E80DF406E439 /* DashboardSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSnapshot.swift; sourceTree = "<group>"; };
+		B4E2A7545CC9ACBAAAAF4752 /* TransportProofView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProofView.swift; sourceTree = "<group>"; };
 		BBB9437080F154EC8602CBB8 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BFD89385D1E4C2D36CE2CF51 /* RoamPiUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiUITests.swift; sourceTree = "<group>"; };
+		C6384C71C53CECC1B7E6031C /* TransportFoundationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportFoundationTests.swift; sourceTree = "<group>"; };
 		C827D0B3B14DA72A49B39098 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		DF2DF968D5B0E11477719BEA /* DemoFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFixture.swift; sourceTree = "<group>"; };
+		F4B05FA85768CC785392B746 /* RemoteEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteEndpoint.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8D8BC6A2DFB4C808C4C66089 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				25311819407070496EDE8E23 /* NIOCore in Frameworks */,
+				6A7B00138246CF9628E88562 /* NIOPosix in Frameworks */,
+				11DBE124394BCBB40E176ECD /* NIOSSH in Frameworks */,
+				0E0C8894513502938ED99B94 /* Crypto in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		1AC724B6A4D59E09710B900F /* Views */ = {
@@ -54,8 +96,25 @@
 			children = (
 				C827D0B3B14DA72A49B39098 /* DashboardView.swift */,
 				97A10EF06169FF6DC17DB2DA /* RootView.swift */,
+				B4E2A7545CC9ACBAAAAF4752 /* TransportProofView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		51DCB0A8C08F1ACF329C2F2A /* Transport */ = {
+			isa = PBXGroup;
+			children = (
+				739FBC45BF1DF075BF785ADA /* DevelopmentTransportProfile.swift */,
+				0788966107FFD16843F71456 /* HostKeyPolicy.swift */,
+				23B88C8854F52B5EF1465A25 /* NIOSSHProbeTransport.swift */,
+				1383A990ADB88A4D77AA8793 /* ProbeCoordinator.swift */,
+				F4B05FA85768CC785392B746 /* RemoteEndpoint.swift */,
+				27A298281A4A953C5E73B301 /* SecureTransportStore.swift */,
+				6F93C32DF31713AA6E142155 /* SSHAuthenticationPlan.swift */,
+				6C30C9A8DAF1CC1E089F4ADD /* TransportDiagnostics.swift */,
+				8A997FC5E9196B229713D75E /* TransportProofModel.swift */,
+			);
+			path = Transport;
 			sourceTree = "<group>";
 		};
 		5789497BA4D9E8A1ADB2F517 /* Models */ = {
@@ -71,6 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */,
+				C6384C71C53CECC1B7E6031C /* TransportFoundationTests.swift */,
 			);
 			path = RoamPiTests;
 			sourceTree = "<group>";
@@ -81,6 +141,7 @@
 				BBB9437080F154EC8602CBB8 /* Assets.xcassets */,
 				6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */,
 				5789497BA4D9E8A1ADB2F517 /* Models */,
+				51DCB0A8C08F1ACF329C2F2A /* Transport */,
 				1AC724B6A4D59E09710B900F /* Views */,
 			);
 			path = RoamPi;
@@ -100,6 +161,7 @@
 			isa = PBXGroup;
 			children = (
 				BFD89385D1E4C2D36CE2CF51 /* RoamPiUITests.swift */,
+				02161DF0FAEBEE91EE19E9DD /* TransportProofUITests.swift */,
 			);
 			path = RoamPiUITests;
 			sourceTree = "<group>";
@@ -159,6 +221,7 @@
 			buildPhases = (
 				5C9281A4128D7BA2A6AA5383 /* Sources */,
 				68AC0CD90F0592727774D18F /* Resources */,
+				8D8BC6A2DFB4C808C4C66089 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -166,6 +229,10 @@
 			);
 			name = RoamPi;
 			packageProductDependencies = (
+				BC17F638BDBF87DF4E81A418 /* NIOCore */,
+				AA5E214DFF38ED1BF5CD9341 /* NIOPosix */,
+				2DF0599CA70167C7597814DE /* NIOSSH */,
+				65A580876ADF9DDF626DA1B7 /* Crypto */,
 			);
 			productName = RoamPi;
 			productReference = 7535689ECF53E4CDB1936B9C /* RoamPi.app */;
@@ -204,6 +271,11 @@
 			);
 			mainGroup = 6FA6D9E59878543AC34D5CC2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5F0524A072BF7E30B0534406 /* XCRemoteSwiftPackageReference "swift-crypto" */,
+				36261F10C569EF81DDB5CEA0 /* XCRemoteSwiftPackageReference "swift-nio" */,
+				839B10BB9A96071C07EE0220 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B0D092237A68793DCBA0FE18 /* Products */;
 			projectDirPath = "";
@@ -233,6 +305,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6DD613E959035A6B06B0C2F3 /* DemoFixtureTests.swift in Sources */,
+				E45F208C01602F0D61B26975 /* TransportFoundationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -243,8 +316,18 @@
 				86F3F89F951C31C2047F071F /* DashboardSnapshot.swift in Sources */,
 				4359A90234E1A17521AD20FB /* DashboardView.swift in Sources */,
 				E8572D18B33C22AA8E4516D7 /* DemoFixture.swift in Sources */,
+				1984B01290835E866914E315 /* DevelopmentTransportProfile.swift in Sources */,
+				13D137583D644D49A42125BF /* HostKeyPolicy.swift in Sources */,
+				702F93DD09F79F8D92824F3D /* NIOSSHProbeTransport.swift in Sources */,
+				638F3415D850FAE3FB5BBD04 /* ProbeCoordinator.swift in Sources */,
+				E8B3E836FB10494A11EDE7E4 /* RemoteEndpoint.swift in Sources */,
 				0AA1EE3FC28F6942702EF724 /* RoamPiApp.swift in Sources */,
 				27B5A8687A760E206ADCA9CA /* RootView.swift in Sources */,
+				72A34DA1A463EAA34225682C /* SSHAuthenticationPlan.swift in Sources */,
+				39C9D764D6FBD8657D80F6A1 /* SecureTransportStore.swift in Sources */,
+				8F63EDC68393A7B9A61815C8 /* TransportDiagnostics.swift in Sources */,
+				2AA3D56BB7123833E9EAD091 /* TransportProofModel.swift in Sources */,
+				D152AFF820FD5BC5D183A029 /* TransportProofView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -253,6 +336,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F64057BEA1905DF95F8F5F62 /* RoamPiUITests.swift in Sources */,
+				7914404EFD09F2607E19BA27 /* TransportProofUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -563,6 +647,56 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		36261F10C569EF81DDB5CEA0 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.103.0;
+			};
+		};
+		5F0524A072BF7E30B0534406 /* XCRemoteSwiftPackageReference "swift-crypto" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-crypto.git";
+			requirement = {
+				kind = exactVersion;
+				version = 4.5.2;
+			};
+		};
+		839B10BB9A96071C07EE0220 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-ssh.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.15.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2DF0599CA70167C7597814DE /* NIOSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 839B10BB9A96071C07EE0220 /* XCRemoteSwiftPackageReference "swift-nio-ssh" */;
+			productName = NIOSSH;
+		};
+		65A580876ADF9DDF626DA1B7 /* Crypto */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5F0524A072BF7E30B0534406 /* XCRemoteSwiftPackageReference "swift-crypto" */;
+			productName = Crypto;
+		};
+		AA5E214DFF38ED1BF5CD9341 /* NIOPosix */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 36261F10C569EF81DDB5CEA0 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOPosix;
+		};
+		BC17F638BDBF87DF4E81A418 /* NIOCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 36261F10C569EF81DDB5CEA0 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E960F8CA8F78584C63DCBD2A /* Project object */;
 }
