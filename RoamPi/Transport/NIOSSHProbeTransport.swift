@@ -9,6 +9,7 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
     private static let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     private static let harmlessCommand = "printf roampi-transport-proof"
     private static let expectedOutput = "roampi-transport-proof"
+    private static let operationTimeout = TimeAmount.seconds(30)
 
     private let store: SecureTransportStore
 
@@ -71,8 +72,20 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
             throw TransportError.diagnostic(.connectionFailed)
         }
 
+        authentication.closeChannelWhenExhausted {
+            channel.close(promise: nil)
+        }
+        let deadline = ProbeDeadline()
+        let timeoutTask = channel.eventLoop.scheduleTask(in: Self.operationTimeout) {
+            deadline.expire()
+            channel.close(promise: nil)
+        }
+
         return try await withTaskCancellationHandler {
-            defer { channel.close(promise: nil) }
+            defer {
+                timeoutTask.cancel()
+                channel.close(promise: nil)
+            }
             do {
                 try Task.checkCancellation()
                 let commandFuture: EventLoopFuture<Void> = channel.pipeline.handler(type: NIOSSHHandler.self)
@@ -118,6 +131,12 @@ final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendable {
                 if let validationError = hostKeys.validationError {
                     throw validationError
                 }
+                if authentication.didExhaustOffers {
+                    throw TransportError.diagnostic(.authenticationFailed)
+                }
+                if deadline.didExpire {
+                    throw TransportError.diagnostic(.timedOut)
+                }
                 if Task.isCancelled {
                     throw TransportError.diagnostic(.cancelled)
                 }
@@ -142,9 +161,15 @@ private final class AuthenticationDelegate: NIOSSHClientUserAuthenticationDelega
     private let privateKey: NIOSSHPrivateKey
     private var plan: SSHAuthenticationPlan
     private var recordedOffer: SSHAuthenticationOffer?
+    private var exhaustedOffers = false
+    private var exhaustionHandler: (@Sendable () -> Void)?
 
     var lastOffer: SSHAuthenticationOffer? {
         lock.withLock { recordedOffer }
+    }
+
+    var didExhaustOffers: Bool {
+        lock.withLock { exhaustedOffers }
     }
 
     init(mode: SSHAuthenticationMode, username: String, privateKey: NIOSSHPrivateKey) {
@@ -153,15 +178,27 @@ private final class AuthenticationDelegate: NIOSSHClientUserAuthenticationDelega
         self.privateKey = privateKey
     }
 
+    func closeChannelWhenExhausted(_ handler: @escaping @Sendable () -> Void) {
+        let shouldClose = lock.withLock {
+            exhaustionHandler = handler
+            return exhaustedOffers
+        }
+        if shouldClose {
+            handler()
+        }
+    }
+
     func nextAuthenticationType(
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
-        let next = lock.withLock {
+        let (next, exhaustionHandler) = lock.withLock {
             let offer = plan.nextOffer(serverAllowsPublicKey: availableMethods.contains(.publicKey))
             recordedOffer = offer
-            return offer
+            exhaustedOffers = offer == nil
+            return (offer, exhaustedOffers ? self.exhaustionHandler : nil)
         }
+        exhaustionHandler?()
 
         switch next {
         case .some(.none):
@@ -182,6 +219,21 @@ private final class AuthenticationDelegate: NIOSSHClientUserAuthenticationDelega
             )
         case nil:
             nextChallengePromise.succeed(nil)
+        }
+    }
+}
+
+private final class ProbeDeadline: @unchecked Sendable {
+    private let lock = NSLock()
+    private var expired = false
+
+    var didExpire: Bool {
+        lock.withLock { expired }
+    }
+
+    func expire() {
+        lock.withLock {
+            expired = true
         }
     }
 }

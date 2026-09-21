@@ -86,6 +86,7 @@ struct TransportFoundationTests {
             .hostKeyChanged,
             .invalidEndpoint,
             .keyUnavailable,
+            .timedOut,
         ] {
             #expect(sensitiveValues.allSatisfy { !diagnostic.userMessage.contains($0) })
         }

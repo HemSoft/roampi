@@ -9,6 +9,7 @@ enum TransportDiagnostic: Equatable, Sendable {
     case hostKeyChanged
     case invalidEndpoint
     case keyUnavailable
+    case timedOut
 
     var userMessage: String {
         switch self {
@@ -28,6 +29,8 @@ enum TransportDiagnostic: Equatable, Sendable {
             "Enter a valid user@host value and optional port."
         case .keyUnavailable:
             "The device key is unavailable."
+        case .timedOut:
+            "The SSH probe timed out. Check the host and try again."
         }
     }
 }
