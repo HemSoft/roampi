@@ -48,6 +48,8 @@ jobs:
         run: swiftformat --lint .
 
       - name: Resolve and audit dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           xcodebuild -resolvePackageDependencies -project RoamPi.xcodeproj -scheme RoamPi
           ./scripts/audit-dependencies.sh

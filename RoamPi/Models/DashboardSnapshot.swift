@@ -11,8 +11,8 @@ struct DashboardSnapshot: Equatable, Sendable {
         machines: []
     )
 
-    var onlineMachineCount: Int {
-        machines.filter { $0.status == .online }.count
+    var availableMachineCount: Int {
+        machines.filter { $0.status != .offline }.count
     }
 
     var activeSessionCount: Int {

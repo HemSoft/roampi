@@ -125,7 +125,7 @@ private struct SummaryStrip: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            SummaryPill(value: "\(snapshot.onlineMachineCount)", label: "online", icon: "network")
+            SummaryPill(value: "\(snapshot.availableMachineCount)", label: "available", icon: "network")
             SummaryPill(value: "\(snapshot.activeSessionCount)", label: "active", icon: "sparkles")
             SummaryPill(value: "\(snapshot.pendingJobCount)", label: "jobs", icon: "clock.arrow.circlepath")
         }

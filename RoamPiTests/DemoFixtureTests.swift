@@ -19,7 +19,7 @@ struct DemoFixtureTests {
     func fixtureSummary() {
         let snapshot = DemoFixture.dashboard
 
-        #expect(snapshot.onlineMachineCount == 1)
+        #expect(snapshot.availableMachineCount == 2)
         #expect(snapshot.activeSessionCount == 2)
         #expect(snapshot.pendingJobCount == 2)
     }
