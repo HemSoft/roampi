@@ -288,7 +288,8 @@ struct SessionFoundationTests {
             command == "cd '/home/user/proj' && "
                 + LoginShellCommand.run(
                     "exec tmux new-session -s 'roampi-proj' "
-                        + ShellQuoting.quote(PiTerminalCommand.start)
+                        + ShellQuoting.quote(PiTerminalCommand.start),
+                    suppressProfileOutput: true
                 )
         )
     }
@@ -299,21 +300,31 @@ struct SessionFoundationTests {
 
         #expect(
             TmuxCommand.hasSession(session: session)
-                == LoginShellCommand.run("exec tmux has-session -t '=roampi-proj:' 2>/dev/null")
+                == LoginShellCommand.run(
+                    "exec tmux has-session -t '=roampi-proj:' 2>/dev/null",
+                    suppressProfileOutput: true
+                )
         )
         #expect(
             try TmuxCommand.attachExisting(
                 session: session,
                 workingDirectory: #require(RemoteWorkingDirectory("/home/user/proj"))
-            ) == LoginShellCommand.run("exec tmux attach-session -t '=roampi-proj:'")
+            ) == LoginShellCommand.run(
+                "exec tmux attach-session -t '=roampi-proj:'",
+                suppressProfileOutput: true
+            )
         )
         #expect(TmuxCommand
             .paneProcessID(session: session) == LoginShellCommand.run(
-                "tmux has-session -t '=roampi-proj:' 2>/dev/null && exec tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'"
+                "tmux has-session -t '=roampi-proj:' 2>/dev/null && exec tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'",
+                suppressProfileOutput: true
             ))
         #expect(
             TmuxCommand.killSession(session: session)
-                == LoginShellCommand.run("exec tmux kill-session -t '=roampi-proj:' 2>/dev/null")
+                == LoginShellCommand.run(
+                    "exec tmux kill-session -t '=roampi-proj:' 2>/dev/null",
+                    suppressProfileOutput: true
+                )
         )
     }
 

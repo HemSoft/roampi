@@ -304,8 +304,8 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
-    @Test("Tmux support commands resolve through the account login environment")
-    func tmuxResolvesThroughLoginEnvironment() async throws {
+    @Test("Tmux commands suppress login-profile output and resolve its PATH")
+    func tmuxSuppressesProfileOutputAndResolvesLoginPath() async throws {
         let fixture = try makeFixture()
         defer { fixture.stop() }
 
@@ -316,10 +316,21 @@ struct SSHFixtureIntegrationTests {
                 + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote("exec cat"))"
         )
 
+        let noisyShell = fixture.root.appendingPathComponent("noisy-login-shell")
+        try Data(
+            "#!/bin/sh\necho profile-noise\necho profile-error >&2\nexec /bin/zsh \"$@\"\n".utf8
+        ).write(to: noisyShell)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: noisyShell.path)
+
         let identity = try await fixture.exec(
-            "export PATH=/usr/bin:/bin; \(TmuxCommand.paneProcessID(session: session))"
+            "SHELL=\(ShellQuoting.quote(noisyShell.path)); export SHELL; "
+                + "PATH=/usr/bin:/bin; export PATH; "
+                + TmuxCommand.paneProcessID(session: session)
         )
-        #expect(identity.split(separator: "|", omittingEmptySubsequences: false).count == 4)
+        let fields = identity.split(separator: "|", omittingEmptySubsequences: false)
+        #expect(fields.count == 4)
+        #expect(!identity.contains("profile-noise"))
+        #expect(!identity.contains("profile-error"))
         try await fixture.killSession(name: sessionName)
     }
 

@@ -21,7 +21,7 @@ enum TmuxCommand {
         let command = "exec tmux new-session -s \(ShellQuoting.quote(session.rawValue))\(marker) "
             + ShellQuoting.quote(paneCommand)
         return "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& \(LoginShellCommand.run(command))"
+            + "&& \(LoginShellCommand.run(command, suppressProfileOutput: true))"
     }
 
     /// Reconnects attach only; they must never create a replacement session
@@ -31,7 +31,8 @@ enum TmuxCommand {
         workingDirectory _: RemoteWorkingDirectory
     ) -> String {
         LoginShellCommand.run(
-            "exec tmux attach-session -t \(ShellQuoting.quote("=\(session.rawValue):"))"
+            "exec tmux attach-session -t \(ShellQuoting.quote("=\(session.rawValue):"))",
+            suppressProfileOutput: true
         )
     }
 
@@ -42,20 +43,22 @@ enum TmuxCommand {
         let target = ShellQuoting.quote("=\(session.rawValue):")
         let command = "tmux has-session -t \(target) 2>/dev/null "
             + "&& exec tmux display-message -p -t \(target) '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'"
-        return LoginShellCommand.run(command)
+        return LoginShellCommand.run(command, suppressProfileOutput: true)
     }
 
     /// True when the named session exists on the remote host.
     static func hasSession(session: TmuxSessionName) -> String {
         LoginShellCommand.run(
-            "exec tmux has-session -t \(ShellQuoting.quote("=\(session.rawValue):")) 2>/dev/null"
+            "exec tmux has-session -t \(ShellQuoting.quote("=\(session.rawValue):")) 2>/dev/null",
+            suppressProfileOutput: true
         )
     }
 
     /// Kill one named session during cleanup of a disposable test session.
     static func killSession(session: TmuxSessionName) -> String {
         LoginShellCommand.run(
-            "exec tmux kill-session -t \(ShellQuoting.quote("=\(session.rawValue):")) 2>/dev/null"
+            "exec tmux kill-session -t \(ShellQuoting.quote("=\(session.rawValue):")) 2>/dev/null",
+            suppressProfileOutput: true
         )
     }
 }
