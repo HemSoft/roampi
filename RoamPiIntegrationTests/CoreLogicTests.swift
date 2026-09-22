@@ -311,8 +311,9 @@ struct SessionFoundationTests {
         let command = PiRPCCommand.start(workingDirectory: directory)
 
         #expect(
-            command == "cd '/home/user/proj' && exec sh -lc 'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
-                + "3>&1 4>&2 1>/dev/null 2>/dev/null"
+            command == "cd '/home/user/proj' && case \"$SHELL\" in /*) exec \"$SHELL\" -lc "
+                + "'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
+                + "3>&1 4>&2 1>/dev/null 2>/dev/null ;; *) exit 126 ;; esac"
         )
     }
 
