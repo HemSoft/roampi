@@ -185,7 +185,7 @@ final class SSHFixture: @unchecked Sendable {
     func paneProcessID(sessionName: String) async throws -> Int32? {
         guard let session = TmuxSessionName(sessionName) else { return nil }
         let text = try await exec(TmuxCommand.paneProcessID(session: session))
-        let firstField = text.split(whereSeparator: { $0.isWhitespace }).first
+        let firstField = text.split(separator: "|", maxSplits: 1).first
         return firstField.flatMap { Int32($0) }
     }
 

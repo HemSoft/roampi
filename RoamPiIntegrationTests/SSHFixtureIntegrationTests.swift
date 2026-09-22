@@ -116,6 +116,37 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("Atomic creation refuses a concurrent tmux name collision")
+    func atomicCreationRefusesConcurrentCollision() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("collision")
+        let session = try #require(TmuxSessionName(sessionName))
+        let directory = try #require(RemoteWorkingDirectory(fixture.workDirectory.path))
+        _ = try await fixture.exec(
+            "cd \(ShellQuoting.quote(directory.absolutePath)) && tmux new-session -d -s "
+                + "\(ShellQuoting.quote(sessionName)) "
+                + ShellQuoting.quote("exec node -e 'setInterval(() => {}, 1000)'")
+        )
+
+        _ = try await fixture.exec(
+            TmuxCommand.attachOrCreate(
+                session: session,
+                workingDirectory: directory,
+                paneCommand: "exec pi"
+            )
+        )
+        let identity = try await fixture.exec(TmuxCommand.paneProcessID(session: session))
+        let fields = identity.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "|", omittingEmptySubsequences: false)
+
+        #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
+        #expect(fields.count == 3)
+        #expect(fields.last == "\"exec node -e 'setInterval(() => {}, 1000)'\"")
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("RPC mode exchanges one strict LF-delimited request and response")
     func rpcStrictExchange() async throws {
         let fixture = try makeFixture()

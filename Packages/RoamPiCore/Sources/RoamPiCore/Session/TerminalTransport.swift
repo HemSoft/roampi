@@ -96,6 +96,7 @@ final class OneShotTerminalClosureGate: @unchecked Sendable {
 struct TmuxPaneIdentity: Equatable, Sendable {
     let processID: Int32
     let executable: String
+    let startCommand: String
 
     func hasSameProcess(as other: TmuxPaneIdentity) -> Bool {
         processID == other.processID
@@ -116,7 +117,6 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let workingDirectory: RemoteWorkingDirectory
     private let terminalType: String
     private let paneCommand: String
-    private let launcherPaneExecutable: String
     private let compatiblePaneExecutables: Set<String>
     private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
@@ -156,7 +156,6 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         self.workingDirectory = workingDirectory
         self.terminalType = terminalType
         self.paneCommand = paneCommand
-        launcherPaneExecutable = Self.launcherPaneExecutable(for: paneCommand)
         compatiblePaneExecutables = Self.compatiblePaneExecutables(for: paneCommand)
         self.attachExisting = attachExisting
         self.credentials = credentials
@@ -188,13 +187,13 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
 
         do {
-            let existingIdentity: (processID: Int32, command: String)? = if attachExisting {
+            let existingIdentity: (processID: Int32, command: String, startCommand: String)? = if attachExisting {
                 nil
             } else {
                 try await queryPaneIdentity(connection: connection)
             }
             if let existingIdentity,
-               existingIdentity.command != launcherPaneExecutable
+               existingIdentity.startCommand != paneCommand
             {
                 throw SessionDiagnostic.processIdentityChanged
             }
@@ -281,19 +280,21 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             return nil
         }
         if !attachExisting,
-           !compatiblePaneExecutables.contains(identity.command)
+           identity.startCommand != paneCommand
+           || !compatiblePaneExecutables.contains(identity.command)
         {
             throw SessionDiagnostic.processIdentityChanged
         }
         return TmuxPaneIdentity(
             processID: identity.processID,
-            executable: identity.command
+            executable: identity.command,
+            startCommand: identity.startCommand
         )
     }
 
     private func queryPaneIdentity(
         connection: SSHSessionConnection
-    ) async throws -> (processID: Int32, command: String)? {
+    ) async throws -> (processID: Int32, command: String, startCommand: String)? {
         let command = TmuxCommand.paneProcessID(session: sessionName)
         let channel = try await connection.openExecSession(command: command)
         defer { Task { await channel.close() } }
@@ -313,9 +314,10 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                     throw failure
                 }
                 if let processID = collector.paneProcessID,
-                   let command = collector.paneCommand
+                   let command = collector.paneCommand,
+                   let startCommand = collector.paneStartCommand
                 {
-                    return (processID, command)
+                    return (processID, command, startCommand)
                 }
                 if attempt >= 10 {
                     return nil
@@ -341,7 +343,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
 /// Collects one strictly bounded decimal pane process ID from an exec channel.
 final class PaneProcessIDCollector: @unchecked Sendable {
-    private static let maxResponseBytes = 64
+    private static let maxResponseBytes = 192
     private static let whitespace = CharacterSet(charactersIn: " \t\r\n")
 
     private let lock = NSLock()
@@ -366,7 +368,8 @@ final class PaneProcessIDCollector: @unchecked Sendable {
             if data.contains(where: { byte in
                 let isDigit = (0x30 ... 0x39).contains(byte)
                 let isLetter = (0x41 ... 0x5A).contains(byte) || (0x61 ... 0x7A).contains(byte)
-                return !isDigit && !isLetter && ![0x09, 0x0A, 0x0D, 0x20, 0x2D, 0x2E, 0x5F].contains(byte)
+                return !isDigit && !isLetter && ![0x09, 0x0A, 0x0D, 0x20, 0x22, 0x2D, 0x2E, 0x2F, 0x5F, 0x7C]
+                    .contains(byte)
             }) {
                 invalid = true
                 done = true
@@ -412,23 +415,40 @@ final class PaneProcessIDCollector: @unchecked Sendable {
         lock.withLock { parsedIdentity()?.command }
     }
 
+    var paneStartCommand: String? {
+        lock.withLock { parsedIdentity()?.startCommand }
+    }
+
     private func validateAndFinish() {
         invalid = parsedIdentity() == nil
         done = true
     }
 
-    private func parsedIdentity() -> (processID: Int32, command: String)? {
+    private func parsedIdentity() -> (processID: Int32, command: String, startCommand: String)? {
         let text = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: Self.whitespace)
-        let parts = text.split(whereSeparator: { $0.isWhitespace })
-        guard parts.count == 2,
+        let parts = text.split(separator: "|", omittingEmptySubsequences: false)
+        let command = parts.count > 1
+            ? String(parts[1]).trimmingCharacters(in: Self.whitespace)
+            : ""
+        let quotedStartCommand = parts.count > 2
+            ? String(parts[2]).trimmingCharacters(in: Self.whitespace)
+            : ""
+        let startCommand = quotedStartCommand.count >= 2
+            && quotedStartCommand.first == "\""
+            && quotedStartCommand.last == "\""
+            ? String(quotedStartCommand.dropFirst().dropLast())
+            : quotedStartCommand
+        guard parts.count == 3,
               parts[0].utf8.count <= 10,
               let processID = Int32(parts[0]),
-              !parts[1].isEmpty,
-              parts[1].utf8.count <= 32
+              !command.isEmpty,
+              command.utf8.count <= 32,
+              !startCommand.isEmpty,
+              startCommand.utf8.count <= 128
         else {
             return nil
         }
-        return (processID, String(parts[1]))
+        return (processID, command, startCommand)
     }
 }

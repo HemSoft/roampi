@@ -180,6 +180,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var recordedExchange: ExchangeResult?
     private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
     private var requestRegistrationHook: (@Sendable () async -> Void)?
+    private var requestWriteHook: (@Sendable () async -> Void)?
 
     private let configuration: Configuration
     private let requestTimeout: Duration
@@ -236,6 +237,11 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     /// Installs a deterministic suspension point used only by protocol race tests.
     func setRequestRegistrationHook(_ hook: (@Sendable () async -> Void)?) {
         lock.withLock { requestRegistrationHook = hook }
+    }
+
+    /// Installs a post-registration suspension point used only by protocol race tests.
+    func setRequestWriteHook(_ hook: (@Sendable () async -> Void)?) {
+        lock.withLock { requestWriteHook = hook }
     }
 
     public func start() async throws {
@@ -460,10 +466,17 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                     }
 
                     Task { [weak self] in
+                        guard let self else { return }
+                        if let hook = lock.withLock({ requestWriteHook }) {
+                            await hook()
+                        }
+                        guard isPending(request.identifier, generation: generation) else {
+                            return
+                        }
                         do {
                             try await channel.write(frame)
                         } catch {
-                            self?.failPending(
+                            self.failPending(
                                 request.identifier,
                                 generation: generation,
                                 error: .connectionFailed
@@ -478,6 +491,12 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             throw failure
         } catch {
             throw SessionFailure(diagnostic: .connectionFailed, phase: .attached)
+        }
+    }
+
+    private func isPending(_ identifier: String, generation: UInt64) -> Bool {
+        lock.withLock {
+            generation == streamGeneration && pendingRequests[identifier] != nil
         }
     }
 

@@ -4,18 +4,18 @@ import Foundation
 /// is validated by `TmuxSessionName` or `RemoteWorkingDirectory` and then
 /// single-quoted, so command-injection forms never reach the remote shell.
 enum TmuxCommand {
-    /// The approved attach-or-create command, run inside the approved directory.
+    /// Creates one new session after a negative identity preflight.
     ///
-    /// Equivalent of `tmux new-session -A -s <name>`: attach when the session
-    /// exists, create it when it does not. `exec` replaces the login shell so the
-    /// PTY lifetime maps onto the tmux client lifetime.
+    /// Deliberately omits `-A`: a concurrent name collision must fail creation
+    /// rather than attaching to an unverified pane. `exec` replaces the login
+    /// shell so the PTY lifetime maps onto the tmux client lifetime.
     static func attachOrCreate(
         session: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         paneCommand: String = "exec pi"
     ) -> String {
         "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec tmux new-session -A -s \(ShellQuoting.quote(session.rawValue)) "
+            + "&& exec tmux new-session -s \(ShellQuoting.quote(session.rawValue)) "
             + ShellQuoting.quote(paneCommand)
     }
 
@@ -33,7 +33,7 @@ enum TmuxCommand {
     /// Reconnect logic compares this value against the identity recorded before
     /// the interruption to prove the same Pi process is still in use.
     static func paneProcessID(session: TmuxSessionName) -> String {
-        "tmux display-message -p -t \(ShellQuoting.quote(session.rawValue)) '#{pane_pid} #{pane_current_command}'"
+        "tmux display-message -p -t \(ShellQuoting.quote(session.rawValue)) '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'"
     }
 
     /// True when the named session exists on the remote host.

@@ -284,7 +284,7 @@ struct SessionFoundationTests {
 
         let command = TmuxCommand.attachOrCreate(session: session, workingDirectory: directory)
 
-        #expect(command == "cd '/home/user/proj' && exec tmux new-session -A -s 'roampi-proj' 'exec pi'")
+        #expect(command == "cd '/home/user/proj' && exec tmux new-session -s 'roampi-proj' 'exec pi'")
     }
 
     @Test("Support commands quote the session name")
@@ -300,7 +300,7 @@ struct SessionFoundationTests {
         )
         #expect(TmuxCommand
             .paneProcessID(session: session) ==
-            "tmux display-message -p -t 'roampi-proj' '#{pane_pid} #{pane_current_command}'")
+            "tmux display-message -p -t 'roampi-proj' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'")
         #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t 'roampi-proj' 2>/dev/null")
     }
 
@@ -693,6 +693,44 @@ struct RPCSessionReliabilityTests {
         }
         try await Task.sleep(for: .milliseconds(60))
         #expect(session.phase == .attached)
+        try await session.close()
+    }
+
+    @Test("Cancellation after registration suppresses the pending RPC write")
+    func cancellationAfterRegistrationSuppressesWrite() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+        #expect(transport.requestFrames.count == 1)
+
+        let gate = RequestRegistrationGate()
+        session.setRequestWriteHook { await gate.pause() }
+        let request = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "cancelled-after-registration", kind: .prompt("do not run"))
+            )
+        }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        request.cancel()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected request cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+        session.setRequestWriteHook(nil)
+        await gate.release()
+        try await Task.sleep(for: .milliseconds(20))
+
+        #expect(transport.requestFrames.count == 1)
+        #expect(session.phase == .failed(.cancelled))
         try await session.close()
     }
 
@@ -1348,9 +1386,9 @@ struct PaneProcessIdentityTests {
 
     @Test("Reconnect identity follows the stable pane PID")
     func stablePIDIgnoresForegroundTool() {
-        let pi = TmuxPaneIdentity(processID: 12345, executable: "node")
-        let childTool = TmuxPaneIdentity(processID: 12345, executable: "sh")
-        let replacement = TmuxPaneIdentity(processID: 12346, executable: "node")
+        let pi = TmuxPaneIdentity(processID: 12345, executable: "node", startCommand: "exec pi")
+        let childTool = TmuxPaneIdentity(processID: 12345, executable: "sh", startCommand: "exec pi")
+        let replacement = TmuxPaneIdentity(processID: 12346, executable: "node", startCommand: "exec pi")
 
         #expect(pi.hasSameProcess(as: childTool))
         #expect(!pi.hasSameProcess(as: replacement))
@@ -1359,12 +1397,13 @@ struct PaneProcessIdentityTests {
     @Test("Pane PID collection accepts one bounded decimal line")
     func acceptsPID() {
         let collector = PaneProcessIDCollector()
-        collector.feed(Data("12345 cat\r\n".utf8))
+        collector.feed(Data("12345|cat|\"exec cat\"\r\n".utf8))
 
         #expect(collector.isComplete)
         #expect(!collector.failed)
         #expect(collector.paneProcessID == 12345)
         #expect(collector.paneCommand == "cat")
+        #expect(collector.paneStartCommand == "exec cat")
     }
 
     @Test("Pane PID collection rejects oversized output immediately")
