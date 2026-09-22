@@ -348,9 +348,18 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let resources = try beginLifecycleRetirement { try stateMachine.detach() }
         publishPhase()
         await resources.channel?.close()
-        try await resources.transport?.close()
+        let teardownFailed: Bool
+        do {
+            try await resources.transport?.close()
+            teardownFailed = false
+        } catch {
+            teardownFailed = true
+        }
         let pending = finishLifecycleRetirement()
         resume(pending, diagnostic: .cancelled, phase: .detached)
+        if teardownFailed {
+            throw SessionFailure(diagnostic: .connectionFailed, phase: .detached)
+        }
     }
 
     public func reconnect() async throws {
@@ -367,13 +376,22 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let resources = try beginLifecycleRetirement { try stateMachine.beginClose() }
         publishPhase()
         await resources.channel?.close()
-        try await resources.transport?.close()
+        let teardownFailed: Bool
+        do {
+            try await resources.transport?.close()
+            teardownFailed = false
+        } catch {
+            teardownFailed = true
+        }
         let pending = finishLifecycleRetirement()
         resume(pending, diagnostic: .cancelled, phase: .closing)
         try lock.withLock {
             try stateMachine.markClosed()
         }
         publishPhase()
+        if teardownFailed {
+            throw SessionFailure(diagnostic: .connectionFailed, phase: .closed)
+        }
     }
 
     private func beginLifecycleRetirement(

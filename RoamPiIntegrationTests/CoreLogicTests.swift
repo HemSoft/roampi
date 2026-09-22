@@ -792,6 +792,53 @@ struct RPCSessionReliabilityTests {
         }
     }
 
+    @Test("Lifecycle retirement drains pending requests when transport close throws")
+    func lifecycleRetirementSurvivesCloseFailure() async throws {
+        for action in ["detach", "close"] {
+            let transport = ControlledRPCTransport(
+                respondsAfterStartup: false,
+                throwsOnClose: true
+            )
+            let session = try RPCSession(
+                endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+                workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+                transport: transport
+            )
+            try await session.start()
+            let request = Task {
+                try await session.exchange(
+                    PiRPCRequest(identifier: "pending-\(action)", kind: .prompt("pending"))
+                )
+            }
+            for _ in 0 ..< 100 where transport.requestCount < 2 {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+
+            do {
+                if action == "detach" {
+                    try await session.detach()
+                } else {
+                    try await session.close()
+                }
+                Issue.record("Expected teardown failure for \(action)")
+            } catch let failure as SessionFailure {
+                #expect(failure.diagnostic == .connectionFailed)
+                #expect(failure.phase == (action == "detach" ? .detached : .closed))
+            }
+            do {
+                _ = try await request.value
+                Issue.record("Expected pending request cancellation for \(action)")
+            } catch let failure as SessionFailure {
+                #expect(failure.diagnostic == .cancelled)
+                #expect(failure.phase == (action == "detach" ? .detached : .closing))
+            }
+            #expect(session.phase == (action == "detach" ? .detached : .closed))
+            if action == "detach" {
+                _ = try? await session.close()
+            }
+        }
+    }
+
     @Test("Lifecycle retirement suppresses queued RPC writes")
     func lifecycleRetirementSuppressesQueuedWrite() async throws {
         let transport = ScriptedRPCTransport()
@@ -1328,6 +1375,7 @@ struct RPCSessionReliabilityTests {
 private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
     private let lock = NSLock()
     private let respondsAfterStartup: Bool
+    private let throwsOnClose: Bool
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
     private var requests = 0
@@ -1351,8 +1399,9 @@ private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
         lock.withLock { stopped }
     }
 
-    init(respondsAfterStartup: Bool) {
+    init(respondsAfterStartup: Bool, throwsOnClose: Bool = false) {
         self.respondsAfterStartup = respondsAfterStartup
+        self.throwsOnClose = throwsOnClose
     }
 
     func open() async throws -> any RPCChannel {
@@ -1361,6 +1410,9 @@ private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
 
     func close() async throws {
         lock.withLock { stopped = true }
+        if throwsOnClose {
+            throw SessionDiagnostic.connectionFailed
+        }
     }
 
     func receive(_ data: Data) {

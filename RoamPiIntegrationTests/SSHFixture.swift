@@ -111,9 +111,10 @@ final class SSHFixture: @unchecked Sendable {
             Thread.sleep(forTimeInterval: 0.05)
         }
         guard reachable else {
-            let log = (try? String(contentsOf: logPath, encoding: .utf8)) ?? ""
             stop()
-            throw FixtureError.startupFailed("sshd did not listen within five seconds: \(log)")
+            throw FixtureError.startupFailed(
+                "Disposable SSH fixture did not become ready within five seconds."
+            )
         }
     }
 
