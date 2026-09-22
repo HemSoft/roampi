@@ -4,56 +4,47 @@ extension TerminalSession {
     /// Runs one attach attempt: connect, allocate the PTY, attach or create the
     /// tmux session, and verify the remote process identity after a reconnect.
     func attach() async {
-        var candidateTransport: (any TerminalTransport)?
+        let transport = makeTransport()
+        configureCallbacks(on: transport)
+
         do {
-            let transport = makeTransport()
-
-            transport.onOutput = { [weak self] data in
-                guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
-                    return
-                }
-                handler(data)
-            }
-            transport.onClosed = { [weak self] exitStatus in
-                self?.handleChannelClosed(exitStatus: exitStatus)
-            }
-
-            candidateTransport = transport
-            let (initialColumns, initialRows) = lock.withLock {
-                (latestColumns, latestRows)
-            }
-            let opened = try await transport.open(columns: initialColumns, rows: initialRows)
-
-            do {
-                try await verifyProcessIdentity(for: transport)
-
-                try lock.withLock {
-                    try stateMachine.markAttached()
-                    self.transport = transport
-                    self.channel = opened
-                    coalescer.clearLastSent()
-                }
-                publishPhase()
-            } catch {
-                await opened.close()
-                try? await transport.close()
-                throw error
-            }
-        } catch is CancellationError {
-            try? await candidateTransport?.close()
-            markFailure(.cancelled)
-        } catch let failure as SessionFailure {
-            try? await candidateTransport?.close()
-            markFailure(failure.diagnostic)
-        } catch let diagnostic as SessionDiagnostic {
-            try? await candidateTransport?.close()
-            markFailure(diagnostic)
-        } catch let transportError as TransportError {
-            try? await candidateTransport?.close()
-            markFailure(Self.diagnostic(for: transportError))
+            try await openAndInstall(transport)
         } catch {
-            try? await candidateTransport?.close()
-            markFailure(.connectionFailed)
+            try? await transport.close()
+            markFailure(Self.diagnostic(for: error))
+        }
+    }
+
+    func configureCallbacks(on transport: any TerminalTransport) {
+        transport.onOutput = { [weak self] data in
+            guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
+                return
+            }
+            handler(data)
+        }
+        transport.onClosed = { [weak self] exitStatus in
+            self?.handleChannelClosed(exitStatus: exitStatus)
+        }
+    }
+
+    func openAndInstall(_ transport: any TerminalTransport) async throws {
+        let (initialColumns, initialRows) = lock.withLock {
+            (latestColumns, latestRows)
+        }
+        let opened = try await transport.open(columns: initialColumns, rows: initialRows)
+
+        do {
+            try await verifyProcessIdentity(for: transport)
+            try lock.withLock {
+                try stateMachine.markAttached()
+                self.transport = transport
+                channel = opened
+                coalescer.clearLastSent()
+            }
+            publishPhase()
+        } catch {
+            await opened.close()
+            throw error
         }
     }
 
@@ -126,6 +117,22 @@ extension TerminalSession {
 
     func publishPhase() {
         lock.withLock { phaseChangeHandler }?(lock.withLock { stateMachine.phase })
+    }
+
+    static func diagnostic(for error: any Error) -> SessionDiagnostic {
+        if error is CancellationError {
+            return .cancelled
+        }
+        if let failure = error as? SessionFailure {
+            return failure.diagnostic
+        }
+        if let diagnostic = error as? SessionDiagnostic {
+            return diagnostic
+        }
+        if let transportError = error as? TransportError {
+            return diagnostic(for: transportError)
+        }
+        return .connectionFailed
     }
 
     static func diagnostic(for transportError: TransportError) -> SessionDiagnostic {
