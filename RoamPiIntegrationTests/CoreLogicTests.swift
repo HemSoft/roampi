@@ -374,6 +374,7 @@ struct SessionFoundationTests {
             .cancelled,
             .commandFailed,
             .connectionFailed,
+            .duplicateRequest,
             .duplicateSession,
             .frameTooLarge,
             .hostKeyChanged,
@@ -412,6 +413,146 @@ struct SessionFoundationTests {
 
         #expect(session.phase == .failed(.cancelled))
     }
+}
+
+@Suite("RPC session reliability")
+struct RPCSessionReliabilityTests {
+    @Test("Reconnect starts each RPC stream with a fresh decoder")
+    func reconnectResetsDecoder() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        try await session.start()
+        #expect(session.phase == .attached)
+        transport.stopProcess()
+        #expect(session.phase == .disconnected)
+
+        try await session.reconnect()
+
+        #expect(session.phase == .attached)
+        #expect(session.lastExchange?.succeeded == true)
+        try await session.close()
+    }
+
+    @Test("Duplicate pending request identifiers are rejected")
+    func rejectsDuplicatePendingIdentifiers() async throws {
+        let transport = ControlledRPCTransport(respondsAfterStartup: false)
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .seconds(2)
+        )
+        try await session.start()
+
+        let first = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "duplicate", kind: .getState)
+            )
+        }
+        while transport.requestCount < 2 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        do {
+            _ = try await session.exchange(
+                PiRPCRequest(identifier: "duplicate", kind: .getState)
+            )
+            Issue.record("Expected duplicate request rejection")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .duplicateRequest)
+        }
+
+        first.cancel()
+        _ = try? await first.value
+        try await session.close()
+    }
+
+    @Test("A missing RPC response fails within the configured bound")
+    func responseTimeoutIsBounded() async throws {
+        let transport = ControlledRPCTransport(respondsAfterStartup: false)
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(40)
+        )
+        try await session.start()
+
+        do {
+            _ = try await session.exchange(
+                PiRPCRequest(identifier: "no-response", kind: .getState)
+            )
+            Issue.record("Expected response timeout")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .timedOut)
+        }
+
+        try await session.close()
+    }
+}
+
+private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
+    private let lock = NSLock()
+    private let respondsAfterStartup: Bool
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var requests = 0
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    var requestCount: Int {
+        lock.withLock { requests }
+    }
+
+    init(respondsAfterStartup: Bool) {
+        self.respondsAfterStartup = respondsAfterStartup
+    }
+
+    func open() async throws -> any RPCChannel {
+        ControlledRPCChannel(transport: self)
+    }
+
+    func close() async throws {}
+
+    func receive(_ data: Data) {
+        let count = lock.withLock {
+            requests += 1
+            return requests
+        }
+        guard count == 1 || respondsAfterStartup,
+              let request = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+              let identifier = request["id"]?.stringValue
+        else { return }
+        let response = "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\",\"success\":true}\n"
+        lock.withLock { outputHandler }?(Data(response.utf8))
+    }
+}
+
+private final class ControlledRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: ControlledRPCTransport?
+
+    init(transport: ControlledRPCTransport) {
+        self.transport = transport
+    }
+
+    func write(_ data: Data) async throws {
+        transport?.receive(data)
+    }
+
+    func close() async {}
 }
 
 private final class CancellingTerminalTransport: @unchecked Sendable, TerminalTransport {

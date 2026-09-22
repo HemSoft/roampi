@@ -20,8 +20,11 @@ final class SSHFixture: @unchecked Sendable {
     let endpoint: RemoteEndpoint
     let credentials: FixtureCredentials
     let clientPublicKeyForAuthorizedKeys: String
+    let tmuxSessionPrefix: String
 
     private let sshdProcess: Process
+    private let tmuxDirectory: URL
+    private let tmuxSocketPath: String
 
     var port: Int {
         endpoint.port
@@ -40,6 +43,15 @@ final class SSHFixture: @unchecked Sendable {
 
         workDirectory = root.appendingPathComponent("work", isDirectory: true)
         try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
+
+        let tmuxSuffix = UUID().uuidString.prefix(8).lowercased()
+        tmuxDirectory = URL(fileURLWithPath: "/tmp/roampi-tmux-\(tmuxSuffix)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmuxDirectory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tmuxDirectory.path)
+        tmuxSocketPath = tmuxDirectory
+            .appendingPathComponent("tmux-\(getuid())/default")
+            .path
+        tmuxSessionPrefix = "roampi-\(tmuxSuffix)"
 
         // Host key via ssh-keygen; it never leaves the temporary directory.
         let hostKeyPath = root.appendingPathComponent("hostkey").path
@@ -79,7 +91,7 @@ final class SSHFixture: @unchecked Sendable {
         AllowTcpForwarding no
         X11Forwarding no
         PrintMotd no
-        SetEnv PATH=\(shellSearchPath)
+        SetEnv PATH=\(shellSearchPath) TMUX_TMPDIR=\(tmuxDirectory.path)
 
         """
         try Data(config.utf8).write(to: configPath)
@@ -103,6 +115,10 @@ final class SSHFixture: @unchecked Sendable {
             stop()
             throw FixtureError.startupFailed("sshd did not listen within five seconds: \(log)")
         }
+    }
+
+    func sessionName(_ suffix: String) -> String {
+        "\(tmuxSessionPrefix)-\(suffix)"
     }
 
     /// A terminal transport bound to the fixture endpoint and credentials.
@@ -185,10 +201,14 @@ final class SSHFixture: @unchecked Sendable {
     }
 
     func stop() {
+        if let tmuxPath = Self.locateExecutable("tmux") {
+            try? Self.runProcess(tmuxPath, arguments: ["-S", tmuxSocketPath, "kill-server"])
+        }
         if sshdProcess.isRunning {
             sshdProcess.terminate()
             sshdProcess.waitUntilExit()
         }
+        try? FileManager.default.removeItem(at: tmuxDirectory)
         try? FileManager.default.removeItem(at: root)
     }
 

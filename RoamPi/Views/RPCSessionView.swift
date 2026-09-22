@@ -128,7 +128,7 @@ final class RPCScreenModel: ObservableObject {
         Task {
             do {
                 let response = try await session.exchange(
-                    PiRPCRequest(identifier: "ui-\(Int(Date().timeIntervalSince1970))", kind: .getState)
+                    PiRPCRequest(identifier: "ui-\(UUID().uuidString)", kind: .getState)
                 )
                 if response.isSuccessResponse(command: "get_state") {
                     phaseDetail = "The state request completed."

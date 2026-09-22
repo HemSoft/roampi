@@ -143,6 +143,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
 
     private let configuration: Configuration
+    private let requestTimeout: Duration
 
     /// Result of the startup `get_state` exchange, nil before it completes.
     public var lastExchange: ExchangeResult? {
@@ -163,7 +164,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         endpoint: RemoteEndpoint,
         authentication: SSHAuthenticationMode = .standardKey,
         workingDirectory: RemoteWorkingDirectory,
-        transport: (any RPCTransport)? = nil
+        transport: (any RPCTransport)? = nil,
+        requestTimeout: Duration = .seconds(30)
     ) {
         configuration = Configuration(
             endpoint: endpoint,
@@ -172,13 +174,15 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             scriptedTransport: transport,
             credentials: nil
         )
+        self.requestTimeout = requestTimeout
     }
 
     init(
         endpoint: RemoteEndpoint,
         authentication: SSHAuthenticationMode = .standardKey,
         workingDirectory: RemoteWorkingDirectory,
-        credentials: any SSHSessionCredentials
+        credentials: any SSHSessionCredentials,
+        requestTimeout: Duration = .seconds(30)
     ) {
         configuration = Configuration(
             endpoint: endpoint,
@@ -187,6 +191,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             scriptedTransport: nil,
             credentials: credentials
         )
+        self.requestTimeout = requestTimeout
     }
 
     public func start() async throws {
@@ -254,6 +259,13 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func openExchange() async {
         var candidateTransport: (any RPCTransport)?
         do {
+            lock.withLock {
+                decoder = JSONLFrameDecoder()
+                responseFrameCount = 0
+                eventFrameCount = 0
+                recordedExchange = nil
+            }
+
             let transport: any RPCTransport = if let scripted = configuration.scriptedTransport {
                 scripted
             } else {
@@ -325,11 +337,27 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             throw SessionFailure(diagnostic: .notAttached, phase: .attached)
         }
 
+        let timeout = requestTimeout
+        let timeoutTask: Task<Void, Never> = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            self?.failPending(request.identifier, error: .timedOut)
+        }
+        defer { timeoutTask.cancel() }
+
         do {
             return try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PiRPCFrame, Error>) in
-                    lock.withLock {
+                    let inserted = lock.withLock {
+                        guard pendingRequests[request.identifier] == nil else { return false }
                         pendingRequests[request.identifier] = continuation
+                        return true
+                    }
+                    guard inserted else {
+                        continuation.resume(
+                            throwing: SessionFailure(diagnostic: .duplicateRequest, phase: .attached)
+                        )
+                        return
                     }
 
                     Task { [weak self] in

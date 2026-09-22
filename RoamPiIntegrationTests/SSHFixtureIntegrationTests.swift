@@ -17,10 +17,11 @@ struct SSHFixtureIntegrationTests {
         let fixture = try makeFixture()
         defer { fixture.stop() }
 
-        let transport = fixture.makeTransport(sessionName: "roampi-itest")
+        let sessionName = fixture.sessionName("resize")
+        let transport = fixture.makeTransport(sessionName: sessionName)
         let terminal = try TerminalSession(
             endpoint: fixture.endpoint,
-            sessionName: #require(TmuxSessionName("roampi-itest")),
+            sessionName: #require(TmuxSessionName(sessionName)),
             workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
             transport: transport
         )
@@ -29,7 +30,7 @@ struct SSHFixtureIntegrationTests {
         #expect(terminal.phase == .attached)
 
         let beforeSize = try await fixture.exec(
-            "tmux display-message -p -t 'roampi-itest' '#{pane_width} #{pane_height}'"
+            "tmux display-message -p -t '\(sessionName)' '#{pane_width} #{pane_height}'"
         )
         // tmux reserves one row for its status line.
         #expect(beforeSize == "80 23")
@@ -38,16 +39,16 @@ struct SSHFixtureIntegrationTests {
         try await Task.sleep(for: .milliseconds(300))
 
         let afterSize = try await fixture.exec(
-            "tmux display-message -p -t 'roampi-itest' '#{pane_width} #{pane_height}'"
+            "tmux display-message -p -t '\(sessionName)' '#{pane_width} #{pane_height}'"
         )
         #expect(afterSize == "120 39")
 
-        let panePID = try await fixture.paneProcessID(sessionName: "roampi-itest")
+        let panePID = try await fixture.paneProcessID(sessionName: sessionName)
         #expect(panePID != nil)
-        #expect(try await fixture.tmuxSessionCount(name: "roampi-itest") == 1)
+        #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
 
         try await terminal.detach()
-        try await fixture.killSession(name: "roampi-itest")
+        try await fixture.killSession(name: sessionName)
     }
 
     @Test("Reconnect attaches the same tmux session without creating a duplicate")
@@ -55,38 +56,39 @@ struct SSHFixtureIntegrationTests {
         let fixture = try makeFixture()
         defer { fixture.stop() }
 
-        let firstTransport = fixture.makeTransport(sessionName: "roampi-itest2")
+        let sessionName = fixture.sessionName("reconnect")
+        let firstTransport = fixture.makeTransport(sessionName: sessionName)
         let firstSession = try TerminalSession(
             endpoint: fixture.endpoint,
-            sessionName: #require(TmuxSessionName("roampi-itest2")),
+            sessionName: #require(TmuxSessionName(sessionName)),
             workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
             transport: firstTransport
         )
         try await firstSession.start()
         #expect(firstSession.phase == .attached)
 
-        let firstPID = try await #require(fixture.paneProcessID(sessionName: "roampi-itest2"))
+        let firstPID = try await #require(fixture.paneProcessID(sessionName: sessionName))
         try await firstSession.detach()
         #expect(firstSession.phase == .detached)
 
         try await Task.sleep(for: .milliseconds(200))
 
-        let secondTransport = fixture.makeTransport(sessionName: "roampi-itest2")
+        let secondTransport = fixture.makeTransport(sessionName: sessionName)
         let secondSession = try TerminalSession(
             endpoint: fixture.endpoint,
-            sessionName: #require(TmuxSessionName("roampi-itest2")),
+            sessionName: #require(TmuxSessionName(sessionName)),
             workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
             transport: secondTransport
         )
         try await secondSession.start()
         #expect(secondSession.phase == .attached)
 
-        let secondPID = try await #require(fixture.paneProcessID(sessionName: "roampi-itest2"))
+        let secondPID = try await #require(fixture.paneProcessID(sessionName: sessionName))
         #expect(secondPID == firstPID)
-        #expect(try await fixture.tmuxSessionCount(name: "roampi-itest2") == 1)
+        #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
 
         try await secondSession.detach()
-        try await fixture.killSession(name: "roampi-itest2")
+        try await fixture.killSession(name: sessionName)
     }
 
     @Test("RPC mode exchanges one strict LF-delimited request and response")

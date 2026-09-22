@@ -47,7 +47,7 @@ Inbound framing:
 - rejects malformed JSON and an unterminated final record;
 - stops the channel and fails pending requests after a protocol error.
 
-Responses are correlated by request ID. Event frames can arrive alongside responses and are counted separately. Prompt and response contents are not logged or included in diagnostics.
+Responses are correlated by request ID. Duplicate pending identifiers are rejected, and each response wait has a 30-second deadline. Every reopened RPC stream starts with a fresh decoder and per-exchange counters. Event frames can arrive alongside responses and are counted separately. Prompt and response contents are not logged or included in diagnostics.
 
 ## Security boundaries
 
@@ -57,7 +57,7 @@ Responses are correlated by request ID. Event frames can arrive alongside respon
 - Diagnostics are closed enums with fixed messages. They never interpolate usernames, hostnames, addresses, paths, commands, terminal output, prompts, keys, or tokens.
 - SwiftTerm handles an untrusted terminal byte stream. Remote OSC 52 clipboard reads and writes are denied.
 - The physical validation profile is `DEBUG`-only, size-limited, deleted at launch, and accepts exactly one independently staged host fingerprint. It can export only the device public key for temporary authorization.
-- Integration tests use a user-level disposable SSH daemon, generated host and client keys, a temporary working directory, a stub RPC executable, and uniquely named tmux sessions. They do not use the live tailnet or a user's Pi state.
+- Integration tests use a user-level disposable SSH daemon, generated host and client keys, a temporary working directory, a stub RPC executable, uniquely named tmux sessions, and a fixture-private tmux socket. They do not use the live tailnet, the developer's tmux server, or a user's Pi state.
 
 ## Unsupported or deferred cases
 

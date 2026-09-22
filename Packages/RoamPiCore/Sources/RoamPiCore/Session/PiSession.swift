@@ -90,6 +90,7 @@ public enum SessionDiagnostic: Error, Equatable, Sendable {
     case cancelled
     case commandFailed
     case connectionFailed
+    case duplicateRequest
     case duplicateSession
     case frameTooLarge
     case hostKeyChanged
@@ -115,6 +116,8 @@ public enum SessionDiagnostic: Error, Equatable, Sendable {
             "The remote command failed."
         case .connectionFailed:
             "The SSH connection failed. Check Tailscale and remote SSH availability."
+        case .duplicateRequest:
+            "A request with this identifier is already pending."
         case .duplicateSession:
             "A session with this name is already managed in this view."
         case .frameTooLarge:
