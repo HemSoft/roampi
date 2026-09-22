@@ -113,6 +113,17 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
 /// least one strict LF-delimited request/response, and keeps framing details
 /// out of SwiftUI views.
 public final class RPCSession: @unchecked Sendable, PiSession {
+    private struct Resources {
+        let channel: (any RPCChannel)?
+        let transport: (any RPCTransport)?
+    }
+
+    private struct ProtocolFailureResources {
+        let channel: (any RPCChannel)?
+        let transport: (any RPCTransport)?
+        let pending: [String: CheckedContinuation<PiRPCFrame, Error>]
+    }
+
     /// Bounded result of the most recent strict JSONL exchange. Contains no
     /// response content, paths, or prompts.
     public struct ExchangeResult: Equatable, Sendable {
@@ -208,20 +219,20 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     public func detach() async throws {
-        let channels = try lock.withLock {
+        let resources: Resources = try lock.withLock {
             try stateMachine.detach()
-            let channels = (channel, transport)
+            let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
-            return channels
+            return resources
         }
         publishPhase()
-        await channels.0?.close()
-        try await channels.1?.close()
+        await resources.channel?.close()
+        try await resources.transport?.close()
     }
 
     public func reconnect() async throws {
-        let staleTransport = try lock.withLock {
+        let staleTransport: (any RPCTransport)? = try lock.withLock {
             try stateMachine.beginReconnect()
             let staleTransport = transport
             transport = nil
@@ -234,16 +245,16 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     public func close() async throws {
-        let channels = try lock.withLock {
+        let resources: Resources = try lock.withLock {
             try stateMachine.beginClose()
-            let channels = (channel, transport)
+            let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
-            return channels
+            return resources
         }
         publishPhase()
-        await channels.0?.close()
-        try await channels.1?.close()
+        await resources.channel?.close()
+        try await resources.transport?.close()
         try lock.withLock {
             try stateMachine.markClosed()
         }
@@ -475,24 +486,27 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     private func stopAfterProtocolFailure(_ diagnostic: SessionDiagnostic) {
-        let resources = lock.withLock {
+        let resources: ProtocolFailureResources = lock.withLock {
             try? stateMachine.fail(diagnostic)
-            let pending = pendingRequests
+            let resources = ProtocolFailureResources(
+                channel: channel,
+                transport: transport,
+                pending: pendingRequests
+            )
             pendingRequests = [:]
-            let resources = (channel, transport, pending)
             channel = nil
             transport = nil
             return resources
         }
 
-        for continuation in resources.2.values {
+        for continuation in resources.pending.values {
             continuation.resume(
                 throwing: SessionFailure(diagnostic: diagnostic, phase: .failed(diagnostic))
             )
         }
         Task {
-            await resources.0?.close()
-            try? await resources.1?.close()
+            await resources.channel?.close()
+            try? await resources.transport?.close()
         }
         publishPhase()
     }

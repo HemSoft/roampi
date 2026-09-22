@@ -167,6 +167,21 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 /// coalescing, and the reconnect rules that prevent duplicate tmux sessions or
 /// duplicate Pi processes.
 public final class TerminalSession: @unchecked Sendable, PiSession {
+    private struct Resources {
+        let channel: (any TerminalChannel)?
+        let transport: (any TerminalTransport)?
+    }
+
+    private struct ResizeSubmission {
+        let decision: ResizeCoalescer.Decision?
+        let channel: (any TerminalChannel)?
+    }
+
+    private struct PendingResize {
+        let size: ResizeCoalescer.Size?
+        let channel: (any TerminalChannel)?
+    }
+
     private struct Configuration: Sendable {
         let endpoint: RemoteEndpoint
         let authentication: SSHAuthenticationMode
@@ -289,20 +304,20 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     public func detach() async throws {
-        let channels = try lock.withLock {
+        let resources: Resources = try lock.withLock {
             try stateMachine.detach()
-            let channels = (channel, transport)
+            let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
-            return channels
+            return resources
         }
         publishPhase()
-        await channels.0?.close()
-        try await channels.1?.close()
+        await resources.channel?.close()
+        try await resources.transport?.close()
     }
 
     public func reconnect() async throws {
-        let staleTransport = try lock.withLock {
+        let staleTransport: (any TerminalTransport)? = try lock.withLock {
             try stateMachine.beginReconnect()
             let staleTransport = transport
             transport = nil
@@ -315,16 +330,16 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     public func close() async throws {
-        let channels = try lock.withLock {
+        let resources: Resources = try lock.withLock {
             try stateMachine.beginClose()
-            let channels = (channel, transport)
+            let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
-            return channels
+            return resources
         }
         publishPhase()
-        await channels.0?.close()
-        try await channels.1?.close()
+        await resources.channel?.close()
+        try await resources.transport?.close()
         try lock.withLock {
             try stateMachine.markClosed()
         }
@@ -334,18 +349,21 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     /// Feeds one viewport size from the UI. Bounded and coalesced; never
     /// reconnects and never starts another process.
     public func submitViewportSize(columns: Int, rows: Int) throws {
-        let decision = lock.withLock {
+        let submission: ResizeSubmission = lock.withLock {
             latestColumns = columns
             latestRows = rows
-            return (coalescer.submit(columns: columns, rows: rows), channel)
+            return ResizeSubmission(
+                decision: coalescer.submit(columns: columns, rows: rows),
+                channel: channel
+            )
         }
 
-        guard let resizeDecision = decision.0 else {
+        guard let resizeDecision = submission.decision else {
             return
         }
 
         if let now = resizeDecision.sendNow {
-            try decision.1?.requestResize(columns: now.columns, rows: now.rows)
+            try submission.channel?.requestResize(columns: now.columns, rows: now.rows)
         }
 
         let interval = deferredResizeInterval
@@ -358,10 +376,10 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     private func flushPendingResize() {
-        let decision = lock.withLock {
-            (coalescer.flush(), channel)
+        let pending: PendingResize = lock.withLock {
+            PendingResize(size: coalescer.flush(), channel: channel)
         }
-        guard let size = decision.0, let channel = decision.1 else {
+        guard let size = pending.size, let channel = pending.channel else {
             return
         }
         try? channel.requestResize(columns: size.columns, rows: size.rows)
