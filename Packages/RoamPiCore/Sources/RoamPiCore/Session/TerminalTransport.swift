@@ -104,8 +104,11 @@ struct TmuxPaneIdentity: Equatable, Sendable {
     let creationIdentifier: String?
 
     func hasSameProcess(as other: TmuxPaneIdentity) -> Bool {
-        processID == other.processID
-            && creationIdentifier == other.creationIdentifier
+        guard let creationIdentifier, let otherIdentifier = other.creationIdentifier else {
+            return false
+        }
+        return processID == other.processID
+            && creationIdentifier == otherIdentifier
     }
 }
 
@@ -220,6 +223,9 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 throw SessionDiagnostic.processIdentityChanged
             }
             if let existingIdentity {
+                guard existingIdentity.creationIdentifier != nil else {
+                    throw SessionDiagnostic.processIdentityChanged
+                }
                 lock.withLock { adoptedPaneProcessID = existingIdentity.processID }
             }
             try await postPreflightHook?()

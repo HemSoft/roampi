@@ -1998,8 +1998,16 @@ struct PaneProcessIdentityTests {
             creationIdentifier: "create-2"
         )
 
+        let markerless = TmuxPaneIdentity(
+            processID: 12345,
+            executable: "node",
+            startCommand: "exec pi",
+            creationIdentifier: nil
+        )
+
         #expect(pi.hasSameProcess(as: childTool))
         #expect(!pi.hasSameProcess(as: replacement))
+        #expect(!markerless.hasSameProcess(as: markerless))
     }
 
     @Test("Pane PID collection accepts one bounded decimal line")

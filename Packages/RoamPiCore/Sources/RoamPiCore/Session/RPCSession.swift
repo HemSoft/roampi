@@ -134,6 +134,38 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
     }
 }
 
+private final class RequestTimeoutController: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var cancelled = false
+
+    func arm(after duration: Duration, action: @escaping @Sendable () -> Void) {
+        let task = Task {
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled else { return }
+            action()
+        }
+        let shouldCancel = lock.withLock {
+            guard !cancelled else { return true }
+            self.task = task
+            return false
+        }
+        if shouldCancel {
+            task.cancel()
+        }
+    }
+
+    func cancel() {
+        let task = lock.withLock {
+            cancelled = true
+            let task = self.task
+            self.task = nil
+            return task
+        }
+        task?.cancel()
+    }
+}
+
 private final class OrderedRPCWriter: @unchecked Sendable {
     private let lock = NSLock()
     private var tail: Task<Void, Never>?
@@ -494,12 +526,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         }
 
         let timeout = requestTimeout
-        let timeoutTask: Task<Void, Never> = Task { [weak self] in
-            try? await Task.sleep(for: timeout)
-            guard !Task.isCancelled else { return }
-            self?.stopTimedOutRequest(request.identifier, generation: generation)
-        }
-        defer { timeoutTask.cancel() }
+        let timeoutController = RequestTimeoutController()
+        defer { timeoutController.cancel() }
 
         do {
             return try await withTaskCancellationHandler {
@@ -533,6 +561,10 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                         continuation.resume(
                             throwing: SessionFailure(diagnostic: registrationError, phase: .attached)
                         )
+                    } else {
+                        timeoutController.arm(after: timeout) { [weak self] in
+                            self?.stopTimedOutRequest(request.identifier, generation: generation)
+                        }
                     }
                 }
             } onCancel: {

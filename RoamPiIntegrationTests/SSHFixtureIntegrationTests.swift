@@ -207,6 +207,35 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("First attach rejects a markerless existing pane")
+    func rejectsMarkerlessExistingPane() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("markerless")
+        _ = try await fixture.exec(
+            "cd \(ShellQuoting.quote(fixture.workDirectory.path)) && tmux new-session -d -s "
+                + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote("exec cat"))"
+        )
+        let transport = try SSHPTYTransport(
+            endpoint: fixture.endpoint,
+            authentication: .standardKey,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            paneCommand: "exec cat",
+            credentials: fixture.credentials
+        )
+
+        do {
+            _ = try await transport.open(columns: 80, rows: 24)
+            Issue.record("Expected markerless pane rejection")
+        } catch let diagnostic as SessionDiagnostic {
+            #expect(diagnostic == .processIdentityChanged)
+        }
+        try await transport.close()
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("First attach rejects an unrelated existing Node pane")
     func rejectsIncompatibleExistingPane() async throws {
         let fixture = try makeFixture()
