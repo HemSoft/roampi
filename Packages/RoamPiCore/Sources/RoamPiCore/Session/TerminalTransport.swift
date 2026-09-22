@@ -146,7 +146,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         sessionName: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         terminalType: String = "xterm-256color",
-        paneCommand: String = "exec pi",
+        paneCommand: String = PiTerminalCommand.start,
         attachExisting: Bool = false,
         credentials: any SSHSessionCredentials = SecureTransportStore.shared
     ) {
@@ -193,7 +193,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 try await queryPaneIdentity(connection: connection)
             }
             if let existingIdentity,
-               existingIdentity.startCommand != paneCommand
+               existingIdentity.startCommand != Self.reportedStartCommand(for: paneCommand)
             {
                 throw SessionDiagnostic.processIdentityChanged
             }
@@ -248,6 +248,16 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
     }
 
+    static func reportedStartCommand(for paneCommand: String) -> String {
+        let escaped = paneCommand.reduce(into: "") { result, character in
+            if character == "\\" || character == "\"" || character == "$" || character == "`" {
+                result.append("\\")
+            }
+            result.append(character)
+        }
+        return "\"\(escaped)\""
+    }
+
     static func launcherPaneExecutable(for paneCommand: String) -> String {
         let commandParts = paneCommand.split(separator: " ")
         if commandParts.count == 2, commandParts[0] == "exec" {
@@ -280,7 +290,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             return nil
         }
         if !attachExisting,
-           identity.startCommand != paneCommand
+           identity.startCommand != Self.reportedStartCommand(for: paneCommand)
            || !compatiblePaneExecutables.contains(identity.command)
         {
             throw SessionDiagnostic.processIdentityChanged
@@ -366,10 +376,8 @@ final class PaneProcessIDCollector: @unchecked Sendable {
             }
             data.append(chunk)
             if data.contains(where: { byte in
-                let isDigit = (0x30 ... 0x39).contains(byte)
-                let isLetter = (0x41 ... 0x5A).contains(byte) || (0x61 ... 0x7A).contains(byte)
-                return !isDigit && !isLetter && ![0x09, 0x0A, 0x0D, 0x20, 0x22, 0x2D, 0x2E, 0x2F, 0x5F, 0x7C]
-                    .contains(byte)
+                byte != 0x0A && byte != 0x0D && byte != 0x7C
+                    && !(0x20 ... 0x7E).contains(byte)
             }) {
                 invalid = true
                 done = true
@@ -431,14 +439,9 @@ final class PaneProcessIDCollector: @unchecked Sendable {
         let command = parts.count > 1
             ? String(parts[1]).trimmingCharacters(in: Self.whitespace)
             : ""
-        let quotedStartCommand = parts.count > 2
+        let startCommand = parts.count > 2
             ? String(parts[2]).trimmingCharacters(in: Self.whitespace)
             : ""
-        let startCommand = quotedStartCommand.count >= 2
-            && quotedStartCommand.first == "\""
-            && quotedStartCommand.last == "\""
-            ? String(quotedStartCommand.dropFirst().dropLast())
-            : quotedStartCommand
         guard parts.count == 3,
               parts[0].utf8.count <= 10,
               let processID = Int32(parts[0]),

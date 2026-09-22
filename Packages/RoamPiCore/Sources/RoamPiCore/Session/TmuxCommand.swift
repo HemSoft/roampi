@@ -12,7 +12,7 @@ enum TmuxCommand {
     static func attachOrCreate(
         session: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
-        paneCommand: String = "exec pi"
+        paneCommand: String = PiTerminalCommand.start
     ) -> String {
         "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
             + "&& exec tmux new-session -s \(ShellQuoting.quote(session.rawValue)) "

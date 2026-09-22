@@ -18,12 +18,12 @@ The iOS app owns SSH connections and channels. The remote host owns tmux and Pi 
 A terminal attach runs the validated equivalent of:
 
 ```text
-cd '<approved-directory>' && exec tmux new-session -A -s '<approved-name>' 'exec pi'
+cd '<approved-directory>' && exec tmux new-session -s '<approved-name>' '<validated login-shell Pi launcher>'
 ```
 
-Session names accept only letters, numbers, underscores, dots, and dashes, with a safe first character and a 64-byte limit. Working directories must be absolute, contain no traversal components or control characters, use a restricted character set, and fit within 256 bytes. Every remote value is then POSIX single-quoted.
+Session names accept only letters, numbers, underscores, and non-leading dashes, with a 64-byte limit. Working directories must be absolute, contain no traversal components or control characters, use a restricted character set, and fit within 256 bytes. Every remote value is then POSIX single-quoted.
 
-A newly created pane starts Pi as its direct process, so tmux's `pane_pid` identifies Pi rather than an intermediate shell. Before adopting an existing named session, RoamPi checks the bounded `pane_pid` and `pane_current_command` response and rejects a pane not owned by the Pi launcher or its direct Node interpreter. `TerminalSession` records the actual executable and PID on the first attach. Reconnect uses attach-only `tmux attach-session`; a missing session therefore fails without creating remote state. After attachment, RoamPi reads the identity again and proceeds only if the executable and PID still match. A mismatch closes the new channel and moves to a bounded failure state.
+A newly created pane uses the account's configured absolute `$SHELL` in login mode to resolve Pi, then replaces that shell with Pi, so tmux's `pane_pid` identifies Pi rather than an intermediate shell. Before adopting an existing named session, RoamPi checks bounded `pane_pid`, `pane_current_command`, and `pane_start_command` fields and requires the exact approved launcher. Creation omits tmux's `-A`, so a concurrent name collision fails rather than attaching to an unverified pane. `TerminalSession` records the actual executable and PID on the first attach. Reconnect uses attach-only `tmux attach-session`; a missing session therefore fails without creating remote state. After attachment, RoamPi reads the identity again and proceeds only if the stable PID still matches; `pane_current_command` may temporarily reflect a child tool. A mismatch closes the new channel and moves to a bounded failure state.
 
 Detach and close end the iOS-side PTY and SSH connection. They do not send `tmux kill-session`, terminate Pi, or delete remote state. The app does not expect continuous execution while backgrounded: iOS may suspend it. tmux is the continuity mechanism, and reconnect is explicit after suspension or transport loss.
 

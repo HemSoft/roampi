@@ -284,7 +284,10 @@ struct SessionFoundationTests {
 
         let command = TmuxCommand.attachOrCreate(session: session, workingDirectory: directory)
 
-        #expect(command == "cd '/home/user/proj' && exec tmux new-session -s 'roampi-proj' 'exec pi'")
+        #expect(
+            command == "cd '/home/user/proj' && exec tmux new-session -s 'roampi-proj' "
+                + ShellQuoting.quote(PiTerminalCommand.start)
+        )
     }
 
     @Test("Support commands quote the session name")
@@ -1382,6 +1385,10 @@ struct PaneProcessIdentityTests {
         #expect(catExecutables == ["cat"])
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec pi") == "pi")
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec node") == "node")
+        #expect(
+            SSHPTYTransport.reportedStartCommand(for: PiTerminalCommand.start)
+                == #""case \"\$SHELL\" in /*) exec \"\$SHELL\" -lc 'exec pi';; *) exit 127;; esac""#
+        )
     }
 
     @Test("Reconnect identity follows the stable pane PID")
@@ -1403,7 +1410,7 @@ struct PaneProcessIdentityTests {
         #expect(!collector.failed)
         #expect(collector.paneProcessID == 12345)
         #expect(collector.paneCommand == "cat")
-        #expect(collector.paneStartCommand == "exec cat")
+        #expect(collector.paneStartCommand == "\"exec cat\"")
     }
 
     @Test("Pane PID collection rejects oversized output immediately")

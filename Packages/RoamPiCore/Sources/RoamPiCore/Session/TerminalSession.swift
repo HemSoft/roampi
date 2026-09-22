@@ -82,7 +82,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             workingDirectory: workingDirectory,
             scriptedTransport: transport.map(TerminalTransportBox.init),
             credentials: nil,
-            paneCommand: "exec pi"
+            paneCommand: PiTerminalCommand.start
         )
         self.deferredResizeInterval = deferredResizeInterval
     }
@@ -93,7 +93,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         sessionName: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         credentials: any SSHSessionCredentials,
-        paneCommand: String = "exec pi",
+        paneCommand: String = PiTerminalCommand.start,
         deferredResizeInterval: Duration = .milliseconds(150)
     ) {
         configuration = Configuration(
