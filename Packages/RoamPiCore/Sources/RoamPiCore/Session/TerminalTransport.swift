@@ -73,6 +73,10 @@ final class TerminalTransportBox: @unchecked Sendable {
         try await TerminalChannelBox(base.open(columns: columns, rows: rows))
     }
 
+    func releaseVerifiedOutput() throws {
+        try sshTransport?.releaseVerifiedOutput()
+    }
+
     func close() async throws {
         try await base.close()
     }
@@ -127,6 +131,10 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private var channel: SSHSessionChannel?
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var heldOutput: [Data] = []
+    private var heldOutputBytes = 0
+    private var heldOutputOverflowed = false
+    private var outputVerified = false
     private var exitStatus: Int32?
     private var isClosed = false
 
@@ -219,10 +227,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
             sessionChannel.onOutput = { [weak self] data, isStdErr in
                 guard !isStdErr else { return }
-                guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
-                    return
-                }
-                handler(data)
+                self?.receiveUnverifiedOutput(data)
             }
             sessionChannel.onOutputOverflow = { [weak self, weak sessionChannel] in
                 self?.reportClosure(exitStatus: 1)
@@ -245,6 +250,48 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             await connection.close()
             lock.withLock { self.connection = nil }
             throw error
+        }
+    }
+
+    private func receiveUnverifiedOutput(_ data: Data) {
+        let handler: (@Sendable (Data) -> Void)? = lock.withLock {
+            if outputVerified {
+                return outputHandler
+            }
+            guard !heldOutputOverflowed,
+                  heldOutputBytes + data.count <= 4 * 1024 * 1024
+            else {
+                heldOutput = []
+                heldOutputBytes = 0
+                heldOutputOverflowed = true
+                return nil
+            }
+            heldOutput.append(Data(data))
+            heldOutputBytes += data.count
+            return nil
+        }
+        handler?(data)
+    }
+
+    func releaseVerifiedOutput() throws {
+        while true {
+            let batch: (chunks: [Data], handler: (@Sendable (Data) -> Void)?) = try lock.withLock {
+                guard !heldOutputOverflowed else {
+                    throw SessionDiagnostic.frameTooLarge
+                }
+                guard !heldOutput.isEmpty else {
+                    outputVerified = true
+                    return ([], outputHandler)
+                }
+                let chunks = heldOutput
+                heldOutput = []
+                heldOutputBytes = 0
+                return (chunks, outputHandler)
+            }
+            guard !batch.chunks.isEmpty else { return }
+            for chunk in batch.chunks {
+                batch.handler?(chunk)
+            }
         }
     }
 
@@ -362,6 +409,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             let resources = Resources(channel: channel, connection: connection)
             channel = nil
             connection = nil
+            heldOutput = []
+            heldOutputBytes = 0
             return resources
         }
         await resources.channel?.close()

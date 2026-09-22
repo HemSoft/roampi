@@ -5,6 +5,23 @@ import Testing
 /// Disposable SSH integration tests. Each test uses a generated keypair, a
 /// user-level sshd on a private high port, a temporary working directory, and
 /// disposable tmux sessions. Production tests never touch the live tailnet.
+private final class LockedTerminalOutput: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = Data()
+
+    var text: String {
+        lock.withLock { String(decoding: storage, as: UTF8.self) }
+    }
+
+    func append(_ data: Data) {
+        lock.withLock { storage.append(data) }
+    }
+
+    func reset() {
+        lock.withLock { storage = Data() }
+    }
+}
+
 @MainActor
 @Suite(.serialized)
 struct SSHFixtureIntegrationTests {
@@ -82,6 +99,39 @@ struct SSHFixtureIntegrationTests {
         #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
 
         try await session.detach()
+        try await fixture.killSession(name: sessionName)
+    }
+
+    @Test("Reconnect never forwards output from a replacement pane")
+    func reconnectSuppressesReplacementOutput() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("replaced")
+        let output = LockedTerminalOutput()
+        let session = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
+        )
+        session.onOutput = { output.append($0) }
+        try await session.start()
+        try await session.detach()
+        output.reset()
+
+        try await fixture.killSession(name: sessionName)
+        let replacementCommand = "printf 'UNRELATED_REPLACEMENT'; exec cat"
+        _ = try await fixture.exec(
+            "cd \(ShellQuoting.quote(fixture.workDirectory.path)) && tmux new-session -d -s "
+                + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote(replacementCommand))"
+        )
+        try await session.reconnect()
+
+        #expect(session.phase == .failed(.processIdentityChanged))
+        #expect(!output.text.contains("UNRELATED_REPLACEMENT"))
+        try await session.close()
         try await fixture.killSession(name: sessionName)
     }
 

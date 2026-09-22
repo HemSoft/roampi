@@ -70,6 +70,7 @@ extension TerminalSession {
                 coalescer.clearLastSent()
                 return coalescer.normalized(columns: latestColumns, rows: latestRows)
             }
+            try transport.releaseVerifiedOutput()
             try opened.requestResize(columns: latestSize.columns, rows: latestSize.rows)
             publishPhase()
         } catch {
@@ -112,6 +113,7 @@ extension TerminalSession {
             }
             guard previous == nil || previous?.hasSameProcess(as: observed) == true else {
                 processIdentityUnchanged = false
+                try? stateMachine.fail(.processIdentityChanged)
                 throw SessionFailure(
                     diagnostic: .processIdentityChanged,
                     phase: .failed(.processIdentityChanged)
