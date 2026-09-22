@@ -29,6 +29,11 @@ public protocol TerminalChannel: Sendable {
 /// The SSH PTY transport: connects, allocates a PTY with an explicit terminal
 /// type and viewport, and runs the approved tmux attach command.
 final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
+    private struct Resources {
+        let channel: SSHSessionChannel?
+        let connection: SSHSessionConnection?
+    }
+
     private let endpoint: RemoteEndpoint
     private let authentication: SSHAuthenticationMode
     private let sessionName: TmuxSessionName
@@ -147,14 +152,14 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     }
 
     func close() async throws {
-        let (channel, connection) = lock.withLock {
-            let channels = (channel, connection)
-            self.channel = nil
-            self.connection = nil
-            return channels
+        let resources: Resources = lock.withLock {
+            let resources = Resources(channel: channel, connection: connection)
+            channel = nil
+            connection = nil
+            return resources
         }
-        await channel?.close()
-        await connection?.close()
+        await resources.channel?.close()
+        await resources.connection?.close()
     }
 }
 
