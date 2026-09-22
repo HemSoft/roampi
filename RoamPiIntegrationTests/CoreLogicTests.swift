@@ -429,6 +429,33 @@ struct SessionFoundationTests {
         #expect(interrupted.phase == .detached)
     }
 
+    @Test("A stalled terminal interrupt publishes its in-flight phase")
+    func stalledInterruptPublishesPhase() async throws {
+        let transport = BlockingInterruptTerminalTransport()
+        let phases = LockedPhaseCollector()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("interrupt-phase")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        session.onPhaseChange = { phases.append($0) }
+        try await session.start()
+
+        let interrupt = Task { try await session.interrupt() }
+        for _ in 0 ..< 100 where !transport.isWriteStalled {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .interrupted)
+        #expect(phases.values.contains(.interrupted))
+
+        transport.releaseWrite()
+        try await interrupt.value
+        #expect(session.phase == .attached)
+        #expect(phases.values.last == .attached)
+        try await session.close()
+    }
+
     @Test("Session diagnostics never interpolate connection details")
     func diagnosticsRedactSecrets() {
         let sensitiveValues = ["person", "machine.example.ts.net", "100.64.0.1", "/private/project", "roampi-proj"]
@@ -693,6 +720,43 @@ struct RPCSessionReliabilityTests {
                 #expect(session.phase == .closed)
             }
         }
+    }
+
+    @Test("Lifecycle retirement suppresses queued RPC writes")
+    func lifecycleRetirementSuppressesQueuedWrite() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+
+        let gate = RequestRegistrationGate()
+        session.setRequestWriteHook { await gate.pause() }
+        let request = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "queued-during-detach", kind: .prompt("do not send"))
+            )
+        }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        try await session.detach()
+        session.setRequestWriteHook(nil)
+        await gate.release()
+        do {
+            _ = try await request.value
+            Issue.record("Expected detach cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+        try await Task.sleep(for: .milliseconds(20))
+
+        #expect(transport.requestFrames.count == 1)
+        #expect(session.phase == .detached)
+        try await session.close()
     }
 
     @Test("A request cannot register against a retired RPC stream")
@@ -1188,6 +1252,71 @@ private actor RequestCompletionFlag {
 
     func markComplete() {
         isComplete = true
+    }
+}
+
+private final class LockedPhaseCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [PiSessionPhase] = []
+
+    var values: [PiSessionPhase] {
+        lock.withLock { storage }
+    }
+
+    func append(_ phase: PiSessionPhase) {
+        lock.withLock { storage.append(phase) }
+    }
+}
+
+private final class BlockingInterruptTerminalTransport: @unchecked Sendable, TerminalTransport {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    var onOutput: (@Sendable (Data) -> Void)?
+    var onClosed: (@Sendable (Int32?) -> Void)?
+
+    var isWriteStalled: Bool {
+        lock.withLock { continuation != nil }
+    }
+
+    func open(columns _: Int, rows _: Int) async throws -> any TerminalChannel {
+        BlockingInterruptTerminalChannel(transport: self)
+    }
+
+    func close() async throws {
+        releaseWrite()
+    }
+
+    func stallWrite() async {
+        await withCheckedContinuation { continuation in
+            lock.withLock { self.continuation = continuation }
+        }
+    }
+
+    func releaseWrite() {
+        let continuation = lock.withLock {
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+}
+
+private final class BlockingInterruptTerminalChannel: @unchecked Sendable, TerminalChannel {
+    private weak var transport: BlockingInterruptTerminalTransport?
+
+    init(transport: BlockingInterruptTerminalTransport) {
+        self.transport = transport
+    }
+
+    func write(_: Data) async throws {
+        await transport?.stallWrite()
+    }
+
+    func requestResize(columns _: Int, rows _: Int) throws {}
+
+    func close() async {
+        transport?.releaseWrite()
     }
 }
 

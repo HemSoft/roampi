@@ -526,8 +526,10 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         }
         let claimed = lock.withLock {
             guard generation == streamGeneration,
+                  retiringStreamGeneration != generation,
                   var pending = pendingRequests[identifier],
-                  pending.writeState == .queued
+                  pending.writeState == .queued,
+                  !pending.deferredByLifecycle
             else { return false }
             pending.writeState = .writing
             pendingRequests[identifier] = pending

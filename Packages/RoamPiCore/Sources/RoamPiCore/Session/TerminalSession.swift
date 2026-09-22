@@ -135,6 +135,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             try stateMachine.beginInterrupt()
             return self.channel
         }
+        publishPhase()
         defer {
             lock.withLock { try? stateMachine.endInterrupt() }
             publishPhase()
