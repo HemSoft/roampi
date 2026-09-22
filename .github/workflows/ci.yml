@@ -17,7 +17,7 @@ jobs:
   build-test-lint-audit:
     name: Xcode build, test, lint, and dependency audit
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Check out source
@@ -48,13 +48,14 @@ jobs:
           xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
 
       - name: Build and test iPhone 17
-        run: |
-          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build
-          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
+        # Xcode 26.6 can hang in Swift batch-mode lowering for protocol
+        # existentials. `test` already builds the app, so compile once with
+        # independent frontend jobs instead.
+        run: xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' SWIFT_ENABLE_BATCH_MODE=NO test
 
       - name: Run disposable SSH integration tests
         run: |
-          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPiIntegrationTests -destination 'platform=macOS' test
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPiIntegrationTests -destination 'platform=macOS' SWIFT_ENABLE_BATCH_MODE=NO test
 
       - name: Check Swift formatting
         run: swiftformat --lint .
