@@ -12,10 +12,14 @@ enum TmuxCommand {
     static func attachOrCreate(
         session: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
-        paneCommand: String = PiTerminalCommand.start
+        paneCommand: String = PiTerminalCommand.start,
+        creationIdentifier: String? = nil
     ) -> String {
-        "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec tmux new-session -s \(ShellQuoting.quote(session.rawValue)) "
+        let marker = creationIdentifier.map {
+            " -e ROAMPI_CREATION_ID=\(ShellQuoting.quote($0))"
+        } ?? ""
+        return "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
+            + "&& exec tmux new-session -s \(ShellQuoting.quote(session.rawValue))\(marker) "
             + ShellQuoting.quote(paneCommand)
     }
 
@@ -34,7 +38,7 @@ enum TmuxCommand {
     static func paneProcessID(session: TmuxSessionName) -> String {
         let target = ShellQuoting.quote("=\(session.rawValue):")
         return "tmux has-session -t \(target) 2>/dev/null "
-            + "&& tmux display-message -p -t \(target) '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'"
+            + "&& tmux display-message -p -t \(target) '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'"
     }
 
     /// True when the named session exists on the remote host.

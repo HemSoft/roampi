@@ -137,6 +137,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private var heldOutputOverflowed = false
     private var outputVerified = false
     private var adoptedPaneProcessID: Int32?
+    private var expectedCreationIdentifier: String?
     private var exitStatus: Int32?
     private var isClosed = false
 
@@ -199,7 +200,12 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
 
         do {
-            let existingIdentity: (processID: Int32, command: String, startCommand: String)? = if attachExisting {
+            let existingIdentity: (
+                processID: Int32,
+                command: String,
+                startCommand: String,
+                creationIdentifier: String?
+            )? = if attachExisting {
                 nil
             } else {
                 try await queryPaneIdentity(connection: connection)
@@ -211,9 +217,11 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             }
             if let existingIdentity {
                 lock.withLock { adoptedPaneProcessID = existingIdentity.processID }
-                try await postPreflightHook?()
             }
+            try await postPreflightHook?()
             let shouldAttachExisting = attachExisting || existingIdentity != nil
+            let creationIdentifier = shouldAttachExisting ? nil : UUID().uuidString.lowercased()
+            lock.withLock { expectedCreationIdentifier = creationIdentifier }
             let attachCommand = if shouldAttachExisting {
                 TmuxCommand.attachExisting(
                     session: sessionName,
@@ -223,7 +231,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 TmuxCommand.attachOrCreate(
                     session: sessionName,
                     workingDirectory: workingDirectory,
-                    paneCommand: paneCommand
+                    paneCommand: paneCommand,
+                    creationIdentifier: creationIdentifier
                 )
             }
             let sessionChannel = try await connection.openPTYSession(
@@ -358,6 +367,11 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         {
             throw SessionDiagnostic.processIdentityChanged
         }
+        if let expectedCreationIdentifier = lock.withLock({ self.expectedCreationIdentifier }),
+           identity.creationIdentifier != expectedCreationIdentifier
+        {
+            throw SessionDiagnostic.processIdentityChanged
+        }
         if !attachExisting {
             guard identity.startCommand == Self.reportedStartCommand(for: paneCommand) else {
                 throw SessionDiagnostic.processIdentityChanged
@@ -382,7 +396,12 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
     private func queryPaneIdentity(
         connection: SSHSessionConnection
-    ) async throws -> (processID: Int32, command: String, startCommand: String)? {
+    ) async throws -> (
+        processID: Int32,
+        command: String,
+        startCommand: String,
+        creationIdentifier: String?
+    )? {
         let command = TmuxCommand.paneProcessID(session: sessionName)
         let channel = try await connection.openExecSession(command: command)
         defer { Task { await channel.close() } }
@@ -405,7 +424,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                    let command = collector.paneCommand,
                    let startCommand = collector.paneStartCommand
                 {
-                    return (processID, command, startCommand)
+                    return (processID, command, startCommand, collector.creationIdentifier)
                 }
                 if attempt >= 10 {
                     return nil
@@ -507,12 +526,21 @@ final class PaneProcessIDCollector: @unchecked Sendable {
         lock.withLock { parsedIdentity()?.startCommand }
     }
 
+    var creationIdentifier: String? {
+        lock.withLock { parsedIdentity()?.creationIdentifier }
+    }
+
     private func validateAndFinish() {
         invalid = parsedIdentity() == nil
         done = true
     }
 
-    private func parsedIdentity() -> (processID: Int32, command: String, startCommand: String)? {
+    private func parsedIdentity() -> (
+        processID: Int32,
+        command: String,
+        startCommand: String,
+        creationIdentifier: String?
+    )? {
         let text = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: Self.whitespace)
         let parts = text.split(separator: "|", omittingEmptySubsequences: false)
@@ -522,16 +550,25 @@ final class PaneProcessIDCollector: @unchecked Sendable {
         let startCommand = parts.count > 2
             ? String(parts[2]).trimmingCharacters(in: Self.whitespace)
             : ""
-        guard parts.count == 3,
+        let creationIdentifier = parts.count > 3
+            ? String(parts[3]).trimmingCharacters(in: Self.whitespace)
+            : ""
+        guard parts.count == 4,
               parts[0].utf8.count <= 10,
               let processID = Int32(parts[0]),
               !command.isEmpty,
               command.utf8.count <= 32,
               !startCommand.isEmpty,
-              startCommand.utf8.count <= 128
+              startCommand.utf8.count <= 128,
+              creationIdentifier.utf8.count <= 64
         else {
             return nil
         }
-        return (processID, command, startCommand)
+        return (
+            processID,
+            command,
+            startCommand,
+            creationIdentifier.isEmpty ? nil : creationIdentifier
+        )
     }
 }

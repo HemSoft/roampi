@@ -298,8 +298,44 @@ struct SSHFixtureIntegrationTests {
             .split(separator: "|", omittingEmptySubsequences: false)
 
         #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
-        #expect(fields.count == 3)
-        #expect(fields.last == "\"exec node -e 'setInterval(() => {}, 1000)'\"")
+        #expect(fields.count == 4)
+        #expect(fields[2] == "\"exec node -e 'setInterval(() => {}, 1000)'\"")
+        #expect(fields[3].isEmpty)
+        try await fixture.killSession(name: sessionName)
+    }
+
+    @Test("Transport creation rejects a concurrent same-name pane")
+    func transportCreationRejectsConcurrentPane() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("transport-collision")
+        let validatedSessionName = try #require(TmuxSessionName(sessionName))
+        let validatedDirectory = try #require(RemoteWorkingDirectory(fixture.workDirectory.path))
+        let transport = SSHPTYTransport(
+            endpoint: fixture.endpoint,
+            authentication: .standardKey,
+            sessionName: validatedSessionName,
+            workingDirectory: validatedDirectory,
+            paneCommand: "exec cat",
+            credentials: fixture.credentials,
+            postPreflightHook: {
+                _ = try await fixture.exec(
+                    "cd \(ShellQuoting.quote(fixture.workDirectory.path)) && tmux new-session -d -s "
+                        + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote("exec cat"))"
+                )
+            }
+        )
+        _ = try await transport.open(columns: 80, rows: 24)
+
+        do {
+            _ = try await transport.paneIdentity()
+            Issue.record("Expected concurrent creation rejection")
+        } catch let diagnostic as SessionDiagnostic {
+            #expect(diagnostic == .processIdentityChanged)
+        }
+        try await transport.close()
+        #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
         try await fixture.killSession(name: sessionName)
     }
 

@@ -303,7 +303,7 @@ struct SessionFoundationTests {
         )
         #expect(TmuxCommand
             .paneProcessID(session: session) ==
-            "tmux has-session -t '=roampi-proj:' 2>/dev/null && tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'")
+            "tmux has-session -t '=roampi-proj:' 2>/dev/null && tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'")
         #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t '=roampi-proj:' 2>/dev/null")
     }
 
@@ -1916,13 +1916,14 @@ struct PaneProcessIdentityTests {
     @Test("Pane PID collection accepts one bounded decimal line")
     func acceptsPID() {
         let collector = PaneProcessIDCollector()
-        collector.feed(Data("12345|cat|\"exec cat\"\r\n".utf8))
+        collector.feed(Data("12345|cat|\"exec cat\"|create-1\r\n".utf8))
 
         #expect(collector.isComplete)
         #expect(!collector.failed)
         #expect(collector.paneProcessID == 12345)
         #expect(collector.paneCommand == "cat")
         #expect(collector.paneStartCommand == "\"exec cat\"")
+        #expect(collector.creationIdentifier == "create-1")
     }
 
     @Test("Pane PID collection rejects oversized output immediately")
