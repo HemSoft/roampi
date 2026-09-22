@@ -241,6 +241,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var streamGeneration: UInt64 = 0
     private var retiringStreamGeneration: UInt64?
     private var recordedExchange: ExchangeResult?
+    private var startupRequestIdentifier: String?
     private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
     private var requestRegistrationHook: (@Sendable () async -> Void)?
     private var requestWriteHook: (@Sendable () async -> Void)?
@@ -433,6 +434,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             responseFrameCount = 0
             eventFrameCount = 0
             recordedExchange = nil
+            startupRequestIdentifier = nil
             return streamGeneration
         }
         var candidateTransport: (any RPCTransport)?
@@ -468,6 +470,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
 
             let channel = try await transport.open()
+            let startupRequest = PiRPCRequest(identifier: nextIdentifier(), kind: .getState)
 
             try lock.withLock {
                 guard generation == streamGeneration,
@@ -477,14 +480,13 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                     throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
                 }
                 try stateMachine.markAttached()
+                startupRequestIdentifier = startupRequest.identifier
                 self.transport = transport
                 self.channel = channel
             }
             publishPhase()
 
-            let stateResponse = try await send(
-                PiRPCRequest(identifier: nextIdentifier(), kind: .getState)
-            )
+            let stateResponse = try await send(startupRequest)
             if let hook = lock.withLock({ startupExchangeHook }) {
                 await hook()
             }
@@ -497,6 +499,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                     responseFrameCount: counts.0,
                     eventFrameCount: counts.1
                 )
+                startupRequestIdentifier = nil
                 return true
             }
             if didRecord {
@@ -799,7 +802,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 } else {
                     let failedStartup = lock.withLock {
                         guard generation == streamGeneration,
-                              recordedExchange == nil
+                              startupRequestIdentifier == frame.identifier
                         else { return false }
                         try? stateMachine.fail(.commandFailed)
                         return true

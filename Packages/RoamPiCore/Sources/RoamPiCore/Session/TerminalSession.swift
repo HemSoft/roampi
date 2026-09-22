@@ -30,6 +30,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     let lock = NSLock()
+    let outputDeliveryLock = NSRecursiveLock()
     var stateMachine = ReconnectStateMachine()
     var attachmentGeneration: UInt64 = 0
     var coalescer = ResizeCoalescer()
@@ -40,6 +41,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     var processIdentityUnchanged: Bool?
     var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
     var outputHandler: (@Sendable (Data) -> Void)?
+    var outputDeliveryHook: (@Sendable () -> Void)?
     var latestColumns = 80
     var latestRows = 24
     let configuration: Configuration
@@ -109,6 +111,11 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         self.deferredResizeInterval = deferredResizeInterval
     }
 
+    /// Installs a synchronous delivery suspension point used only by ordering tests.
+    func setOutputDeliveryHook(_ hook: (@Sendable () -> Void)?) {
+        lock.withLock { outputDeliveryHook = hook }
+    }
+
     public func start() async throws {
         try lock.withLock {
             try stateMachine.beginConnecting()
@@ -148,13 +155,15 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     public func detach() async throws {
-        let resources: Resources = try lock.withLock {
-            try stateMachine.detach()
-            attachmentGeneration &+= 1
-            let resources = Resources(channel: channel, transport: transport)
-            channel = nil
-            transport = nil
-            return resources
+        let resources: Resources = try outputDeliveryLock.withLock {
+            try lock.withLock {
+                try stateMachine.detach()
+                attachmentGeneration &+= 1
+                let resources = Resources(channel: channel, transport: transport)
+                channel = nil
+                transport = nil
+                return resources
+            }
         }
         publishPhase()
         await resources.channel?.close()
@@ -162,13 +171,15 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     public func reconnect() async throws {
-        let staleTransport: TerminalTransportBox? = try lock.withLock {
-            try stateMachine.beginReconnect()
-            attachmentGeneration &+= 1
-            let staleTransport = transport
-            transport = nil
-            channel = nil
-            return staleTransport
+        let staleTransport: TerminalTransportBox? = try outputDeliveryLock.withLock {
+            try lock.withLock {
+                try stateMachine.beginReconnect()
+                attachmentGeneration &+= 1
+                let staleTransport = transport
+                transport = nil
+                channel = nil
+                return staleTransport
+            }
         }
         publishPhase()
         try? await staleTransport?.close()
@@ -176,13 +187,15 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     public func close() async throws {
-        let resources: Resources = try lock.withLock {
-            try stateMachine.beginClose()
-            attachmentGeneration &+= 1
-            let resources = Resources(channel: channel, transport: transport)
-            channel = nil
-            transport = nil
-            return resources
+        let resources: Resources = try outputDeliveryLock.withLock {
+            try lock.withLock {
+                try stateMachine.beginClose()
+                attachmentGeneration &+= 1
+                let resources = Resources(channel: channel, transport: transport)
+                channel = nil
+                transport = nil
+                return resources
+            }
         }
         publishPhase()
         await resources.channel?.close()

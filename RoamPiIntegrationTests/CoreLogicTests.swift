@@ -569,6 +569,39 @@ struct SessionFoundationTests {
         #expect(session.phase == .failed(.cancelled))
     }
 
+    @Test("Reconnect serializes old terminal output before replacement output")
+    func reconnectSerializesOutputDelivery() async throws {
+        let transport = ScriptedTerminalTransport()
+        let output = LockedDataCollector()
+        let gate = SynchronousDeliveryGate()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-output-generation")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        session.onOutput = { output.append($0) }
+        try await session.start()
+        output.reset()
+        session.setOutputDeliveryHook { gate.pause() }
+
+        let oldDelivery = Task.detached { transport.feed("old") }
+        for _ in 0 ..< 100 where !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let detach = Task { try await session.detach() }
+        try await Task.sleep(for: .milliseconds(20))
+        gate.release()
+        await oldDelivery.value
+        try await detach.value
+        session.setOutputDeliveryHook(nil)
+        try await session.reconnect()
+        transport.feed("new")
+
+        #expect(output.text.hasSuffix("oldRoamPi scripted terminal\r\nnew"))
+        try await session.detach()
+    }
+
     @Test("Obsolete terminal attach cleanup cannot fail its replacement")
     func obsoleteAttachCleanupIsIgnored() async throws {
         let transport = AttachRaceTerminalTransport()
@@ -649,6 +682,37 @@ struct RPCSessionReliabilityTests {
 
         #expect(session.lastExchange?.responseFrameCount == 1)
         #expect(session.lastExchange?.eventFrameCount == 2)
+        try await session.close()
+    }
+
+    @Test("A failed follow-up cannot be classified as startup failure")
+    func followUpFailureIsNotStartupFailure() async throws {
+        let transport = FailedFollowUpRPCTransport()
+        let gate = RequestRegistrationGate()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        session.setStartupExchangeHook { await gate.pause() }
+        let startup = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        do {
+            _ = try await session.exchange(
+                PiRPCRequest(identifier: "failed-follow-up", kind: .prompt("fail"))
+            )
+            Issue.record("Expected follow-up command failure")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .commandFailed)
+            #expect(failure.phase == .attached)
+        }
+        #expect(session.phase == .attached)
+        await gate.release()
+        try await startup.value
+        #expect(session.lastExchange?.succeeded == true)
         try await session.close()
     }
 
@@ -1408,6 +1472,48 @@ struct RPCSessionReliabilityTests {
     }
 }
 
+private final class FailedFollowUpRPCTransport: @unchecked Sendable, RPCTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)?
+
+    func open() async throws -> any RPCChannel {
+        FailedFollowUpRPCChannel(transport: self)
+    }
+
+    func close() async throws {}
+
+    func receive(_ data: Data) {
+        guard let request = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+              let identifier = request["id"]?.stringValue,
+              let command = request["type"]?.stringValue
+        else { return }
+        let success = command == "get_state"
+        let response = "{\"id\":\"\(identifier)\",\"type\":\"response\","
+            + "\"command\":\"\(command)\",\"success\":\(success)}\n"
+        lock.withLock { outputHandler }?(Data(response.utf8))
+    }
+}
+
+private final class FailedFollowUpRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: FailedFollowUpRPCTransport?
+
+    init(transport: FailedFollowUpRPCTransport) {
+        self.transport = transport
+    }
+
+    func write(_ data: Data) async throws {
+        transport?.receive(data)
+    }
+
+    func close() async {}
+}
+
 private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
     private let lock = NSLock()
     private let respondsAfterStartup: Bool
@@ -1499,6 +1605,42 @@ private actor RequestCompletionFlag {
 
     func markComplete() {
         isComplete = true
+    }
+}
+
+private final class SynchronousDeliveryGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let semaphore = DispatchSemaphore(value: 0)
+    private var entered = false
+
+    var hasEntered: Bool {
+        lock.withLock { entered }
+    }
+
+    func pause() {
+        lock.withLock { entered = true }
+        semaphore.wait()
+    }
+
+    func release() {
+        semaphore.signal()
+    }
+}
+
+private final class LockedDataCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    var text: String {
+        lock.withLock { String(decoding: data, as: UTF8.self) }
+    }
+
+    func append(_ chunk: Data) {
+        lock.withLock { data.append(chunk) }
+    }
+
+    func reset() {
+        lock.withLock { data = Data() }
     }
 }
 

@@ -5,9 +5,11 @@ extension TerminalSession {
     /// tmux session, and verify the remote process identity after a reconnect.
     func attach() async {
         let transport = makeTransport()
-        let generation: UInt64 = lock.withLock {
-            attachmentGeneration &+= 1
-            return attachmentGeneration
+        let generation: UInt64 = outputDeliveryLock.withLock {
+            lock.withLock {
+                attachmentGeneration &+= 1
+                return attachmentGeneration
+            }
         }
         configureCallbacks(on: transport, generation: generation)
 
@@ -33,10 +35,14 @@ extension TerminalSession {
 
     func configureCallbacks(on transport: TerminalTransportBox, generation: UInt64) {
         transport.onOutput = { [weak self] data in
-            guard let self, let handler = currentOutputHandler(generation: generation) else {
-                return
+            guard let self else { return }
+            outputDeliveryLock.withLock {
+                guard let handler = currentOutputHandler(generation: generation) else {
+                    return
+                }
+                lock.withLock { outputDeliveryHook }?()
+                handler(data)
             }
-            handler(data)
         }
         transport.onClosed = { [weak self] exitStatus in
             self?.handleChannelClosed(exitStatus: exitStatus, generation: generation)
@@ -141,19 +147,22 @@ extension TerminalSession {
     }
 
     func handleChannelClosed(exitStatus: Int32?, generation: UInt64) {
-        let didChange = lock.withLock {
-            guard generation == attachmentGeneration,
-                  stateMachine.phase.isConnectedOrRecovering
-            else {
-                return false
+        let didChange = outputDeliveryLock.withLock {
+            lock.withLock {
+                guard generation == attachmentGeneration,
+                      stateMachine.phase.isConnectedOrRecovering
+                else {
+                    return false
+                }
+                attachmentGeneration &+= 1
+                if let exitStatus, exitStatus != 0 {
+                    try? stateMachine.fail(.commandFailed)
+                } else {
+                    try? stateMachine.markDisconnected()
+                }
+                channel = nil
+                return true
             }
-            if let exitStatus, exitStatus != 0 {
-                try? stateMachine.fail(.commandFailed)
-            } else {
-                try? stateMachine.markDisconnected()
-            }
-            channel = nil
-            return true
         }
         if didChange {
             publishPhase()
@@ -165,15 +174,17 @@ extension TerminalSession {
         transport: TerminalTransportBox,
         generation: UInt64
     ) {
-        let didFail = lock.withLock {
-            guard generation == attachmentGeneration, self.transport === transport else {
-                return false
+        let didFail = outputDeliveryLock.withLock {
+            lock.withLock {
+                guard generation == attachmentGeneration, self.transport === transport else {
+                    return false
+                }
+                attachmentGeneration &+= 1
+                self.transport = nil
+                channel = nil
+                try? stateMachine.fail(diagnostic)
+                return true
             }
-            attachmentGeneration &+= 1
-            self.transport = nil
-            channel = nil
-            try? stateMachine.fail(diagnostic)
-            return true
         }
         if didFail {
             publishPhase()
