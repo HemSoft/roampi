@@ -564,6 +564,58 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A request cannot register against a retired RPC stream")
+    func requestRegistrationRejectsRetiredStream() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+
+        let gate = RequestRegistrationGate()
+        session.setRequestRegistrationHook { await gate.pause() }
+        let request = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "retired-stream", kind: .getState)
+            )
+        }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        session.setRequestRegistrationHook(nil)
+        try await session.detach()
+        try await session.reconnect()
+        await gate.release()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected retired-stream cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+        #expect(session.phase == .attached)
+        try await session.close()
+    }
+
+    @Test("A nonzero RPC process exit reports command failure")
+    func nonzeroExitIsCommandFailure() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+
+        transport.stopProcess(exitStatus: 127)
+
+        #expect(session.phase == .failed(.commandFailed))
+        try await session.close()
+    }
+
     @Test("Detach resumes pending requests and preserves the detached phase")
     func detachDrainsPendingRequests() async throws {
         let transport = ControlledRPCTransport(respondsAfterStartup: false)
@@ -758,6 +810,21 @@ private final class ControlledRPCChannel: @unchecked Sendable, RPCChannel {
     func close() async {}
 }
 
+private actor RequestRegistrationGate {
+    private(set) var hasEntered = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func pause() async {
+        hasEntered = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 private final class BlockingCloseRPCTransport: @unchecked Sendable, RPCTransport {
     private let lock = NSLock()
     private var outputHandler: (@Sendable (Data) -> Void)?
@@ -938,6 +1005,38 @@ private final class CancellingTerminalTransport: @unchecked Sendable, TerminalTr
     }
 
     func close() async throws {}
+}
+
+@Suite("Pane process identity")
+struct PaneProcessIdentityTests {
+    @Test("Pane PID collection accepts one bounded decimal line")
+    func acceptsPID() {
+        let collector = PaneProcessIDCollector()
+        collector.feed(Data("12345\r\n".utf8))
+
+        #expect(collector.isComplete)
+        #expect(!collector.failed)
+        #expect(collector.paneProcessID == 12345)
+    }
+
+    @Test("Pane PID collection rejects oversized output immediately")
+    func rejectsOversizedOutput() {
+        let collector = PaneProcessIDCollector()
+        collector.feed(Data(repeating: 0x31, count: 1024 * 1024))
+
+        #expect(collector.isComplete)
+        #expect(collector.failed)
+        #expect(collector.paneProcessID == nil)
+    }
+
+    @Test("Pane PID collection rejects non-decimal output immediately")
+    func rejectsInvalidOutput() {
+        let collector = PaneProcessIDCollector()
+        collector.feed(Data("12x".utf8))
+
+        #expect(collector.isComplete)
+        #expect(collector.failed)
+    }
 }
 
 @Suite("Pi RPC messages")

@@ -153,8 +153,8 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
         }
     }
 
-    func stopProcess() {
-        lock.withLock { closedHandler }?(0)
+    func stopProcess(exitStatus: Int32 = 0) {
+        lock.withLock { closedHandler }?(exitStatus)
     }
 }
 

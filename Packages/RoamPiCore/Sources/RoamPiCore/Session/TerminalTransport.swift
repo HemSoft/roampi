@@ -232,6 +232,9 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
         for _ in 0 ..< 200 {
             if collector.isComplete {
+                if let failure = collector.failureDiagnostic {
+                    throw failure
+                }
                 return collector.paneProcessID
             }
             try await Task.sleep(for: .milliseconds(25))
@@ -252,22 +255,46 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     }
 }
 
-/// Collects one pane process ID from an exec channel.
-private final class PaneProcessIDCollector: @unchecked Sendable {
+/// Collects one strictly bounded decimal pane process ID from an exec channel.
+final class PaneProcessIDCollector: @unchecked Sendable {
+    private static let maxResponseBytes = 32
+    private static let whitespace = CharacterSet(charactersIn: " \t\r\n")
+
     private let lock = NSLock()
     private var data = Data()
     private var done = false
+    private var invalid = false
+    private var overflowed = false
 
     func feed(_ chunk: Data) {
         lock.withLock {
+            guard !done else { return }
+            guard data.count + chunk.count <= Self.maxResponseBytes else {
+                invalid = true
+                overflowed = true
+                done = true
+                return
+            }
             data.append(chunk)
-            done = data.contains(0x0A)
+            if data.contains(where: { !(0x30 ... 0x39).contains($0) && ![0x09, 0x0A, 0x0D, 0x20].contains($0) }) {
+                invalid = true
+                done = true
+                return
+            }
+            if data.contains(0x0A) {
+                validateAndFinish()
+            }
         }
     }
 
     func finish() {
         lock.withLock {
-            done = true
+            guard !done else { return }
+            if data.isEmpty {
+                done = true
+            } else {
+                validateAndFinish()
+            }
         }
     }
 
@@ -275,12 +302,33 @@ private final class PaneProcessIDCollector: @unchecked Sendable {
         lock.withLock { done }
     }
 
+    var failed: Bool {
+        lock.withLock { invalid }
+    }
+
+    var failureDiagnostic: SessionDiagnostic? {
+        lock.withLock {
+            guard invalid else { return nil }
+            return overflowed ? .frameTooLarge : .malformedFrame
+        }
+    }
+
     var paneProcessID: Int32? {
         lock.withLock {
-            guard done else { return nil }
+            guard done, !invalid else { return nil }
             let text = String(decoding: data, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: Self.whitespace)
             return Int32(text)
         }
+    }
+
+    private func validateAndFinish() {
+        let text = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: Self.whitespace)
+        invalid = text.isEmpty
+            || text.utf8.count > 10
+            || text.utf8.contains(where: { !(0x30 ... 0x39).contains($0) })
+            || Int32(text) == nil
+        done = true
     }
 }
