@@ -57,6 +57,34 @@ struct TerminalScreenBufferingTests {
     }
 
     @MainActor
+    @Test("Control modifies the next terminal key without sending Ctrl-C")
+    func controlModifiesNextKey() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-control-key")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let model = TerminalScreenModel(session: session)
+        try await session.start()
+
+        model.toggleControlModifier()
+        #expect(model.controlModifierArmed)
+        #expect(transport.recordedWrites.isEmpty)
+        model.sendKey(Data("d".utf8))
+        for _ in 0 ..< 100 where transport.recordedWrites.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(transport.recordedWrites == [Data([0x04])])
+        #expect(!model.controlModifierArmed)
+        #expect(TerminalScreenModel.applyingControlModifier(to: Data("z".utf8)) == Data([0x1A]))
+        #expect(TerminalScreenModel.applyingControlModifier(to: Data("?".utf8)) == Data([0x7F]))
+        try await session.close()
+    }
+
+    @MainActor
     @Test("Terminal viewport callbacks preserve their latest size")
     func preservesViewportCallbackOrder() async throws {
         let transport = ScriptedTerminalTransport()

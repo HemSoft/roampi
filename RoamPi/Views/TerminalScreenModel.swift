@@ -25,6 +25,7 @@ final class TerminalScreenModel: ObservableObject {
     @Published private(set) var phaseDetail: String?
     @Published private(set) var identityNote: String?
     @Published private(set) var hasStarted = false
+    @Published private(set) var controlModifierArmed = false
 
     let session: TerminalSession
     private weak var coordinator: TerminalCoordinator?
@@ -129,10 +130,21 @@ final class TerminalScreenModel: ObservableObject {
         runStart()
     }
 
+    func toggleControlModifier() {
+        controlModifierArmed.toggle()
+    }
+
     func sendKey(_ data: Data) {
-        for offset in stride(from: 0, to: data.count, by: 64 * 1024) {
-            let end = min(offset + 64 * 1024, data.count)
-            switch inputContinuation.yield(data.subdata(in: offset ..< end)) {
+        let outgoingData: Data
+        if controlModifierArmed {
+            controlModifierArmed = false
+            outgoingData = Self.applyingControlModifier(to: data)
+        } else {
+            outgoingData = data
+        }
+        for offset in stride(from: 0, to: outgoingData.count, by: 64 * 1024) {
+            let end = min(offset + 64 * 1024, outgoingData.count)
+            switch inputContinuation.yield(outgoingData.subdata(in: offset ..< end)) {
             case .enqueued:
                 continue
             case .dropped:
@@ -146,6 +158,21 @@ final class TerminalScreenModel: ObservableObject {
                 return
             }
         }
+    }
+
+    static func applyingControlModifier(to data: Data) -> Data {
+        guard data.count == 1, let byte = data.first else { return data }
+        let controlByte: UInt8? = switch byte {
+        case 0x20:
+            0x00
+        case 0x3F:
+            0x7F
+        case 0x40 ... 0x5F, 0x60 ... 0x7A:
+            byte & 0x1F
+        default:
+            nil
+        }
+        return controlByte.map { Data([$0]) } ?? data
     }
 
     func viewportChanged(columns: Int, rows: Int) {

@@ -30,9 +30,11 @@ struct TerminalScreenView: View {
                 .accessibilityLabel("Pi terminal")
                 .accessibilityIdentifier("terminal-view")
 
-            TerminalKeyRow { key in
-                model.sendKey(key)
-            }
+            TerminalKeyRow(
+                controlModifierArmed: model.controlModifierArmed,
+                onControl: model.toggleControlModifier,
+                onKey: model.sendKey
+            )
             .accessibilityIdentifier("terminal-key-row")
 
             HStack(spacing: 12) {
@@ -227,7 +229,7 @@ struct TerminalKeyRow: View {
             case .escape:
                 Data([0x1B])
             case .control:
-                Data([0x03])
+                Data()
             case .tab:
                 Data([0x09])
             case .up:
@@ -246,6 +248,8 @@ struct TerminalKeyRow: View {
         }
     }
 
+    let controlModifierArmed: Bool
+    let onControl: () -> Void
     let onKey: (Data) -> Void
 
     var body: some View {
@@ -253,10 +257,18 @@ struct TerminalKeyRow: View {
             HStack(spacing: 10) {
                 ForEach(Key.allCases) { key in
                     Button(key.rawValue) {
-                        onKey(key.bytes)
+                        if key == .control {
+                            onControl()
+                        } else {
+                            onKey(key.bytes)
+                        }
                     }
                     .buttonStyle(.bordered)
+                    .tint(key == .control && controlModifierArmed ? .accentColor : nil)
                     .accessibilityIdentifier("key-\(key.rawValue)")
+                    .accessibilityValue(
+                        key == .control ? (controlModifierArmed ? "On" : "Off") : ""
+                    )
                 }
             }
             .padding(.horizontal, 12)

@@ -761,7 +761,13 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
 
             let pending = pendingRequests
-            let cleanStartupClose: SessionDiagnostic? = if endingDiagnostic == nil,
+            let existingFailure: SessionDiagnostic? = if case let .failed(diagnostic) = stateMachine.phase {
+                diagnostic
+            } else {
+                nil
+            }
+            let cleanStartupClose: SessionDiagnostic? = if existingFailure == nil,
+                                                           endingDiagnostic == nil,
                                                            recordedExchange == nil
                                                            || !pending.isEmpty
                                                            || stateMachine.phase == .connecting
@@ -771,7 +777,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             } else {
                 nil
             }
-            let sessionDiagnostic = pending.values.compactMap(\.deferredFailure).first
+            let sessionDiagnostic = existingFailure
+                ?? pending.values.compactMap(\.deferredFailure).first
                 ?? endingDiagnostic
                 ?? cleanStartupClose
             let isLifecycleRetirement = retiringStreamGeneration == generation

@@ -138,13 +138,15 @@ final class SSHFixture: @unchecked Sendable {
     func makeRPCTransport(
         crOnlyMode: Bool = false,
         partialTrailerMode: Bool = false,
-        oversizedMode: Bool = false
+        oversizedMode: Bool = false,
+        wrongCommandMode: Bool = false
     ) throws -> SSHRPCTransport {
         let stubPath = try Self.writeRPCStub(
             in: root,
             crOnlyMode: crOnlyMode,
             partialTrailerMode: partialTrailerMode,
-            oversizedMode: oversizedMode
+            oversizedMode: oversizedMode,
+            wrongCommandMode: wrongCommandMode
         )
         return SSHRPCTransport(
             endpoint: endpoint,
@@ -321,7 +323,8 @@ final class SSHFixture: @unchecked Sendable {
         in root: URL,
         crOnlyMode: Bool,
         partialTrailerMode: Bool,
-        oversizedMode: Bool
+        oversizedMode: Bool,
+        wrongCommandMode: Bool
     ) throws -> String {
         let bin = root.appendingPathComponent("stubbin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
@@ -337,6 +340,7 @@ final class SSHFixture: @unchecked Sendable {
             ":"
         }
 
+        let responseCommand = wrongCommandMode ? "wrong_command" : "get_state"
         let script = """
         #!/bin/sh
         # Protocol-faithful pi RPC stub for integration tests.
@@ -344,7 +348,7 @@ final class SSHFixture: @unchecked Sendable {
             printf '{"type":"banner","version":"stub"}\\n'
         }
         respond() {
-            printf '{"id":"%s","type":"response","command":"get_state","success":true,"data":{"isStreaming":false,"messageCount":0}}\\n' "$1"
+            printf '{"id":"%s","type":"response","command":"\(responseCommand)","success":true,"data":{"isStreaming":false,"messageCount":0}}\\n' "$1"
         }
         emit_banner
         while IFS= read -r line; do
