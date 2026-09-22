@@ -18,12 +18,12 @@ The iOS app owns SSH connections and channels. The remote host owns tmux and Pi 
 A terminal attach runs the validated equivalent of:
 
 ```text
-cd '<approved-directory>' && exec tmux new-session -A -s '<approved-name>'
+cd '<approved-directory>' && exec tmux new-session -A -s '<approved-name>' 'exec pi'
 ```
 
 Session names accept only letters, numbers, underscores, dots, and dashes, with a safe first character and a 64-byte limit. Working directories must be absolute, contain no traversal components or control characters, use a restricted character set, and fit within 256 bytes. Every remote value is then POSIX single-quoted.
 
-On the first SSH attach, `TerminalSession` records tmux's `pane_pid`. A reconnect uses the same `new-session -A` command, reads `pane_pid` again, and proceeds only if it matches. A mismatch closes the new channel and moves to a bounded failure state. tmux therefore prevents a second named session, while the process-identity check prevents a changed process from being reported as a successful resume.
+A newly created pane starts Pi as its direct process, so tmux's `pane_pid` identifies Pi rather than an intermediate shell. `TerminalSession` records that PID on the first attach. Reconnect uses attach-only `tmux attach-session`; a missing session therefore fails without creating remote state. After attachment, RoamPi reads `pane_pid` again and proceeds only if it matches. A mismatch closes the new channel and moves to a bounded failure state.
 
 Detach and close end the iOS-side PTY and SSH connection. They do not send `tmux kill-session`, terminate Pi, or delete remote state. The app does not expect continuous execution while backgrounded: iOS may suspend it. tmux is the continuity mechanism, and reconnect is explicit after suspension or transport loss.
 
@@ -35,7 +35,7 @@ Terminal input is byte-oriented. The system keyboard and hardware keyboard feed 
 
 ## RPC framing
 
-RPC mode starts `pi --mode rpc --no-session` in an approved directory. `--no-session` keeps the bounded proof out of the user's Pi session history. The startup proof sends `get_state`; it does not submit a prompt or invoke a model provider.
+RPC mode resolves `pi` through the account's login environment, but redirects login-profile output away from the protocol stream until the fixed `pi --mode rpc --no-session` command restores the SSH descriptors. `--no-session` keeps the bounded proof out of the user's Pi session history. The startup proof sends `get_state`; it does not submit a prompt or invoke a model provider.
 
 Inbound framing:
 

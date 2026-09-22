@@ -11,6 +11,8 @@ final class TerminalScreenModel: ObservableObject {
 
     let session: TerminalSession
     private weak var coordinator: TerminalCoordinator?
+    private let outputContinuation: AsyncStream<Data>.Continuation
+    private var outputTask: Task<Void, Never>?
 
     var canReconnect: Bool {
         switch phase {
@@ -30,18 +32,32 @@ final class TerminalScreenModel: ObservableObject {
     }
 
     init(session: TerminalSession) {
+        let (outputStream, outputContinuation) = AsyncStream<Data>.makeStream()
         self.session = session
-        session.onPhaseChange = { [weak self] newPhase in
-            Task { @MainActor in
-                self?.phase = newPhase
-                self?.refreshIdentityNote()
-            }
-        }
-        session.onOutput = { [weak self] data in
-            Task { @MainActor in
+        self.outputContinuation = outputContinuation
+        outputTask = Task { @MainActor [weak self] in
+            for await data in outputStream {
+                guard !Task.isCancelled else { return }
                 self?.coordinator?.feed(data)
             }
         }
+        session.onPhaseChange = { [weak self] newPhase in
+            Task { @MainActor in
+                self?.phase = newPhase
+                if case let .failed(diagnostic) = newPhase {
+                    self?.phaseDetail = diagnostic.userMessage
+                }
+                self?.refreshIdentityNote()
+            }
+        }
+        session.onOutput = { data in
+            outputContinuation.yield(data)
+        }
+    }
+
+    deinit {
+        outputContinuation.finish()
+        outputTask?.cancel()
     }
 
     /// Binds the SwiftTerm bridge so transport bytes reach the view.

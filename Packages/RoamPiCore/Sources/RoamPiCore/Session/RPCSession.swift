@@ -40,6 +40,7 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
     private var channel: SSHSessionChannel?
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var isClosed = false
 
     var onOutput: (@Sendable (Data) -> Void)? {
         get { lock.withLock { outputHandler } }
@@ -66,8 +67,20 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
     }
 
     func open() async throws -> any RPCChannel {
+        guard !lock.withLock({ isClosed }) else {
+            throw SessionDiagnostic.cancelled
+        }
         let transport = SSHSessionTransport(credentials: credentials)
         let connection = try await transport.connect(endpoint: endpoint, mode: authentication)
+        let closeImmediately = lock.withLock {
+            guard !isClosed else { return true }
+            self.connection = connection
+            return false
+        }
+        if closeImmediately {
+            await connection.close()
+            throw SessionDiagnostic.cancelled
+        }
         do {
             let command = remoteCommand ?? PiRPCCommand.start(workingDirectory: workingDirectory)
             let sessionChannel = try await connection.openExecSession(command: command)
@@ -87,18 +100,19 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
             }
 
             lock.withLock {
-                self.connection = connection
                 self.channel = sessionChannel
             }
             return sessionChannel
         } catch {
             await connection.close()
+            lock.withLock { self.connection = nil }
             throw error
         }
     }
 
     func close() async throws {
         let resources: Resources = lock.withLock {
+            isClosed = true
             let resources = Resources(channel: channel, connection: connection)
             channel = nil
             connection = nil
@@ -300,6 +314,12 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             transport.onClosed = { [weak self] _ in
                 self?.handleProcessEnded()
             }
+            try lock.withLock {
+                guard stateMachine.phase == .connecting || stateMachine.phase == .reconnecting else {
+                    throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
+                }
+                self.transport = transport
+            }
 
             let channel = try await transport.open()
 
@@ -314,15 +334,19 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 PiRPCRequest(identifier: nextIdentifier(), kind: .getState)
             )
             let counts = lock.withLock { (responseFrameCount, eventFrameCount) }
-            lock.withLock {
+            let didRecord = lock.withLock {
+                guard stateMachine.phase == .attached else { return false }
                 recordedExchange = ExchangeResult(
                     succeeded: stateResponse.isSuccessResponse(command: "get_state"),
                     diagnostic: nil,
                     responseFrameCount: counts.0,
                     eventFrameCount: counts.1
                 )
+                return true
             }
-            publishPhase()
+            if didRecord {
+                publishPhase()
+            }
         } catch is CancellationError {
             try? await candidateTransport?.close()
             clearTransportReferences()
@@ -357,7 +381,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let timeoutTask: Task<Void, Never> = Task { [weak self] in
             try? await Task.sleep(for: timeout)
             guard !Task.isCancelled else { return }
-            self?.failPending(request.identifier, error: .timedOut)
+            self?.stopTimedOutRequest(request.identifier)
         }
         defer { timeoutTask.cancel() }
 
@@ -385,7 +409,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                     }
                 }
             } onCancel: {
-                failPending(request.identifier, error: .cancelled)
+                stopCancelledRequest(request.identifier)
             }
         } catch let failure as SessionFailure {
             throw failure
@@ -397,6 +421,20 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func failPending(_ identifier: String, error: SessionDiagnostic) {
         let continuation = lock.withLock { pendingRequests.removeValue(forKey: identifier) }
         continuation?.resume(throwing: SessionFailure(diagnostic: error, phase: .attached))
+    }
+
+    private func stopTimedOutRequest(_ identifier: String) {
+        let isPending = lock.withLock { pendingRequests[identifier] != nil }
+        if isPending {
+            stopAfterProtocolFailure(.timedOut)
+        }
+    }
+
+    private func stopCancelledRequest(_ identifier: String) {
+        let isPending = lock.withLock { pendingRequests[identifier] != nil }
+        if isPending {
+            stopAfterProtocolFailure(.cancelled)
+        }
     }
 
     private func handleOutput(_ data: Data) {
@@ -413,16 +451,18 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             return
         }
 
+        var frames: [PiRPCFrame] = []
         for payload in payloads {
-            guard let frame = try? JSONLFrameDecoder.decode(payload) else {
+            guard let frame = try? JSONLFrameDecoder.decode(payload),
+                  let rpcFrame = PiRPCFrameDecoder.decode(frame)
+            else {
                 stopAfterProtocolFailure(.malformedFrame)
                 return
             }
-            guard let rpcFrame = PiRPCFrameDecoder.decode(frame) else {
-                stopAfterProtocolFailure(.malformedFrame)
-                return
-            }
-            dispatch(rpcFrame)
+            frames.append(rpcFrame)
+        }
+        for frame in frames {
+            dispatch(frame)
         }
     }
 

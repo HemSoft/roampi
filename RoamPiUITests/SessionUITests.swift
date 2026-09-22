@@ -69,7 +69,8 @@ final class SessionUITests: XCTestCase {
 
         XCUIDevice.shared.orientation = .landscapeLeft
         sleep(2)
-        captureScreenshot(named: "physical-terminal-session")
+        // Do not retain the live terminal image: remote output is untrusted
+        // and can contain endpoint, account, command, or project details.
         let attachment = XCTAttachment(
             string: "physical-terminal-suspend-cellular-reconnect-same-process"
         )

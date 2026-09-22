@@ -78,7 +78,6 @@ struct JSONLFrameDecoder: Sendable {
             }
 
             buffer.removeSubrange(buffer.startIndex ... newline)
-            try validateBufferLimit()
             frames.append(payload)
             _ = try Self.decode(payload)
         }
@@ -181,7 +180,11 @@ enum JSONLOutgoing {
         text = text
             .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
             .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
-        return Data((text + "\n").utf8)
+        let frame = Data(text.utf8)
+        guard frame.count <= JSONLFraming.maxFrameBytes else {
+            throw JSONLFraming.FrameError.frameTooLarge
+        }
+        return frame + Data([0x0A])
     }
 }
 

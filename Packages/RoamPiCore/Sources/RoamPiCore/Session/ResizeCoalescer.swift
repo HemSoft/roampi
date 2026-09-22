@@ -39,11 +39,15 @@ struct ResizeCoalescer: Sendable {
         self.limits = limits
     }
 
-    mutating func submit(columns rawColumns: Int, rows rawRows: Int) -> Decision? {
-        let size = Size(
+    func normalized(columns rawColumns: Int, rows rawRows: Int) -> Size {
+        Size(
             columns: max(limits.minimumColumns, min(limits.maximumColumns, rawColumns)),
             rows: max(limits.minimumRows, min(limits.maximumRows, rawRows))
         )
+    }
+
+    mutating func submit(columns rawColumns: Int, rows rawRows: Int) -> Decision? {
+        let size = normalized(columns: rawColumns, rows: rawRows)
 
         guard size != pendingSize, size != lastSent else {
             return nil

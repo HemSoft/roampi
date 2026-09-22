@@ -30,6 +30,20 @@ struct JSONLFramingTests {
         #expect(try JSONLFrameDecoder.decode(rest[1])["type"]?.stringValue == "b")
     }
 
+    @Test("A large transport chunk of individually bounded records is accepted")
+    func acceptsLargeAggregateChunk() throws {
+        var decoder = JSONLFrameDecoder()
+        let record = Data("{\"ok\":true}\n".utf8)
+        var chunk = Data()
+        while chunk.count <= JSONLFraming.maxFrameBytes {
+            chunk.append(record)
+        }
+
+        let frames = try decoder.feed(chunk)
+
+        #expect(frames.count == chunk.count / record.count)
+    }
+
     @Test("One byte at a time still yields one frame")
     func byteAtATime() throws {
         var decoder = JSONLFrameDecoder()
@@ -164,6 +178,16 @@ struct JSONLFramingTests {
         #expect(text.contains("\\u2028"))
     }
 
+    @Test("Outbound JSON escaping cannot exceed the frame limit")
+    func rejectsExpandedOutgoingFrame() {
+        let message = String(repeating: "\u{0001}", count: PiRPCRequest.maximumMessageBytes)
+        let request = PiRPCRequest(identifier: "expanded", kind: .prompt(message))
+
+        #expect(throws: JSONLFraming.FrameError.frameTooLarge) {
+            try request.encodedFrame()
+        }
+    }
+
     @Test("The frame limit is documented as one mebibyte")
     func frameLimit() {
         #expect(JSONLFraming.maxFrameBytes == 1_048_576)
@@ -247,7 +271,7 @@ struct SessionFoundationTests {
 
         let command = TmuxCommand.attachOrCreate(session: session, workingDirectory: directory)
 
-        #expect(command == "cd '/home/user/proj' && exec tmux new-session -A -s 'roampi-proj'")
+        #expect(command == "cd '/home/user/proj' && exec tmux new-session -A -s 'roampi-proj' 'exec pi'")
     }
 
     @Test("Support commands quote the session name")
@@ -255,6 +279,12 @@ struct SessionFoundationTests {
         let session = try #require(TmuxSessionName("roampi-proj"))
 
         #expect(TmuxCommand.hasSession(session: session) == "tmux has-session -t 'roampi-proj' 2>/dev/null")
+        #expect(
+            try TmuxCommand.attachExisting(
+                session: session,
+                workingDirectory: #require(RemoteWorkingDirectory("/home/user/proj"))
+            ) == "cd '/home/user/proj' && exec tmux attach-session -t 'roampi-proj'"
+        )
         #expect(TmuxCommand.paneProcessID(session: session) == "tmux display-message -p -t 'roampi-proj' '#{pane_pid}'")
         #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t 'roampi-proj' 2>/dev/null")
     }
@@ -265,7 +295,10 @@ struct SessionFoundationTests {
 
         let command = PiRPCCommand.start(workingDirectory: directory)
 
-        #expect(command == "cd '/home/user/proj' && exec sh -lc 'exec pi --mode rpc --no-session'")
+        #expect(
+            command == "cd '/home/user/proj' && exec sh -lc 'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
+                + "3>&1 4>&2 1>/dev/null 2>/dev/null"
+        )
     }
 
     @Test("Resize coalescing sends the first size immediately")
@@ -352,9 +385,6 @@ struct SessionFoundationTests {
         #expect(throws: Error.self) {
             try machine.beginConnecting()
         }
-        #expect(throws: Error.self) {
-            try machine.beginClose()
-        }
 
         try? machine.markAttached()
         #expect(throws: Error.self) {
@@ -363,6 +393,21 @@ struct SessionFoundationTests {
         #expect(throws: Error.self) {
             try machine.markAttached()
         }
+    }
+
+    @Test("Connecting and reconnecting can close, and interrupted can detach")
+    func lifecycleActionsRemainAvailableDuringWork() throws {
+        var connecting = ReconnectStateMachine()
+        try connecting.beginConnecting()
+        try connecting.beginClose()
+        try connecting.markClosed()
+
+        var interrupted = ReconnectStateMachine()
+        try interrupted.beginConnecting()
+        try interrupted.markAttached()
+        try interrupted.beginInterrupt()
+        try interrupted.detach()
+        #expect(interrupted.phase == .detached)
     }
 
     @Test("Session diagnostics never interpolate connection details")
@@ -392,6 +437,26 @@ struct SessionFoundationTests {
         ] {
             #expect(sensitiveValues.allSatisfy { !diagnostic.userMessage.contains($0) })
         }
+    }
+
+    @Test("Reconnect retains the bounded viewport for the replacement PTY")
+    func reconnectUsesBoundedViewport() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-resize")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            deferredResizeInterval: .milliseconds(5)
+        )
+
+        try await session.start()
+        try session.submitViewportSize(columns: 50000, rows: 0)
+        try await session.detach()
+        try await session.reconnect()
+
+        #expect(transport.resizeRequests.last == ResizeCoalescer.Size(columns: 500, rows: 1))
+        try await session.close()
     }
 
     @Test("Cancelling an attach leaves a bounded cancelled state")
@@ -492,6 +557,23 @@ struct RPCSessionReliabilityTests {
             #expect(failure.diagnostic == .timedOut)
         }
 
+        #expect(transport.didStop)
+        try await session.close()
+    }
+
+    @Test("A malformed frame later in one batch prevents recording success")
+    func validatesWholeRPCBatchBeforeDispatch() async throws {
+        let transport = InvalidBatchRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        try await session.start()
+
+        #expect(session.phase == .failed(.malformedFrame))
+        #expect(session.lastExchange == nil)
         try await session.close()
     }
 }
@@ -502,6 +584,7 @@ private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
     private var requests = 0
+    private var stopped = false
 
     var onOutput: (@Sendable (Data) -> Void)? {
         get { lock.withLock { outputHandler } }
@@ -517,6 +600,10 @@ private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
         lock.withLock { requests }
     }
 
+    var didStop: Bool {
+        lock.withLock { stopped }
+    }
+
     init(respondsAfterStartup: Bool) {
         self.respondsAfterStartup = respondsAfterStartup
     }
@@ -525,7 +612,9 @@ private final class ControlledRPCTransport: @unchecked Sendable, RPCTransport {
         ControlledRPCChannel(transport: self)
     }
 
-    func close() async throws {}
+    func close() async throws {
+        lock.withLock { stopped = true }
+    }
 
     func receive(_ data: Data) {
         let count = lock.withLock {
@@ -545,6 +634,39 @@ private final class ControlledRPCChannel: @unchecked Sendable, RPCChannel {
     private weak var transport: ControlledRPCTransport?
 
     init(transport: ControlledRPCTransport) {
+        self.transport = transport
+    }
+
+    func write(_ data: Data) async throws {
+        transport?.receive(data)
+    }
+
+    func close() async {}
+}
+
+private final class InvalidBatchRPCTransport: @unchecked Sendable, RPCTransport {
+    var onOutput: (@Sendable (Data) -> Void)?
+    var onClosed: (@Sendable (Int32?) -> Void)?
+
+    func open() async throws -> any RPCChannel {
+        InvalidBatchRPCChannel(transport: self)
+    }
+
+    func close() async throws {}
+
+    func receive(_ data: Data) {
+        guard let request = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+              let identifier = request["id"]?.stringValue
+        else { return }
+        let batch = "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\",\"success\":true}\n{\"success\":true}\n"
+        onOutput?(Data(batch.utf8))
+    }
+}
+
+private final class InvalidBatchRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: InvalidBatchRPCTransport?
+
+    init(transport: InvalidBatchRPCTransport) {
         self.transport = transport
     }
 

@@ -128,6 +128,7 @@ final class SSHFixture: @unchecked Sendable {
             authentication: .standardKey,
             sessionName: TmuxSessionName(sessionName)!,
             workingDirectory: RemoteWorkingDirectory(workDirectory.path)!,
+            paneCommand: "exec cat",
             credentials: credentials
         )
     }

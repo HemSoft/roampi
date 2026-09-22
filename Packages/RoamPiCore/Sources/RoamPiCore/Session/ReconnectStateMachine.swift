@@ -23,12 +23,12 @@ struct ReconnectStateMachine: Sendable {
 
     private static let allowedTransitions: [PhaseKey: Set<PhaseKey>] = [
         .idle: [.connecting, .failed, .closed],
-        .connecting: [.attached, .disconnected, .failed, .closed],
+        .connecting: [.attached, .disconnected, .closing, .failed, .closed],
         .attached: [.interrupted, .detached, .disconnected, .closing, .failed],
-        .interrupted: [.attached, .disconnected, .closing, .failed],
+        .interrupted: [.attached, .detached, .disconnected, .closing, .failed],
         .detached: [.reconnecting, .closing, .failed],
         .disconnected: [.reconnecting, .closing, .failed],
-        .reconnecting: [.attached, .disconnected, .failed],
+        .reconnecting: [.attached, .disconnected, .closing, .failed],
         .closing: [.closed],
         .closed: [],
         .failed: [.reconnecting, .closing],

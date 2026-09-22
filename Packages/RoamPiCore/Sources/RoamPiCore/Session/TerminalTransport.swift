@@ -91,6 +91,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let sessionName: TmuxSessionName
     private let workingDirectory: RemoteWorkingDirectory
     private let terminalType: String
+    private let paneCommand: String
+    private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
 
     private let lock = NSLock()
@@ -98,6 +100,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private var channel: SSHSessionChannel?
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var exitStatus: Int32?
+    private var isClosed = false
 
     var onOutput: (@Sendable (Data) -> Void)? {
         get { lock.withLock { outputHandler } }
@@ -115,6 +119,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         sessionName: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         terminalType: String = "xterm-256color",
+        paneCommand: String = "exec pi",
+        attachExisting: Bool = false,
         credentials: any SSHSessionCredentials = SecureTransportStore.shared
     ) {
         self.endpoint = endpoint
@@ -122,10 +128,16 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         self.sessionName = sessionName
         self.workingDirectory = workingDirectory
         self.terminalType = terminalType
+        self.paneCommand = paneCommand
+        self.attachExisting = attachExisting
         self.credentials = credentials
     }
 
     func open(columns: Int, rows: Int) async throws -> any TerminalChannel {
+        guard !lock.withLock({ isClosed }) else {
+            throw SessionDiagnostic.cancelled
+        }
+
         let connection: SSHSessionConnection
         if let existing = lock.withLock({ self.connection }) {
             connection = existing
@@ -135,14 +147,30 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 endpoint: endpoint,
                 mode: authentication
             )
-            lock.withLock { self.connection = connection }
+            let closeImmediately = lock.withLock {
+                guard !isClosed else { return true }
+                self.connection = connection
+                return false
+            }
+            if closeImmediately {
+                await connection.close()
+                throw SessionDiagnostic.cancelled
+            }
         }
 
         do {
-            let attachCommand = TmuxCommand.attachOrCreate(
-                session: sessionName,
-                workingDirectory: workingDirectory
-            )
+            let attachCommand = if attachExisting {
+                TmuxCommand.attachExisting(
+                    session: sessionName,
+                    workingDirectory: workingDirectory
+                )
+            } else {
+                TmuxCommand.attachOrCreate(
+                    session: sessionName,
+                    workingDirectory: workingDirectory,
+                    paneCommand: paneCommand
+                )
+            }
             let sessionChannel = try await connection.openPTYSession(
                 command: attachCommand,
                 terminalType: terminalType,
@@ -157,11 +185,13 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 }
                 handler(data)
             }
+            sessionChannel.onExit = { [weak self] status in
+                self?.lock.withLock { self?.exitStatus = status }
+            }
             sessionChannel.onClosed = { [weak self] in
-                guard let handler = self?.lock.withLock({ self?.closedHandler }) else {
-                    return
-                }
-                handler(nil)
+                guard let self else { return }
+                let result = lock.withLock { (closedHandler, exitStatus) }
+                result.0?(result.1)
             }
 
             lock.withLock { self.channel = sessionChannel }
@@ -205,6 +235,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
     func close() async throws {
         let resources: Resources = lock.withLock {
+            isClosed = true
             let resources = Resources(channel: channel, connection: connection)
             channel = nil
             connection = nil

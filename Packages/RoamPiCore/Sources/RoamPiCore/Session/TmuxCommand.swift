@@ -11,10 +11,22 @@ enum TmuxCommand {
     /// PTY lifetime maps onto the tmux client lifetime.
     static func attachOrCreate(
         session: TmuxSessionName,
+        workingDirectory: RemoteWorkingDirectory,
+        paneCommand: String = "exec pi"
+    ) -> String {
+        "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
+            + "&& exec tmux new-session -A -s \(ShellQuoting.quote(session.rawValue)) "
+            + ShellQuoting.quote(paneCommand)
+    }
+
+    /// Reconnects attach only; they must never create a replacement session
+    /// before the recorded pane identity has been verified.
+    static func attachExisting(
+        session: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory
     ) -> String {
         "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec tmux new-session -A -s \(ShellQuoting.quote(session.rawValue))"
+            + "&& exec tmux attach-session -t \(ShellQuoting.quote(session.rawValue))"
     }
 
     /// Detach-proof identity query: the tmux pane process ID for one session.
@@ -39,11 +51,13 @@ enum TmuxCommand {
 enum PiRPCCommand {
     /// Starts `pi --mode rpc` inside the approved directory.
     ///
-    /// `sh -lc` resolves `pi` from the login environment, which is where the
-    /// bootstrap installs it. `--no-session` keeps disposable RPC exchanges out
-    /// of the user's Pi session history.
+    /// A login shell resolves the same Pi installation used interactively, but
+    /// its profile output is discarded until the fixed command restores the SSH
+    /// stdout/stderr descriptors. `--no-session` keeps the exchange out of Pi
+    /// session history.
     static func start(workingDirectory: RemoteWorkingDirectory) -> String {
         "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec sh -lc 'exec pi --mode rpc --no-session'"
+            + "&& exec sh -lc 'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
+            + "3>&1 4>&2 1>/dev/null 2>/dev/null"
     }
 }

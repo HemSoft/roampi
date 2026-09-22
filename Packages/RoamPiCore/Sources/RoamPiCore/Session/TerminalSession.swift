@@ -187,10 +187,11 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     /// reconnects and never starts another process.
     public func submitViewportSize(columns: Int, rows: Int) throws {
         let submission: ResizeSubmission = lock.withLock {
-            latestColumns = columns
-            latestRows = rows
+            let normalized = coalescer.normalized(columns: columns, rows: rows)
+            latestColumns = normalized.columns
+            latestRows = normalized.rows
             return ResizeSubmission(
-                decision: coalescer.submit(columns: columns, rows: rows),
+                decision: coalescer.submit(columns: normalized.columns, rows: normalized.rows),
                 channel: channel
             )
         }

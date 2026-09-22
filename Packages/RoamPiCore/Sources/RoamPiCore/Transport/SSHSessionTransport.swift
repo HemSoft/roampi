@@ -143,14 +143,14 @@ final class SSHSessionTransport: @unchecked Sendable {
         if let validationError = hostKeys.validationError {
             throw validationError
         }
-        if let transportError = error as? TransportError {
-            throw transportError
-        }
         if Task.isCancelled || error is CancellationError {
             throw TransportError.diagnostic(.cancelled)
         }
         if deadline.didExpire {
             throw TransportError.diagnostic(.timedOut)
+        }
+        if let transportError = error as? TransportError {
+            throw transportError
         }
         if authentication.didExhaustOffers {
             throw TransportError.diagnostic(.authenticationFailed)
@@ -226,10 +226,24 @@ final class SSHSessionConnection: @unchecked Sendable {
                 return opened.futureResult
             }
 
+        let childDeadline = SSHOperationDeadline()
+        let childTimeout = channel.eventLoop.scheduleTask(in: TimeAmount.seconds(30)) { [channel] in
+            childDeadline.expire()
+            channel.close(promise: nil)
+        }
+        defer { childTimeout.cancel() }
+
         let childChannel: Channel
         do {
-            childChannel = try await childFuture.get()
+            childChannel = try await withTaskCancellationHandler {
+                try await childFuture.get()
+            } onCancel: { [channel] in
+                channel.close(promise: nil)
+            }
         } catch {
+            if childDeadline.didExpire {
+                throw TransportError.diagnostic(.timedOut)
+            }
             try Self.translateChannelError(error)
             throw TransportError.diagnostic(.connectionFailed)
         }
@@ -263,9 +277,9 @@ final class SSHSessionConnection: @unchecked Sendable {
         }
     }
 
-    /// Closes the whole SSH connection.
+    /// Closes the whole SSH connection and waits for the channel to finish.
     func close() async {
-        channel.close(promise: nil)
+        try? await channel.close().get()
     }
 }
 
@@ -324,7 +338,7 @@ final class SSHSessionChannel: @unchecked Sendable, TerminalChannel, RPCChannel 
     /// Ends this channel. For tmux sessions the remote session detaches and
     /// keeps running; for exec channels the remote process ends.
     func close() async {
-        channel.close(promise: nil)
+        try? await channel.close().get()
     }
 }
 
@@ -333,8 +347,15 @@ final class SSHSessionChannel: @unchecked Sendable, TerminalChannel, RPCChannel 
 final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
 
+    private struct PendingReply {
+        let identifier: Int
+        let continuation: CheckedContinuation<Void, Error>
+        let timeout: Scheduled<Void>
+    }
+
     private let lock = NSLock()
-    private var replyContinuations: [CheckedContinuation<Void, Error>] = []
+    private var replyContinuations: [PendingReply] = []
+    private var nextReplyIdentifier = 0
     private var outputHandler: (@Sendable (Data, Bool) -> Void)?
     private var exitHandler: (@Sendable (Int32) -> Void)?
     private var closedHandler: (@Sendable () -> Void)?
@@ -346,19 +367,16 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
     var outputCallback: (@Sendable (Data, Bool) -> Void)? {
         get { lock.withLock { outputHandler } }
         set {
-            let pending: [(Data, Bool)] = lock.withLock {
-                outputHandler = newValue
-                guard newValue != nil else { return [] }
-                let buffered = pendingOutput
-                pendingOutput = []
-                pendingOutputBytes = 0
-                return buffered
-            }
+            lock.lock()
+            outputHandler = newValue
             if let newValue {
-                for (data, isStdErr) in pending {
+                for (data, isStdErr) in pendingOutput {
                     newValue(data, isStdErr)
                 }
+                pendingOutput = []
+                pendingOutputBytes = 0
             }
+            lock.unlock()
         }
     }
 
@@ -402,14 +420,20 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
             return
         }
         let isStdErr = channelData.type == .stdErr
-        let callback: (@Sendable (Data, Bool) -> Void)? = lock.withLock {
-            if outputHandler == nil, pendingOutputBytes + payload.count <= JSONLFraming.maxFrameBytes {
-                pendingOutput.append((payload, isStdErr))
-                pendingOutputBytes += payload.count
+        lock.lock()
+        if let outputHandler {
+            outputHandler(payload, isStdErr)
+        } else {
+            // Buffer at most one byte beyond the frame limit. RPC then reports
+            // frameTooLarge instead of receiving a silently truncated prefix.
+            let capacity = JSONLFraming.maxFrameBytes + 1 - pendingOutputBytes
+            if capacity > 0 {
+                let buffered = Data(payload.prefix(capacity))
+                pendingOutput.append((buffered, isStdErr))
+                pendingOutputBytes += buffered.count
             }
-            return outputHandler
         }
-        callback?(payload, isStdErr)
+        lock.unlock()
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
@@ -434,8 +458,9 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
 
     func channelInactive(context: ChannelHandlerContext) {
         let pending = pendingReplies()
-        for continuation in pending {
-            continuation.resume(throwing: TransportError.diagnostic(.connectionFailed))
+        for reply in pending {
+            reply.timeout.cancel()
+            reply.continuation.resume(throwing: TransportError.diagnostic(.connectionFailed))
         }
         let callback: (@Sendable () -> Void)? = lock.withLock {
             didClose = true
@@ -447,8 +472,9 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
 
     func handlerRemoved(context _: ChannelHandlerContext) {
         let pending = pendingReplies()
-        for continuation in pending {
-            continuation.resume(throwing: TransportError.diagnostic(.connectionFailed))
+        for reply in pending {
+            reply.timeout.cancel()
+            reply.continuation.resume(throwing: TransportError.diagnostic(.connectionFailed))
         }
     }
 
@@ -464,35 +490,56 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
         on channel: Channel
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let identifier = lock.withLock {
+                nextReplyIdentifier += 1
+                return nextReplyIdentifier
+            }
+            let timeout = channel.eventLoop.scheduleTask(in: TimeAmount.seconds(30)) {
+                self.failReply(identifier, error: TransportError.diagnostic(.timedOut))
+            }
             lock.withLock {
-                replyContinuations.append(continuation)
+                replyContinuations.append(
+                    PendingReply(
+                        identifier: identifier,
+                        continuation: continuation,
+                        timeout: timeout
+                    )
+                )
             }
-
-            channel.eventLoop.scheduleTask(in: TimeAmount.seconds(30)) {
-                self.failOldestReply(TransportError.diagnostic(.timedOut))
-            }
-
             channel.triggerUserOutboundEvent(request, promise: nil)
         }
     }
 
     private func resolveReply() {
-        let continuation: CheckedContinuation<Void, Error>? = lock.withLock {
+        let reply: PendingReply? = lock.withLock {
             guard !replyContinuations.isEmpty else { return nil }
             return replyContinuations.removeFirst()
         }
-        continuation?.resume(returning: ())
+        reply?.timeout.cancel()
+        reply?.continuation.resume(returning: ())
     }
 
     private func failOldestReply(_ error: Error) {
-        let continuation: CheckedContinuation<Void, Error>? = lock.withLock {
+        let reply: PendingReply? = lock.withLock {
             guard !replyContinuations.isEmpty else { return nil }
             return replyContinuations.removeFirst()
         }
-        continuation?.resume(throwing: error)
+        reply?.timeout.cancel()
+        reply?.continuation.resume(throwing: error)
     }
 
-    private func pendingReplies() -> [CheckedContinuation<Void, Error>] {
+    private func failReply(_ identifier: Int, error: Error) {
+        let reply: PendingReply? = lock.withLock {
+            guard let index = replyContinuations.firstIndex(where: { $0.identifier == identifier }) else {
+                return nil
+            }
+            return replyContinuations.remove(at: index)
+        }
+        reply?.timeout.cancel()
+        reply?.continuation.resume(throwing: error)
+    }
+
+    private func pendingReplies() -> [PendingReply] {
         lock.withLock {
             let pending = replyContinuations
             replyContinuations = []

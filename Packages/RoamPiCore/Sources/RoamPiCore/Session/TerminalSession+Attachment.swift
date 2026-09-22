@@ -8,9 +8,21 @@ extension TerminalSession {
         configureCallbacks(on: transport)
 
         do {
+            try lock.withLock {
+                guard stateMachine.phase == .connecting || stateMachine.phase == .reconnecting else {
+                    throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
+                }
+                self.transport = transport
+            }
             try await openAndInstall(transport)
         } catch {
             try? await transport.close()
+            lock.withLock {
+                if self.transport === transport {
+                    self.transport = nil
+                    channel = nil
+                }
+            }
             markFailure(Self.diagnostic(for: error))
         }
     }
@@ -35,12 +47,14 @@ extension TerminalSession {
 
         do {
             try await verifyProcessIdentity(for: transport)
-            try lock.withLock {
+            let latestSize: ResizeCoalescer.Size = try lock.withLock {
                 try stateMachine.markAttached()
                 self.transport = transport
                 channel = opened
                 coalescer.clearLastSent()
+                return coalescer.normalized(columns: latestColumns, rows: latestRows)
             }
+            try opened.requestResize(columns: latestSize.columns, rows: latestSize.rows)
             publishPhase()
         } catch {
             await opened.close()
@@ -52,12 +66,14 @@ extension TerminalSession {
         if let scripted = configuration.scriptedTransport {
             return scripted
         }
+        let attachExisting = lock.withLock { recordedPaneProcessID != nil }
         return TerminalTransportBox(
             SSHPTYTransport(
                 endpoint: configuration.endpoint,
                 authentication: configuration.authentication,
                 sessionName: configuration.sessionName,
                 workingDirectory: configuration.workingDirectory,
+                attachExisting: attachExisting,
                 credentials: configuration.credentials ?? SecureTransportStore.shared
             )
         )
@@ -99,12 +115,16 @@ extension TerminalSession {
         throw SessionFailure(diagnostic: .commandFailed, phase: .connecting)
     }
 
-    func handleChannelClosed(exitStatus _: Int32?) {
+    func handleChannelClosed(exitStatus: Int32?) {
         lock.withLock {
             guard stateMachine.phase.isConnectedOrRecovering else {
                 return
             }
-            try? stateMachine.markDisconnected()
+            if let exitStatus, exitStatus != 0 {
+                try? stateMachine.fail(.commandFailed)
+            } else {
+                try? stateMachine.markDisconnected()
+            }
             channel = nil
         }
         publishPhase()
