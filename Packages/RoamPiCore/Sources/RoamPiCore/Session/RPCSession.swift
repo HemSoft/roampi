@@ -436,6 +436,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             return try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PiRPCFrame, Error>) in
                     let registrationError: SessionDiagnostic? = lock.withLock {
+                        guard !Task.isCancelled else { return .cancelled }
                         guard pendingRequests[request.identifier] == nil else {
                             return .duplicateRequest
                         }

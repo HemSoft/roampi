@@ -33,7 +33,7 @@ enum TmuxCommand {
     /// Reconnect logic compares this value against the identity recorded before
     /// the interruption to prove the same Pi process is still in use.
     static func paneProcessID(session: TmuxSessionName) -> String {
-        "tmux display-message -p -t \(ShellQuoting.quote(session.rawValue)) '#{pane_pid}'"
+        "tmux display-message -p -t \(ShellQuoting.quote(session.rawValue)) '#{pane_pid} #{pane_current_command}'"
     }
 
     /// True when the named session exists on the remote host.

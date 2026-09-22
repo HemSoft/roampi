@@ -31,6 +31,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
 
     let lock = NSLock()
     var stateMachine = ReconnectStateMachine()
+    var attachmentGeneration: UInt64 = 0
     var coalescer = ResizeCoalescer()
     var transport: TerminalTransportBox?
     var channel: TerminalChannelBox?
@@ -147,6 +148,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     public func detach() async throws {
         let resources: Resources = try lock.withLock {
             try stateMachine.detach()
+            attachmentGeneration &+= 1
             let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
@@ -160,6 +162,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     public func reconnect() async throws {
         let staleTransport: TerminalTransportBox? = try lock.withLock {
             try stateMachine.beginReconnect()
+            attachmentGeneration &+= 1
             let staleTransport = transport
             transport = nil
             channel = nil
@@ -173,6 +176,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     public func close() async throws {
         let resources: Resources = try lock.withLock {
             try stateMachine.beginClose()
+            attachmentGeneration &+= 1
             let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil

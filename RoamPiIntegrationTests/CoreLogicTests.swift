@@ -297,7 +297,9 @@ struct SessionFoundationTests {
                 workingDirectory: #require(RemoteWorkingDirectory("/home/user/proj"))
             ) == "cd '/home/user/proj' && exec tmux attach-session -t 'roampi-proj'"
         )
-        #expect(TmuxCommand.paneProcessID(session: session) == "tmux display-message -p -t 'roampi-proj' '#{pane_pid}'")
+        #expect(TmuxCommand
+            .paneProcessID(session: session) ==
+            "tmux display-message -p -t 'roampi-proj' '#{pane_pid} #{pane_current_command}'")
         #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t 'roampi-proj' 2>/dev/null")
     }
 
@@ -491,6 +493,30 @@ struct SessionFoundationTests {
         #expect(session.phase == .failed(.cancelled))
     }
 
+    @Test("Obsolete terminal attach cleanup cannot fail its replacement")
+    func obsoleteAttachCleanupIsIgnored() async throws {
+        let transport = AttachRaceTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-attach-race")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        let initialStart = Task { try await session.start() }
+        for _ in 0 ..< 100 where session.phase != .failed(.commandFailed) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .failed(.commandFailed))
+
+        try await session.reconnect()
+        #expect(session.phase == .attached)
+        transport.releaseFirstOpen()
+        try await initialStart.value
+        #expect(session.phase == .attached)
+        try await session.detach()
+    }
+
     @Test("An overflow closure is disarmed before one reconnect")
     func overflowClosureReconnectsOnce() async throws {
         let transport = OverflowRecoveryTerminalTransport()
@@ -628,6 +654,42 @@ struct RPCSessionReliabilityTests {
         } catch let failure as SessionFailure {
             #expect(failure.diagnostic == .cancelled)
         }
+        #expect(session.phase == .attached)
+        try await session.close()
+    }
+
+    @Test("Cancellation before request registration cannot write or time out")
+    func cancellationBeforeRegistration() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(40)
+        )
+        try await session.start()
+
+        let gate = RequestRegistrationGate()
+        session.setRequestRegistrationHook { await gate.pause() }
+        let request = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "cancelled-before-registration", kind: .getState)
+            )
+        }
+        while await !(gate.hasEntered) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        request.cancel()
+        session.setRequestRegistrationHook(nil)
+        await gate.release()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected request cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+        try await Task.sleep(for: .milliseconds(60))
         #expect(session.phase == .attached)
         try await session.close()
     }
@@ -1027,6 +1089,58 @@ private final class InvalidBatchRPCChannel: @unchecked Sendable, RPCChannel {
     func close() async {}
 }
 
+private final class AttachRaceTerminalTransport: @unchecked Sendable, TerminalTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var opens = 0
+    private var releaseRequested = false
+    private var firstOpenContinuation: CheckedContinuation<Void, Never>?
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    func open(columns _: Int, rows _: Int) async throws -> any TerminalChannel {
+        let isFirst = lock.withLock {
+            opens += 1
+            return opens == 1
+        }
+        if isFirst {
+            lock.withLock { closedHandler }?(1)
+            await withCheckedContinuation { continuation in
+                let resumeNow = lock.withLock {
+                    guard !releaseRequested else { return true }
+                    firstOpenContinuation = continuation
+                    return false
+                }
+                if resumeNow {
+                    continuation.resume()
+                }
+            }
+        }
+        return OverflowRecoveryTerminalChannel()
+    }
+
+    func close() async throws {}
+
+    func releaseFirstOpen() {
+        let continuation = lock.withLock {
+            releaseRequested = true
+            let continuation = firstOpenContinuation
+            firstOpenContinuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+}
+
 private final class OverflowRecoveryTerminalTransport: @unchecked Sendable, TerminalTransport {
     private let lock = NSLock()
     private var outputHandler: (@Sendable (Data) -> Void)?
@@ -1102,11 +1216,12 @@ struct PaneProcessIdentityTests {
     @Test("Pane PID collection accepts one bounded decimal line")
     func acceptsPID() {
         let collector = PaneProcessIDCollector()
-        collector.feed(Data("12345\r\n".utf8))
+        collector.feed(Data("12345 cat\r\n".utf8))
 
         #expect(collector.isComplete)
         #expect(!collector.failed)
         #expect(collector.paneProcessID == 12345)
+        #expect(collector.paneCommand == "cat")
     }
 
     @Test("Pane PID collection rejects oversized output immediately")
@@ -1122,7 +1237,7 @@ struct PaneProcessIdentityTests {
     @Test("Pane PID collection rejects non-decimal output immediately")
     func rejectsInvalidOutput() {
         let collector = PaneProcessIDCollector()
-        collector.feed(Data("12x".utf8))
+        collector.feed(Data("12x\n".utf8))
 
         #expect(collector.isComplete)
         #expect(collector.failed)

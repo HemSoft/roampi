@@ -107,6 +107,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let workingDirectory: RemoteWorkingDirectory
     private let terminalType: String
     private let paneCommand: String
+    private let expectedPaneExecutable: String
     private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
     private let closureGate = OneShotTerminalClosureGate()
@@ -145,6 +146,12 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         self.workingDirectory = workingDirectory
         self.terminalType = terminalType
         self.paneCommand = paneCommand
+        let commandParts = paneCommand.split(separator: " ")
+        if commandParts.count == 2, commandParts[0] == "exec" {
+            expectedPaneExecutable = URL(fileURLWithPath: String(commandParts[1])).lastPathComponent
+        } else {
+            expectedPaneExecutable = "pi"
+        }
         self.attachExisting = attachExisting
         self.credentials = credentials
     }
@@ -175,7 +182,18 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
 
         do {
-            let attachCommand = if attachExisting {
+            let existingIdentity: (processID: Int32, command: String)? = if attachExisting {
+                nil
+            } else {
+                try await queryPaneIdentity(connection: connection)
+            }
+            if let existingIdentity,
+               existingIdentity.command != expectedPaneExecutable
+            {
+                throw SessionDiagnostic.processIdentityChanged
+            }
+            let shouldAttachExisting = attachExisting || existingIdentity != nil
+            let attachCommand = if shouldAttachExisting {
                 TmuxCommand.attachExisting(
                     session: sessionName,
                     workingDirectory: workingDirectory
@@ -238,6 +256,18 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         guard let connection else {
             throw SessionDiagnostic.notAttached
         }
+        guard let identity = try await queryPaneIdentity(connection: connection) else {
+            return nil
+        }
+        guard identity.command == expectedPaneExecutable else {
+            throw SessionDiagnostic.processIdentityChanged
+        }
+        return identity.processID
+    }
+
+    private func queryPaneIdentity(
+        connection: SSHSessionConnection
+    ) async throws -> (processID: Int32, command: String)? {
         let command = TmuxCommand.paneProcessID(session: sessionName)
         let channel = try await connection.openExecSession(command: command)
         defer { Task { await channel.close() } }
@@ -251,12 +281,19 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             collector.finish()
         }
 
-        for _ in 0 ..< 200 {
+        for attempt in 0 ..< 200 {
             if collector.isComplete {
                 if let failure = collector.failureDiagnostic {
                     throw failure
                 }
-                return collector.paneProcessID
+                if let processID = collector.paneProcessID,
+                   let command = collector.paneCommand
+                {
+                    return (processID, command)
+                }
+                if attempt >= 10 {
+                    return nil
+                }
             }
             try await Task.sleep(for: .milliseconds(25))
         }
@@ -278,7 +315,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
 /// Collects one strictly bounded decimal pane process ID from an exec channel.
 final class PaneProcessIDCollector: @unchecked Sendable {
-    private static let maxResponseBytes = 32
+    private static let maxResponseBytes = 64
     private static let whitespace = CharacterSet(charactersIn: " \t\r\n")
 
     private let lock = NSLock()
@@ -289,6 +326,9 @@ final class PaneProcessIDCollector: @unchecked Sendable {
 
     func feed(_ chunk: Data) {
         lock.withLock {
+            if done, data.isEmpty {
+                done = false
+            }
             guard !done else { return }
             guard data.count + chunk.count <= Self.maxResponseBytes else {
                 invalid = true
@@ -297,7 +337,11 @@ final class PaneProcessIDCollector: @unchecked Sendable {
                 return
             }
             data.append(chunk)
-            if data.contains(where: { !(0x30 ... 0x39).contains($0) && ![0x09, 0x0A, 0x0D, 0x20].contains($0) }) {
+            if data.contains(where: { byte in
+                let isDigit = (0x30 ... 0x39).contains(byte)
+                let isLetter = (0x41 ... 0x5A).contains(byte) || (0x61 ... 0x7A).contains(byte)
+                return !isDigit && !isLetter && ![0x09, 0x0A, 0x0D, 0x20, 0x2D, 0x2E, 0x5F].contains(byte)
+            }) {
                 invalid = true
                 done = true
                 return
@@ -335,21 +379,30 @@ final class PaneProcessIDCollector: @unchecked Sendable {
     }
 
     var paneProcessID: Int32? {
-        lock.withLock {
-            guard done, !invalid else { return nil }
-            let text = String(decoding: data, as: UTF8.self)
-                .trimmingCharacters(in: Self.whitespace)
-            return Int32(text)
-        }
+        lock.withLock { parsedIdentity()?.processID }
+    }
+
+    var paneCommand: String? {
+        lock.withLock { parsedIdentity()?.command }
     }
 
     private func validateAndFinish() {
+        invalid = parsedIdentity() == nil
+        done = true
+    }
+
+    private func parsedIdentity() -> (processID: Int32, command: String)? {
         let text = String(decoding: data, as: UTF8.self)
             .trimmingCharacters(in: Self.whitespace)
-        invalid = text.isEmpty
-            || text.utf8.count > 10
-            || text.utf8.contains(where: { !(0x30 ... 0x39).contains($0) })
-            || Int32(text) == nil
-        done = true
+        let parts = text.split(whereSeparator: { $0.isWhitespace })
+        guard parts.count == 2,
+              parts[0].utf8.count <= 10,
+              let processID = Int32(parts[0]),
+              !parts[1].isEmpty,
+              parts[1].utf8.count <= 32
+        else {
+            return nil
+        }
+        return (processID, String(parts[1]))
     }
 }

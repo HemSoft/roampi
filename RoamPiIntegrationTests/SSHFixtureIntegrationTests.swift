@@ -85,6 +85,37 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("First attach rejects an existing pane owned by another process")
+    func rejectsIncompatibleExistingPane() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("incompatible")
+        let existing = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
+        )
+        try await existing.start()
+        #expect(existing.phase == .attached)
+        try await existing.detach()
+
+        let expectedPi = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec pi"
+        )
+        try await expectedPi.start()
+
+        #expect(expectedPi.phase == .failed(.processIdentityChanged))
+        try await expectedPi.close()
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("RPC mode exchanges one strict LF-delimited request and response")
     func rpcStrictExchange() async throws {
         let fixture = try makeFixture()

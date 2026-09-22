@@ -5,49 +5,65 @@ extension TerminalSession {
     /// tmux session, and verify the remote process identity after a reconnect.
     func attach() async {
         let transport = makeTransport()
-        configureCallbacks(on: transport)
+        let generation: UInt64 = lock.withLock {
+            attachmentGeneration &+= 1
+            return attachmentGeneration
+        }
+        configureCallbacks(on: transport, generation: generation)
 
         do {
             try lock.withLock {
-                guard stateMachine.phase == .connecting || stateMachine.phase == .reconnecting else {
+                guard generation == attachmentGeneration,
+                      stateMachine.phase == .connecting || stateMachine.phase == .reconnecting
+                else {
                     throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
                 }
                 self.transport = transport
             }
-            try await openAndInstall(transport)
+            try await openAndInstall(transport, generation: generation)
         } catch {
+            failAttachmentIfCurrent(
+                Self.diagnostic(for: error),
+                transport: transport,
+                generation: generation
+            )
             try? await transport.close()
-            lock.withLock {
-                if self.transport === transport {
-                    self.transport = nil
-                    channel = nil
-                }
-            }
-            markFailure(Self.diagnostic(for: error))
         }
     }
 
-    func configureCallbacks(on transport: TerminalTransportBox) {
+    func configureCallbacks(on transport: TerminalTransportBox, generation: UInt64) {
         transport.onOutput = { [weak self] data in
-            guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
+            guard let self, let handler = currentOutputHandler(generation: generation) else {
                 return
             }
             handler(data)
         }
         transport.onClosed = { [weak self] exitStatus in
-            self?.handleChannelClosed(exitStatus: exitStatus)
+            self?.handleChannelClosed(exitStatus: exitStatus, generation: generation)
         }
     }
 
-    func openAndInstall(_ transport: TerminalTransportBox) async throws {
+    func currentOutputHandler(
+        generation: UInt64
+    ) -> (@Sendable (Data) -> Void)? {
+        lock.withLock {
+            guard generation == attachmentGeneration else { return nil }
+            return outputHandler
+        }
+    }
+
+    func openAndInstall(_ transport: TerminalTransportBox, generation: UInt64) async throws {
         let (initialColumns, initialRows) = lock.withLock {
             (latestColumns, latestRows)
         }
         let opened = try await transport.open(columns: initialColumns, rows: initialRows)
 
         do {
-            try await verifyProcessIdentity(for: transport)
+            try await verifyProcessIdentity(for: transport, generation: generation)
             let latestSize: ResizeCoalescer.Size = try lock.withLock {
+                guard generation == attachmentGeneration, self.transport === transport else {
+                    throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
+                }
                 try stateMachine.markAttached()
                 self.transport = transport
                 channel = opened
@@ -80,21 +96,27 @@ extension TerminalSession {
         )
     }
 
-    func verifyProcessIdentity(for transport: TerminalTransportBox) async throws {
+    func verifyProcessIdentity(
+        for transport: TerminalTransportBox,
+        generation: UInt64
+    ) async throws {
         guard let sshTransport = transport.sshTransport else {
             return
         }
 
         let previous = lock.withLock { recordedPaneProcessID }
         let observed = try await observePaneProcessID(transport: sshTransport)
-        guard previous == nil || previous == observed else {
-            lock.withLock { processIdentityUnchanged = false }
-            throw SessionFailure(
-                diagnostic: .processIdentityChanged,
-                phase: .failed(.processIdentityChanged)
-            )
-        }
-        lock.withLock {
+        try lock.withLock {
+            guard generation == attachmentGeneration, self.transport === transport else {
+                throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
+            }
+            guard previous == nil || previous == observed else {
+                processIdentityUnchanged = false
+                throw SessionFailure(
+                    diagnostic: .processIdentityChanged,
+                    phase: .failed(.processIdentityChanged)
+                )
+            }
             recordedPaneProcessID = observed
             if previous != nil {
                 processIdentityUnchanged = true
@@ -116,10 +138,12 @@ extension TerminalSession {
         throw SessionFailure(diagnostic: .commandFailed, phase: .connecting)
     }
 
-    func handleChannelClosed(exitStatus: Int32?) {
-        lock.withLock {
-            guard stateMachine.phase.isConnectedOrRecovering else {
-                return
+    func handleChannelClosed(exitStatus: Int32?, generation: UInt64) {
+        let didChange = lock.withLock {
+            guard generation == attachmentGeneration,
+                  stateMachine.phase.isConnectedOrRecovering
+            else {
+                return false
             }
             if let exitStatus, exitStatus != 0 {
                 try? stateMachine.fail(.commandFailed)
@@ -127,15 +151,31 @@ extension TerminalSession {
                 try? stateMachine.markDisconnected()
             }
             channel = nil
+            return true
         }
-        publishPhase()
+        if didChange {
+            publishPhase()
+        }
     }
 
-    func markFailure(_ diagnostic: SessionDiagnostic) {
-        lock.withLock {
+    func failAttachmentIfCurrent(
+        _ diagnostic: SessionDiagnostic,
+        transport: TerminalTransportBox,
+        generation: UInt64
+    ) {
+        let didFail = lock.withLock {
+            guard generation == attachmentGeneration, self.transport === transport else {
+                return false
+            }
+            attachmentGeneration &+= 1
+            self.transport = nil
+            channel = nil
             try? stateMachine.fail(diagnostic)
+            return true
         }
-        publishPhase()
+        if didFail {
+            publishPhase()
+        }
     }
 
     func publishPhase() {
