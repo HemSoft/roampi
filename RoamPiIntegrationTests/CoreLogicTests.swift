@@ -654,6 +654,37 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A stalled RPC interrupt publishes its in-flight phase")
+    func stalledRPCInterruptPublishesPhase() async throws {
+        let transport = StallingWriteRPCTransport()
+        let phases = LockedPhaseCollector()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(40)
+        )
+        session.onPhaseChange = { phases.append($0) }
+        try await session.start()
+
+        let interrupt = Task { try await session.interrupt() }
+        for _ in 0 ..< 100 where !transport.isWriteStalled {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .interrupted)
+        #expect(phases.values.contains(.interrupted))
+
+        do {
+            try await interrupt.value
+            Issue.record("Expected interrupt timeout")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .timedOut)
+        }
+        #expect(session.phase == .failed(.timedOut))
+        #expect(phases.values.last == .failed(.timedOut))
+        try await session.close()
+    }
+
     @Test("A stalled RPC write is torn down at its response deadline")
     func stalledWriteHonorsDeadline() async throws {
         let transport = StallingWriteRPCTransport()
@@ -710,6 +741,7 @@ struct RPCSessionReliabilityTests {
                 Issue.record("Expected lifecycle cancellation for \(action)")
             } catch let failure as SessionFailure {
                 #expect(failure.diagnostic == .cancelled)
+                #expect(failure.phase == (action == "detach" ? .detached : .closing))
             }
             #expect(transport.didClose)
             switch action {

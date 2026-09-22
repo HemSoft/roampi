@@ -296,8 +296,20 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     public func interrupt() async throws {
+        try lock.withLock { try stateMachine.beginInterrupt() }
+        publishPhase()
+        defer {
+            let didRestore = lock.withLock {
+                guard stateMachine.phase == .interrupted else { return false }
+                try? stateMachine.endInterrupt()
+                return true
+            }
+            if didRestore {
+                publishPhase()
+            }
+        }
         let request = PiRPCRequest(identifier: nextIdentifier(), kind: .abort)
-        _ = try await send(request)
+        _ = try await send(request, allowInterrupted: true)
     }
 
     public func detach() async throws {
@@ -462,10 +474,16 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         }
     }
 
-    private func send(_ request: PiRPCRequest) async throws -> PiRPCFrame {
+    private func send(
+        _ request: PiRPCRequest,
+        allowInterrupted: Bool = false
+    ) async throws -> PiRPCFrame {
         let frame = try request.encodedFrame()
         let requestContext: (any RPCChannel, UInt64)? = lock.withLock {
-            guard let channel, stateMachine.phase == .attached else { return nil }
+            guard let channel,
+                  stateMachine.phase == .attached
+                  || (allowInterrupted && stateMachine.phase == .interrupted)
+            else { return nil }
             return (channel, streamGeneration)
         }
         guard let (channel, generation) = requestContext else {
@@ -491,7 +509,10 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                         guard pendingRequests[request.identifier] == nil else {
                             return .duplicateRequest
                         }
-                        guard generation == streamGeneration, stateMachine.phase == .attached else {
+                        guard generation == streamGeneration,
+                              stateMachine.phase == .attached
+                              || (allowInterrupted && stateMachine.phase == .interrupted)
+                        else {
                             return .cancelled
                         }
                         pendingRequests[request.identifier] = PendingRequest(
@@ -689,7 +710,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         case let .response(command, success, _):
             let result: (pending: PendingRequest?, protocolMismatch: Bool) = lock.withLock {
                 guard generation == streamGeneration,
-                      stateMachine.phase == .attached
+                      stateMachine.phase == .attached || stateMachine.phase == .interrupted
                 else { return (nil, false) }
                 responseFrameCount += 1
                 guard let identifier = frame.identifier,
@@ -722,7 +743,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func handleProcessEnded(generation: UInt64, exitStatus: Int32?) {
         // Finish and retire only the stream that emitted this callback. An old
         // channel may close after reconnect has already installed its successor.
-        let result: (SessionDiagnostic?, [String: PendingRequest])? = lock.withLock {
+        let result: (SessionDiagnostic?, [String: PendingRequest], PiSessionPhase)? = lock.withLock {
             guard generation == streamGeneration else { return nil }
 
             let endingDiagnostic: SessionDiagnostic?
@@ -763,10 +784,13 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                     try? stateMachine.markDisconnected()
                 }
             }
-            return (sessionDiagnostic, pending)
+            let requestPhase = isLifecycleRetirement
+                ? stateMachine.phase
+                : sessionDiagnostic.map(PiSessionPhase.failed) ?? .detached
+            return (sessionDiagnostic, pending, requestPhase)
         }
 
-        guard let (endingDiagnostic, pending) = result else { return }
+        guard let (endingDiagnostic, pending, requestPhase) = result else { return }
         for request in pending.values {
             let diagnostic = request.deferredFailure
                 ?? endingDiagnostic
@@ -774,7 +798,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             request.continuation.resume(
                 throwing: SessionFailure(
                     diagnostic: diagnostic,
-                    phase: endingDiagnostic == nil ? .detached : .failed(diagnostic)
+                    phase: requestPhase
                 )
             )
         }
