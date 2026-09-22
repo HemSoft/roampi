@@ -479,6 +479,27 @@ struct SessionFoundationTests {
         try await session.close()
     }
 
+    @Test("Terminal close reaches closed when transport teardown throws")
+    func terminalCloseSurvivesTeardownFailure() async throws {
+        let transport = ThrowingCloseTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-close-failure")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+
+        do {
+            try await session.close()
+            Issue.record("Expected terminal teardown failure")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .connectionFailed)
+            #expect(failure.phase == .closed)
+        }
+        #expect(session.phase == .closed)
+    }
+
     @Test("Session diagnostics never interpolate connection details")
     func diagnosticsRedactSecrets() {
         let sensitiveValues = ["person", "machine.example.ts.net", "100.64.0.1", "/private/project", "roampi-proj"]
@@ -1977,6 +1998,29 @@ private struct OverflowRecoveryTerminalChannel: TerminalChannel {
     func write(_: Data) async throws {}
     func requestResize(columns _: Int, rows _: Int) throws {}
     func close() async {}
+}
+
+private final class ThrowingCloseTerminalTransport: @unchecked Sendable, TerminalTransport {
+    private let base = ScriptedTerminalTransport()
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { base.onOutput }
+        set { base.onOutput = newValue }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { base.onClosed }
+        set { base.onClosed = newValue }
+    }
+
+    func open(columns: Int, rows: Int) async throws -> any TerminalChannel {
+        try await base.open(columns: columns, rows: rows)
+    }
+
+    func close() async throws {
+        try await base.close()
+        throw SessionDiagnostic.connectionFailed
+    }
 }
 
 private final class CancellingTerminalTransport: @unchecked Sendable, TerminalTransport {

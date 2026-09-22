@@ -142,6 +142,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private var heldOutputOverflowed = false
     private var outputVerified = false
     private var adoptedPaneProcessID: Int32?
+    private var adoptedCreationIdentifier: String?
     private var expectedCreationIdentifier: String?
     private var exitStatus: Int32?
     private var isClosed = false
@@ -226,7 +227,10 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 guard existingIdentity.creationIdentifier != nil else {
                     throw SessionDiagnostic.processIdentityChanged
                 }
-                lock.withLock { adoptedPaneProcessID = existingIdentity.processID }
+                lock.withLock {
+                    adoptedPaneProcessID = existingIdentity.processID
+                    adoptedCreationIdentifier = existingIdentity.creationIdentifier
+                }
             }
             try await postPreflightHook?()
             let shouldAttachExisting = attachExisting || existingIdentity != nil
@@ -372,8 +376,12 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         guard let identity = try await queryPaneIdentity(connection: connection) else {
             return nil
         }
-        if let adoptedPaneProcessID = lock.withLock({ self.adoptedPaneProcessID }),
+        let adoptedIdentity = lock.withLock {
+            (processID: adoptedPaneProcessID, creationIdentifier: adoptedCreationIdentifier)
+        }
+        if let adoptedPaneProcessID = adoptedIdentity.processID,
            identity.processID != adoptedPaneProcessID
+           || identity.creationIdentifier != adoptedIdentity.creationIdentifier
         {
             throw SessionDiagnostic.processIdentityChanged
         }

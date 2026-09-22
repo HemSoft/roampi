@@ -191,7 +191,8 @@ struct SSHFixtureIntegrationTests {
                 try await fixture.killSession(name: sessionName)
                 _ = try await fixture.exec(
                     "cd \(ShellQuoting.quote(fixture.workDirectory.path)) && tmux new-session -d -s "
-                        + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote("exec cat"))"
+                        + "\(ShellQuoting.quote(sessionName)) -e ROAMPI_CREATION_ID=replacement-marker "
+                        + ShellQuoting.quote("exec cat")
                 )
             }
         )

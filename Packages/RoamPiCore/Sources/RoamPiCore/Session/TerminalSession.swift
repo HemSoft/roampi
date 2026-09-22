@@ -186,11 +186,20 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         }
         publishPhase()
         await resources.channel?.close()
-        try await resources.transport?.close()
+        let teardownFailed: Bool
+        do {
+            try await resources.transport?.close()
+            teardownFailed = false
+        } catch {
+            teardownFailed = true
+        }
         try lock.withLock {
             try stateMachine.markClosed()
         }
         publishPhase()
+        if teardownFailed {
+            throw SessionFailure(diagnostic: .connectionFailed, phase: .closed)
+        }
     }
 
     /// Feeds one viewport size from the UI. Bounded and coalesced; never
