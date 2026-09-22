@@ -82,7 +82,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             workingDirectory: workingDirectory,
             scriptedTransport: transport.map(TerminalTransportBox.init),
             credentials: nil,
-            paneCommand: PiTerminalCommand.start
+            paneCommand: PiTerminalCommand.start(workingDirectory: workingDirectory)
         )
         self.deferredResizeInterval = deferredResizeInterval
     }
@@ -93,7 +93,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         sessionName: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         credentials: any SSHSessionCredentials,
-        paneCommand: String = PiTerminalCommand.start,
+        paneCommand: String? = nil,
         deferredResizeInterval: Duration = .milliseconds(150)
     ) {
         configuration = Configuration(
@@ -104,6 +104,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             scriptedTransport: nil,
             credentials: credentials,
             paneCommand: paneCommand
+                ?? PiTerminalCommand.start(workingDirectory: workingDirectory)
         )
         self.deferredResizeInterval = deferredResizeInterval
     }

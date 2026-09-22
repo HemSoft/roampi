@@ -12,16 +12,18 @@ enum TmuxCommand {
     static func attachOrCreate(
         session: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
-        paneCommand: String = PiTerminalCommand.start,
+        paneCommand: String? = nil,
         creationIdentifier: String? = nil
     ) -> String {
         let marker = creationIdentifier.map {
             " -e ROAMPI_CREATION_ID=\(ShellQuoting.quote($0))"
         } ?? ""
-        let command = "exec tmux new-session -s \(ShellQuoting.quote(session.rawValue))\(marker) "
-            + ShellQuoting.quote(paneCommand)
-        return "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& \(LoginShellCommand.run(command, suppressProfileOutput: true))"
+        let resolvedPaneCommand = paneCommand
+            ?? PiTerminalCommand.start(workingDirectory: workingDirectory)
+        let command = "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
+            + "&& exec tmux new-session -s \(ShellQuoting.quote(session.rawValue))\(marker) "
+            + ShellQuoting.quote(resolvedPaneCommand)
+        return LoginShellCommand.run(command, suppressProfileOutput: true)
     }
 
     /// Reconnects attach only; they must never create a replacement session
@@ -72,9 +74,10 @@ enum PiRPCCommand {
     /// stdout/stderr descriptors. `--no-session` keeps the exchange out of Pi
     /// session history.
     static func start(workingDirectory: RemoteWorkingDirectory) -> String {
-        "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& case \"$SHELL\" in /*) exec \"$SHELL\" -lc "
-            + "'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
-            + "3>&1 4>&2 1>/dev/null 2>/dev/null ;; *) exit 126 ;; esac"
+        LoginShellCommand.run(
+            "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
+                + "&& exec pi --mode rpc --no-session",
+            suppressProfileOutput: true
+        )
     }
 }

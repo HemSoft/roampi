@@ -17,7 +17,12 @@ enum LoginShellCommand {
     }
 }
 
-/// Starts Pi through the account login environment.
+/// Starts Pi through the account login environment after restoring the
+/// approved project directory in case the login profile changed directory.
 enum PiTerminalCommand {
-    static let start = LoginShellCommand.run("exec pi")
+    static func start(workingDirectory: RemoteWorkingDirectory) -> String {
+        LoginShellCommand.run(
+            "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) && exec pi"
+        )
+    }
 }

@@ -285,12 +285,13 @@ struct SessionFoundationTests {
         let command = TmuxCommand.attachOrCreate(session: session, workingDirectory: directory)
 
         #expect(
-            command == "cd '/home/user/proj' && "
-                + LoginShellCommand.run(
-                    "exec tmux new-session -s 'roampi-proj' "
-                        + ShellQuoting.quote(PiTerminalCommand.start),
-                    suppressProfileOutput: true
-                )
+            command == LoginShellCommand.run(
+                "cd '/home/user/proj' && exec tmux new-session -s 'roampi-proj' "
+                    + ShellQuoting.quote(
+                        PiTerminalCommand.start(workingDirectory: directory)
+                    ),
+                suppressProfileOutput: true
+            )
         )
     }
 
@@ -335,9 +336,10 @@ struct SessionFoundationTests {
         let command = PiRPCCommand.start(workingDirectory: directory)
 
         #expect(
-            command == "cd '/home/user/proj' && case \"$SHELL\" in /*) exec \"$SHELL\" -lc "
-                + "'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
-                + "3>&1 4>&2 1>/dev/null 2>/dev/null ;; *) exit 126 ;; esac"
+            command == LoginShellCommand.run(
+                "cd '/home/user/proj' && exec pi --mode rpc --no-session",
+                suppressProfileOutput: true
+            )
         )
     }
 
@@ -1925,7 +1927,7 @@ private final class CancellingTerminalTransport: @unchecked Sendable, TerminalTr
 @Suite("Pane process identity")
 struct PaneProcessIdentityTests {
     @Test("The Pi launcher accepts its direct Node process identity")
-    func acceptsNodeBackedPi() {
+    func acceptsNodeBackedPi() throws {
         let piExecutables = SSHPTYTransport.compatiblePaneExecutables(for: "exec pi")
         let catExecutables = SSHPTYTransport.compatiblePaneExecutables(for: "exec cat")
 
@@ -1933,10 +1935,14 @@ struct PaneProcessIdentityTests {
         #expect(catExecutables == ["cat"])
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec pi") == "pi")
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec node") == "node")
-        let reportedLauncher = SSHPTYTransport.reportedStartCommand(for: PiTerminalCommand.start)
+        let reportedLauncher = try SSHPTYTransport.reportedStartCommand(
+            for: PiTerminalCommand.start(
+                workingDirectory: #require(RemoteWorkingDirectory("/tmp"))
+            )
+        )
         #expect(
             reportedLauncher
-                == #""case \"\$SHELL\" in /*) exec \"\$SHELL\" -lc 'exec pi';; *) exit 127;; esac""#
+                == #""case \"\$SHELL\" in /*) exec \"\$SHELL\" -lc 'cd '\\''/tmp'\\'' && exec pi';; *) exit 127;; esac""#
         )
         #expect(
             SSHPTYTransport.shouldRetryLauncher(

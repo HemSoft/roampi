@@ -327,7 +327,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         await resources.channel?.close()
         try? await resources.transport?.close()
         let pending = finishLifecycleRetirement()
-        resume(pending, diagnostic: .cancelled, phase: .detached)
+        resume(pending, diagnostic: .cancelled, phase: .reconnecting)
         await openExchange()
     }
 

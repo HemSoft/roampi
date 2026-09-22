@@ -157,7 +157,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         sessionName: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         terminalType: String = "xterm-256color",
-        paneCommand: String = PiTerminalCommand.start,
+        paneCommand: String? = nil,
         attachExisting: Bool = false,
         credentials: any SSHSessionCredentials = SecureTransportStore.shared,
         postPreflightHook: (@Sendable () async throws -> Void)? = nil
@@ -167,8 +167,10 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         self.sessionName = sessionName
         self.workingDirectory = workingDirectory
         self.terminalType = terminalType
-        self.paneCommand = paneCommand
-        compatiblePaneExecutables = Self.compatiblePaneExecutables(for: paneCommand)
+        let resolvedPaneCommand = paneCommand
+            ?? PiTerminalCommand.start(workingDirectory: workingDirectory)
+        self.paneCommand = resolvedPaneCommand
+        compatiblePaneExecutables = Self.compatiblePaneExecutables(for: resolvedPaneCommand)
         self.attachExisting = attachExisting
         self.credentials = credentials
         self.postPreflightHook = postPreflightHook
