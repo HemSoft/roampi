@@ -161,6 +161,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
 
     private struct PendingRequest {
         let continuation: CheckedContinuation<PiRPCFrame, Error>
+        let expectedCommand: String
         var writeState: RequestWriteState = .queued
         var deferredFailure: SessionDiagnostic?
     }
@@ -489,7 +490,10 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                         guard generation == streamGeneration, stateMachine.phase == .attached else {
                             return .cancelled
                         }
-                        pendingRequests[request.identifier] = PendingRequest(continuation: continuation)
+                        pendingRequests[request.identifier] = PendingRequest(
+                            continuation: continuation,
+                            expectedCommand: request.expectedResponseCommand
+                        )
                         writer.enqueue { [weak self] in
                             await self?.performWrite(
                                 identifier: request.identifier,
@@ -671,15 +675,19 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func dispatch(_ frame: PiRPCFrame, generation: UInt64) {
         switch frame.body {
         case let .response(command, success, _):
-            let pending: PendingRequest? = lock.withLock {
-                guard generation == streamGeneration else { return nil }
+            let result: (pending: PendingRequest?, commandMismatch: Bool) = lock.withLock {
+                guard generation == streamGeneration else { return (nil, false) }
                 responseFrameCount += 1
                 guard let identifier = frame.identifier,
-                      pendingRequests[identifier]?.deferredFailure == nil
-                else { return nil }
-                return pendingRequests.removeValue(forKey: identifier)
+                      let pending = pendingRequests[identifier],
+                      pending.deferredFailure == nil
+                else { return (nil, false) }
+                guard pending.expectedCommand == command else { return (nil, true) }
+                return (pendingRequests.removeValue(forKey: identifier), false)
             }
-            if let pending {
+            if result.commandMismatch {
+                stopAfterProtocolFailure(.malformedFrame, generation: generation)
+            } else if let pending = result.pending {
                 if success {
                     pending.continuation.resume(returning: frame)
                 } else {
@@ -687,9 +695,6 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                         throwing: SessionFailure(diagnostic: .commandFailed, phase: .attached)
                     )
                 }
-            } else {
-                _ = command
-                _ = success
             }
         case let .event(type, _):
             lock.withLock {

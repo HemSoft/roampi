@@ -116,6 +116,40 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("Overlapping tmux names never use prefix matching")
+    func overlappingNamesStayDistinct() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let shortName = fixture.sessionName("overlap")
+        let longName = shortName + "-dev"
+        let longer = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(longName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
+        )
+        try await longer.start()
+        try await longer.detach()
+
+        let shorter = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(shortName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
+        )
+        try await shorter.start()
+
+        #expect(shorter.phase == .attached)
+        #expect(try await fixture.tmuxSessionCount(name: shortName) == 1)
+        #expect(try await fixture.tmuxSessionCount(name: longName) == 1)
+        try await shorter.close()
+        try await fixture.killSession(name: shortName)
+        try await fixture.killSession(name: longName)
+    }
+
     @Test("Atomic creation refuses a concurrent tmux name collision")
     func atomicCreationRefusesConcurrentCollision() async throws {
         let fixture = try makeFixture()

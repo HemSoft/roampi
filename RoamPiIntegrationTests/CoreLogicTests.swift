@@ -294,17 +294,17 @@ struct SessionFoundationTests {
     func supportCommands() throws {
         let session = try #require(TmuxSessionName("roampi-proj"))
 
-        #expect(TmuxCommand.hasSession(session: session) == "tmux has-session -t 'roampi-proj' 2>/dev/null")
+        #expect(TmuxCommand.hasSession(session: session) == "tmux has-session -t '=roampi-proj:' 2>/dev/null")
         #expect(
             try TmuxCommand.attachExisting(
                 session: session,
                 workingDirectory: #require(RemoteWorkingDirectory("/home/user/proj"))
-            ) == "cd '/home/user/proj' && exec tmux attach-session -t 'roampi-proj'"
+            ) == "cd '/home/user/proj' && exec tmux attach-session -t '=roampi-proj:'"
         )
         #expect(TmuxCommand
             .paneProcessID(session: session) ==
-            "tmux display-message -p -t 'roampi-proj' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'")
-        #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t 'roampi-proj' 2>/dev/null")
+            "tmux has-session -t '=roampi-proj:' 2>/dev/null && tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'")
+        #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t '=roampi-proj:' 2>/dev/null")
     }
 
     @Test("The RPC start command quotes the directory and pins rpc mode")
@@ -1020,6 +1020,25 @@ struct RPCSessionReliabilityTests {
             PiRPCRequest(identifier: "after-reconnect", kind: .getState)
         )
         #expect(response.isSuccessResponse(command: "get_state"))
+        try await session.close()
+    }
+
+    @Test("A response command must match its correlated request")
+    func responseCommandMustMatchRequest() async throws {
+        let transport = ScriptedRPCTransport(responseCommandOverride: "prompt")
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        try await session.start()
+
+        for _ in 0 ..< 100 where !transport.stopped {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .failed(.malformedFrame))
+        #expect(transport.stopped)
         try await session.close()
     }
 

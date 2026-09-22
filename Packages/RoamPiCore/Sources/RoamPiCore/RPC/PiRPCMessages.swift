@@ -19,6 +19,14 @@ public struct PiRPCRequest: Equatable, Sendable {
         self.kind = kind
     }
 
+    var expectedResponseCommand: String {
+        switch kind {
+        case .getState: "get_state"
+        case .prompt: "prompt"
+        case .abort: "abort"
+        }
+    }
+
     /// Encodes the request as one bounded frame ending with LF.
     func encodedFrame() throws -> Data {
         let object: [String: JSONValue]

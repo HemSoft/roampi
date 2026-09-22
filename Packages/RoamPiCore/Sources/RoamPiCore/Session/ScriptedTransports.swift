@@ -97,8 +97,15 @@ final class ScriptedTerminalChannel: @unchecked Sendable, TerminalChannel {
 /// Deterministic scripted RPC transport: answers `get_state` with a fixed
 /// response and records prompts, performing no network access.
 public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
-    public init() {}
+    public init() {
+        responseCommandOverride = nil
+    }
 
+    init(responseCommandOverride: String) {
+        self.responseCommandOverride = responseCommandOverride
+    }
+
+    private let responseCommandOverride: String?
     private let lock = NSLock()
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
@@ -145,8 +152,9 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
         }
 
         if request["type"]?.stringValue == "get_state" {
+            let command = responseCommandOverride ?? "get_state"
             feed(
-                "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\","
+                "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"\(command)\","
                     + "\"success\":true,\"data\":{\"isStreaming\":false,\"messageCount\":0}}"
             )
         } else {

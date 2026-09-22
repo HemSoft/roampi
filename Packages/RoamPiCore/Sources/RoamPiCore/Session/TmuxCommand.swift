@@ -26,24 +26,26 @@ enum TmuxCommand {
         workingDirectory: RemoteWorkingDirectory
     ) -> String {
         "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec tmux attach-session -t \(ShellQuoting.quote(session.rawValue))"
+            + "&& exec tmux attach-session -t \(ShellQuoting.quote("=\(session.rawValue):"))"
     }
 
     /// Detach-proof identity query: the tmux pane process ID for one session.
     /// Reconnect logic compares this value against the identity recorded before
     /// the interruption to prove the same Pi process is still in use.
     static func paneProcessID(session: TmuxSessionName) -> String {
-        "tmux display-message -p -t \(ShellQuoting.quote(session.rawValue)) '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'"
+        let target = ShellQuoting.quote("=\(session.rawValue):")
+        return "tmux has-session -t \(target) 2>/dev/null "
+            + "&& tmux display-message -p -t \(target) '#{pane_pid}|#{pane_current_command}|#{pane_start_command}'"
     }
 
     /// True when the named session exists on the remote host.
     static func hasSession(session: TmuxSessionName) -> String {
-        "tmux has-session -t \(ShellQuoting.quote(session.rawValue)) 2>/dev/null"
+        "tmux has-session -t \(ShellQuoting.quote("=\(session.rawValue):")) 2>/dev/null"
     }
 
     /// Kill one named session during cleanup of a disposable test session.
     static func killSession(session: TmuxSessionName) -> String {
-        "tmux kill-session -t \(ShellQuoting.quote(session.rawValue)) 2>/dev/null"
+        "tmux kill-session -t \(ShellQuoting.quote("=\(session.rawValue):")) 2>/dev/null"
     }
 }
 
