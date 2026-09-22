@@ -110,14 +110,14 @@ extension TerminalSession {
             guard generation == attachmentGeneration, self.transport === transport else {
                 throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
             }
-            guard previous == nil || previous == observed else {
+            guard previous == nil || previous?.hasSameProcess(as: observed) == true else {
                 processIdentityUnchanged = false
                 throw SessionFailure(
                     diagnostic: .processIdentityChanged,
                     phase: .failed(.processIdentityChanged)
                 )
             }
-            recordedPaneIdentity = observed
+            recordedPaneIdentity = previous ?? observed
             if previous != nil {
                 processIdentityUnchanged = true
             }

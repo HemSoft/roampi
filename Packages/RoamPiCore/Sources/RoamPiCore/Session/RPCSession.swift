@@ -667,6 +667,9 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
             channel = nil
             transport = nil
+            if case .failed = stateMachine.phase {
+                return false
+            }
             try? stateMachine.fail(diagnostic)
             return true
         }

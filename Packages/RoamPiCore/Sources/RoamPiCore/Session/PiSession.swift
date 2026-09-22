@@ -129,7 +129,7 @@ public enum SessionDiagnostic: Error, Equatable, Sendable {
         case .invalidWorkingDirectory:
             "Enter an approved absolute project directory."
         case .invalidSessionName:
-            "Enter a tmux session name using letters, numbers, dots, dashes, or underscores."
+            "Enter a tmux session name using letters, numbers, underscores, or non-leading dashes."
         case .keyUnavailable:
             "The device key is unavailable."
         case .malformedFrame:

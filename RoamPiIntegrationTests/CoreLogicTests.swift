@@ -719,6 +719,26 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A recorded fast-exit diagnosis survives open cleanup")
+    func fastExitPreservesCommandFailure() async throws {
+        let transport = FastExitRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        let initialStart = Task { try await session.start() }
+        for _ in 0 ..< 100 where session.phase != .failed(.commandFailed) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        transport.releaseFirstOpen()
+        try await initialStart.value
+
+        #expect(session.phase == .failed(.commandFailed))
+        try await session.close()
+    }
+
     @Test("A nonzero RPC process exit reports command failure")
     func nonzeroExitIsCommandFailure() async throws {
         let transport = ScriptedRPCTransport()
@@ -1324,6 +1344,16 @@ struct PaneProcessIdentityTests {
         #expect(catExecutables == ["cat"])
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec pi") == "pi")
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec node") == "node")
+    }
+
+    @Test("Reconnect identity follows the stable pane PID")
+    func stablePIDIgnoresForegroundTool() {
+        let pi = TmuxPaneIdentity(processID: 12345, executable: "node")
+        let childTool = TmuxPaneIdentity(processID: 12345, executable: "sh")
+        let replacement = TmuxPaneIdentity(processID: 12346, executable: "node")
+
+        #expect(pi.hasSameProcess(as: childTool))
+        #expect(!pi.hasSameProcess(as: replacement))
     }
 
     @Test("Pane PID collection accepts one bounded decimal line")

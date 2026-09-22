@@ -96,6 +96,10 @@ final class OneShotTerminalClosureGate: @unchecked Sendable {
 struct TmuxPaneIdentity: Equatable, Sendable {
     let processID: Int32
     let executable: String
+
+    func hasSameProcess(as other: TmuxPaneIdentity) -> Bool {
+        processID == other.processID
+    }
 }
 
 /// The SSH PTY transport: connects, allocates a PTY with an explicit terminal
@@ -276,7 +280,9 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         guard let identity = try await queryPaneIdentity(connection: connection) else {
             return nil
         }
-        guard compatiblePaneExecutables.contains(identity.command) else {
+        if !attachExisting,
+           !compatiblePaneExecutables.contains(identity.command)
+        {
             throw SessionDiagnostic.processIdentityChanged
         }
         return TmuxPaneIdentity(
