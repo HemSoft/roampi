@@ -47,7 +47,7 @@ Inbound framing:
 - rejects malformed JSON and an unterminated final record;
 - stops the channel and fails pending requests after a protocol error.
 
-Responses are correlated by request ID. Duplicate pending identifiers are rejected, and each response wait has a 30-second deadline. Every reopened RPC stream starts with a fresh decoder and per-exchange counters. Event frames can arrive alongside responses and are counted separately. Prompt and response contents are not logged or included in diagnostics.
+Responses are correlated by request ID. Duplicate pending identifiers are rejected, and each response wait has a 30-second deadline. One ordered writer preserves registration order for side-effecting commands. Cancellation removes a queued frame; once a write is claimed, cancellation is recorded but not reported until that write finishes, eliminating a post-cancellation remote-write window. Every reopened RPC stream starts with a fresh decoder and per-exchange counters. Event frames can arrive alongside responses and are counted separately. Prompt and response contents are not logged or included in diagnostics.
 
 ## Security boundaries
 

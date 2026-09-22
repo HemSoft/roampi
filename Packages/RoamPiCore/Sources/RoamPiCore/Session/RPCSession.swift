@@ -134,20 +134,47 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
     }
 }
 
+private final class OrderedRPCWriter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tail: Task<Void, Never>?
+
+    func enqueue(_ operation: @escaping @Sendable () async -> Void) {
+        lock.withLock {
+            let predecessor = tail
+            tail = Task {
+                await predecessor?.value
+                await operation()
+            }
+        }
+    }
+}
+
 /// Native RPC adapter behind `PiSession`. Starts `pi --mode rpc`, exchanges at
 /// least one strict LF-delimited request/response, and keeps framing details
 /// out of SwiftUI views.
 public final class RPCSession: @unchecked Sendable, PiSession {
+    private enum RequestWriteState: Sendable {
+        case queued
+        case writing
+        case written
+    }
+
+    private struct PendingRequest {
+        let continuation: CheckedContinuation<PiRPCFrame, Error>
+        var writeState: RequestWriteState = .queued
+        var deferredFailure: SessionDiagnostic?
+    }
+
     private struct Resources {
         let channel: (any RPCChannel)?
         let transport: (any RPCTransport)?
-        let pending: [String: CheckedContinuation<PiRPCFrame, Error>]
+        let pending: [String: PendingRequest]
     }
 
     private struct ProtocolFailureResources {
         let channel: (any RPCChannel)?
         let transport: (any RPCTransport)?
-        let pending: [String: CheckedContinuation<PiRPCFrame, Error>]
+        let pending: [String: PendingRequest]
     }
 
     /// Bounded result of the most recent strict JSONL exchange. Contains no
@@ -172,7 +199,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var decoder = JSONLFrameDecoder()
     private var transport: (any RPCTransport)?
     private var channel: (any RPCChannel)?
-    private var pendingRequests: [String: CheckedContinuation<PiRPCFrame, Error>] = [:]
+    private var pendingRequests: [String: PendingRequest] = [:]
+    private let writer = OrderedRPCWriter()
     private var responseFrameCount = 0
     private var eventFrameCount = 0
     private var identifierCounter = 0
@@ -181,6 +209,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
     private var requestRegistrationHook: (@Sendable () async -> Void)?
     private var requestWriteHook: (@Sendable () async -> Void)?
+    private var requestWriteClaimHook: (@Sendable () async -> Void)?
 
     private let configuration: Configuration
     private let requestTimeout: Duration
@@ -242,6 +271,11 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     /// Installs a post-registration suspension point used only by protocol race tests.
     func setRequestWriteHook(_ hook: (@Sendable () async -> Void)?) {
         lock.withLock { requestWriteHook = hook }
+    }
+
+    /// Installs a post-claim suspension point used only by protocol race tests.
+    func setRequestWriteClaimHook(_ hook: (@Sendable () async -> Void)?) {
+        lock.withLock { requestWriteClaimHook = hook }
     }
 
     public func start() async throws {
@@ -455,33 +489,21 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                         guard generation == streamGeneration, stateMachine.phase == .attached else {
                             return .cancelled
                         }
-                        pendingRequests[request.identifier] = continuation
+                        pendingRequests[request.identifier] = PendingRequest(continuation: continuation)
+                        writer.enqueue { [weak self] in
+                            await self?.performWrite(
+                                identifier: request.identifier,
+                                generation: generation,
+                                channel: channel,
+                                frame: frame
+                            )
+                        }
                         return nil
                     }
                     if let registrationError {
                         continuation.resume(
                             throwing: SessionFailure(diagnostic: registrationError, phase: .attached)
                         )
-                        return
-                    }
-
-                    Task { [weak self] in
-                        guard let self else { return }
-                        if let hook = lock.withLock({ requestWriteHook }) {
-                            await hook()
-                        }
-                        guard isPending(request.identifier, generation: generation) else {
-                            return
-                        }
-                        do {
-                            try await channel.write(frame)
-                        } catch {
-                            self.failPending(
-                                request.identifier,
-                                generation: generation,
-                                error: .connectionFailed
-                            )
-                        }
                     }
                 }
             } onCancel: {
@@ -494,22 +516,61 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         }
     }
 
-    private func isPending(_ identifier: String, generation: UInt64) -> Bool {
-        lock.withLock {
-            generation == streamGeneration && pendingRequests[identifier] != nil
+    private func performWrite(
+        identifier: String,
+        generation: UInt64,
+        channel: any RPCChannel,
+        frame: Data
+    ) async {
+        if let hook = lock.withLock({ requestWriteHook }) {
+            await hook()
+        }
+        let claimed = lock.withLock {
+            guard generation == streamGeneration,
+                  var pending = pendingRequests[identifier],
+                  pending.writeState == .queued
+            else { return false }
+            pending.writeState = .writing
+            pendingRequests[identifier] = pending
+            return true
+        }
+        guard claimed else { return }
+        if let hook = lock.withLock({ requestWriteClaimHook }) {
+            await hook()
+        }
+
+        do {
+            try await channel.write(frame)
+            finishWrite(identifier, generation: generation, writeError: nil)
+        } catch {
+            finishWrite(identifier, generation: generation, writeError: .connectionFailed)
         }
     }
 
-    private func failPending(
+    private func finishWrite(
         _ identifier: String,
         generation: UInt64,
-        error: SessionDiagnostic
+        writeError: SessionDiagnostic?
     ) {
-        let continuation: CheckedContinuation<PiRPCFrame, Error>? = lock.withLock {
-            guard generation == streamGeneration else { return nil }
-            return pendingRequests.removeValue(forKey: identifier)
+        let outcome: (deferred: SessionDiagnostic?, failure: PendingRequest?) = lock.withLock {
+            guard generation == streamGeneration,
+                  var pending = pendingRequests[identifier]
+            else { return (nil, nil) }
+            pending.writeState = .written
+            pendingRequests[identifier] = pending
+            if let deferred = pending.deferredFailure {
+                return (deferred, nil)
+            }
+            guard writeError != nil else { return (nil, nil) }
+            return (nil, pendingRequests.removeValue(forKey: identifier))
         }
-        continuation?.resume(throwing: SessionFailure(diagnostic: error, phase: .attached))
+        if let deferred = outcome.deferred {
+            stopRequest(identifier, generation: generation, diagnostic: deferred)
+        } else if let failure = outcome.failure, let writeError {
+            failure.continuation.resume(
+                throwing: SessionFailure(diagnostic: writeError, phase: .attached)
+            )
+        }
     }
 
     private func stopTimedOutRequest(_ identifier: String, generation: UInt64) {
@@ -525,13 +586,22 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         generation: UInt64,
         diagnostic: SessionDiagnostic
     ) {
-        let continuation: CheckedContinuation<PiRPCFrame, Error>? = lock.withLock {
-            guard generation == streamGeneration else { return nil }
+        let pending: PendingRequest? = lock.withLock {
+            guard generation == streamGeneration,
+                  var pending = pendingRequests[identifier]
+            else { return nil }
+            if pending.writeState == .writing {
+                if pending.deferredFailure == nil {
+                    pending.deferredFailure = diagnostic
+                    pendingRequests[identifier] = pending
+                }
+                return nil
+            }
             return pendingRequests.removeValue(forKey: identifier)
         }
-        guard let continuation else { return }
+        guard let pending else { return }
         stopAfterProtocolFailure(diagnostic, generation: generation)
-        continuation.resume(
+        pending.continuation.resume(
             throwing: SessionFailure(diagnostic: diagnostic, phase: .failed(diagnostic))
         )
     }
@@ -570,17 +640,19 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func dispatch(_ frame: PiRPCFrame, generation: UInt64) {
         switch frame.body {
         case let .response(command, success, _):
-            let continuation: CheckedContinuation<PiRPCFrame, Error>? = lock.withLock {
+            let pending: PendingRequest? = lock.withLock {
                 guard generation == streamGeneration else { return nil }
                 responseFrameCount += 1
-                guard let identifier = frame.identifier else { return nil }
+                guard let identifier = frame.identifier,
+                      pendingRequests[identifier]?.deferredFailure == nil
+                else { return nil }
                 return pendingRequests.removeValue(forKey: identifier)
             }
-            if let continuation {
+            if let pending {
                 if success {
-                    continuation.resume(returning: frame)
+                    pending.continuation.resume(returning: frame)
                 } else {
-                    continuation.resume(
+                    pending.continuation.resume(
                         throwing: SessionFailure(diagnostic: .commandFailed, phase: .attached)
                     )
                 }
@@ -600,38 +672,37 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func handleProcessEnded(generation: UInt64, exitStatus: Int32?) {
         // Finish and retire only the stream that emitted this callback. An old
         // channel may close after reconnect has already installed its successor.
-        let result: (SessionDiagnostic?, [String: CheckedContinuation<PiRPCFrame, Error>])? =
-            lock.withLock {
-                guard generation == streamGeneration else { return nil }
+        let result: (SessionDiagnostic?, [String: PendingRequest])? = lock.withLock {
+            guard generation == streamGeneration else { return nil }
 
-                let endingDiagnostic: SessionDiagnostic?
-                do {
-                    try decoder.finish()
-                    if let exitStatus, exitStatus != 0 {
-                        endingDiagnostic = .commandFailed
-                    } else {
-                        endingDiagnostic = nil
-                    }
-                } catch let error as JSONLFraming.FrameError {
-                    endingDiagnostic = Self.diagnostic(for: error)
-                } catch {
-                    endingDiagnostic = .malformedFrame
+            let endingDiagnostic: SessionDiagnostic?
+            do {
+                try decoder.finish()
+                if let exitStatus, exitStatus != 0 {
+                    endingDiagnostic = .commandFailed
+                } else {
+                    endingDiagnostic = nil
                 }
-
-                let pending = pendingRequests
-                pendingRequests = [:]
-                channel = nil
-                if let endingDiagnostic {
-                    try? stateMachine.fail(endingDiagnostic)
-                } else if stateMachine.phase.isConnectedOrRecovering {
-                    try? stateMachine.markDisconnected()
-                }
-                return (endingDiagnostic, pending)
+            } catch let error as JSONLFraming.FrameError {
+                endingDiagnostic = Self.diagnostic(for: error)
+            } catch {
+                endingDiagnostic = .malformedFrame
             }
 
+            let pending = pendingRequests
+            pendingRequests = [:]
+            channel = nil
+            if let endingDiagnostic {
+                try? stateMachine.fail(endingDiagnostic)
+            } else if stateMachine.phase.isConnectedOrRecovering {
+                try? stateMachine.markDisconnected()
+            }
+            return (endingDiagnostic, pending)
+        }
+
         guard let (endingDiagnostic, pending) = result else { return }
-        for continuation in pending.values {
-            continuation.resume(
+        for request in pending.values {
+            request.continuation.resume(
                 throwing: SessionFailure(
                     diagnostic: endingDiagnostic ?? .unexpectedRemoteClose,
                     phase: .detached
@@ -662,8 +733,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         }
 
         guard let resources else { return }
-        for continuation in resources.pending.values {
-            continuation.resume(
+        for request in resources.pending.values {
+            request.continuation.resume(
                 throwing: SessionFailure(diagnostic: diagnostic, phase: .failed(diagnostic))
             )
         }
@@ -698,12 +769,14 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     private func resume(
-        _ pending: [String: CheckedContinuation<PiRPCFrame, Error>],
+        _ pending: [String: PendingRequest],
         diagnostic: SessionDiagnostic,
         phase: PiSessionPhase
     ) {
-        for continuation in pending.values {
-            continuation.resume(throwing: SessionFailure(diagnostic: diagnostic, phase: phase))
+        for request in pending.values {
+            request.continuation.resume(
+                throwing: SessionFailure(diagnostic: diagnostic, phase: phase)
+            )
         }
     }
 

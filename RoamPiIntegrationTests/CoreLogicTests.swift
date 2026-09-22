@@ -737,6 +737,95 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("Cancellation waits for an already-claimed RPC write")
+    func cancellationWaitsForClaimedWrite() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+
+        let gate = RequestRegistrationGate()
+        let completion = RequestCompletionFlag()
+        session.setRequestWriteClaimHook { await gate.pause() }
+        let request = Task {
+            do {
+                let frame = try await session.exchange(
+                    PiRPCRequest(identifier: "claimed-before-cancellation", kind: .prompt("ordered"))
+                )
+                await completion.markComplete()
+                return frame
+            } catch {
+                await completion.markComplete()
+                throw error
+            }
+        }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        request.cancel()
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(await !completion.isComplete)
+
+        session.setRequestWriteClaimHook(nil)
+        await gate.release()
+        do {
+            _ = try await request.value
+            Issue.record("Expected request cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+
+        #expect(transport.requestFrames.count == 2)
+        #expect(session.phase == .failed(.cancelled))
+        try await session.close()
+    }
+
+    @Test("Concurrent RPC writes preserve registration order")
+    func concurrentWritesPreserveOrder() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+
+        let gate = RequestRegistrationGate()
+        session.setRequestWriteHook { await gate.pause() }
+        let first = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "first-write", kind: .prompt("first"))
+            )
+        }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let second = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "second-write", kind: .abort)
+            )
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(transport.requestFrames.count == 1)
+
+        session.setRequestWriteHook(nil)
+        await gate.release()
+        _ = try await first.value
+        _ = try await second.value
+        let identifiers = transport.requestFrames.dropFirst().compactMap { data -> String? in
+            guard let object = try? JSONLFrameDecoder.decode(Data(data.dropLast())) else {
+                return nil
+            }
+            return object["id"]?.stringValue
+        }
+
+        #expect(identifiers == ["first-write", "second-write"])
+        try await session.close()
+    }
+
     @Test("A fast RPC exit cannot install over its replacement")
     func fastExitCannotReplaceReconnect() async throws {
         let transport = FastExitRPCTransport()
@@ -1002,6 +1091,14 @@ private actor RequestRegistrationGate {
     func release() {
         continuation?.resume()
         continuation = nil
+    }
+}
+
+private actor RequestCompletionFlag {
+    private(set) var isComplete = false
+
+    func markComplete() {
+        isComplete = true
     }
 }
 
