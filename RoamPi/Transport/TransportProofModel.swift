@@ -1,4 +1,5 @@
 import Foundation
+import RoamPiCore
 
 @MainActor
 final class TransportProofModel: ObservableObject {

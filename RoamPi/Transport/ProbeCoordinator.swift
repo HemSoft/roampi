@@ -1,15 +1,5 @@
 import Foundation
-
-struct ProbeResult: Equatable, Sendable {
-    let elapsedMilliseconds: Int
-    let authentication: SSHAuthenticationOffer
-}
-
-protocol SSHProbeTransporting: Sendable {
-    func publicKey() async throws -> String
-    func runProbe(endpoint: RemoteEndpoint, mode: SSHAuthenticationMode) async throws -> ProbeResult
-    func trust(fingerprint: String, endpoint: RemoteEndpoint) async throws
-}
+import RoamPiCore
 
 actor ProbeCoordinator {
     private let transport: any SSHProbeTransporting

@@ -1,12 +1,12 @@
 import Foundation
 
-struct DevelopmentTransportProfile: Sendable {
-    static let launchArgument = "--install-development-transport-profile"
+public struct DevelopmentTransportProfile: Sendable {
+    public static let launchArgument = "--install-development-transport-profile"
 
-    let endpoint: RemoteEndpoint
-    let expectedFingerprints: Set<String>
+    public let endpoint: RemoteEndpoint
+    public let expectedFingerprints: Set<String>
 
-    static func consumeIfRequested(arguments: [String]) -> DevelopmentTransportProfile? {
+    public static func consumeIfRequested(arguments: [String]) -> DevelopmentTransportProfile? {
         #if DEBUG
             guard arguments.contains(launchArgument) else { return nil }
 
@@ -37,7 +37,7 @@ struct DevelopmentTransportProfile: Sendable {
         #endif
     }
 
-    static func exportPublicKey(_ value: String) {
+    public static func exportPublicKey(_ value: String) {
         #if DEBUG
             guard value.hasPrefix("ssh-ed25519 "), value.utf8.count <= 1024,
                   let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first

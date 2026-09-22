@@ -1,14 +1,14 @@
 import Foundation
 
-enum SSHAuthenticationMode: String, CaseIterable, Identifiable, Sendable {
+public enum SSHAuthenticationMode: String, CaseIterable, Identifiable, Sendable {
     case standardKey
     case tailscaleSSHThenKey
 
-    var id: Self {
+    public var id: Self {
         self
     }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .standardKey:
             "Ed25519 key"
@@ -18,7 +18,7 @@ enum SSHAuthenticationMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum SSHAuthenticationOffer: Equatable, Sendable {
+public enum SSHAuthenticationOffer: Equatable, Sendable {
     case none
     case publicKey
 }

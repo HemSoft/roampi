@@ -4,6 +4,8 @@ import NIOSSH
 import Security
 
 actor SecureTransportStore {
+    static let shared = SecureTransportStore()
+
     private enum Account {
         static let privateKey = "transport-ed25519-v1"
 

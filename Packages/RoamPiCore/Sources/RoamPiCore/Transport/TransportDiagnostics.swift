@@ -1,6 +1,6 @@
 import Foundation
 
-enum TransportDiagnostic: Equatable, Sendable {
+public enum TransportDiagnostic: Equatable, Sendable {
     case authenticationFailed
     case cancelled
     case commandFailed
@@ -11,7 +11,7 @@ enum TransportDiagnostic: Equatable, Sendable {
     case keyUnavailable
     case timedOut
 
-    var userMessage: String {
+    public var userMessage: String {
         switch self {
         case .authenticationFailed:
             "Authentication failed. Verify the selected method and remote authorization."
@@ -35,7 +35,7 @@ enum TransportDiagnostic: Equatable, Sendable {
     }
 }
 
-enum TransportError: Error, Equatable, Sendable {
+public enum TransportError: Error, Equatable, Sendable {
     case diagnostic(TransportDiagnostic)
     case hostKeyConfirmationRequired(fingerprint: String)
 }

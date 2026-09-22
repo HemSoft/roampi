@@ -28,10 +28,11 @@ jobs:
         with:
           xcode-version: 26.6
 
-      - name: Install SwiftFormat
+      - name: Install test tools
         run: |
-          brew install swiftformat
+          brew install swiftformat tmux
           swiftformat --version
+          tmux -V
 
       - name: Record toolchain and simulator versions
         run: |
@@ -44,12 +45,16 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           ./scripts/audit-dependencies.sh
-          xcodebuild -resolvePackageDependencies -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
+          xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
 
       - name: Build and test iPhone 17
         run: |
-          xcodebuild -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build
-          xcodebuild -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
+
+      - name: Run disposable SSH integration tests
+        run: |
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPiIntegrationTests -destination 'platform=macOS' test
 
       - name: Check Swift formatting
         run: swiftformat --lint .

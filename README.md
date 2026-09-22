@@ -1,6 +1,6 @@
 # RoamPi
 
-RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. This repository contains the application foundation, a network-free demo dashboard, and a bounded SSH transport proof. Tailscale routing comes from the installed iOS app. tmux and Pi RPC support remain later work.
+RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. This repository contains the application foundation, a network-free demo dashboard, an SSH transport proof, and bounded terminal, tmux reconnect, and Pi RPC vertical slices. Tailscale routing comes from the installed iOS app.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ cd roampi
 open RoamPi.xcodeproj
 ```
 
-The app requires no credentials to build. SwiftNIO SSH, SwiftNIO, and Swift Crypto are pinned through Swift Package Manager for the transport proof.
+The app requires no credentials to build. SwiftTerm, SwiftNIO SSH, SwiftNIO, and Swift Crypto are pinned through Swift Package Manager.
 
 ## Build and test
 
@@ -35,6 +35,16 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project RoamPi.xcodeproj \
   -scheme RoamPi \
   -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+  test
+```
+
+Run the disposable macOS SSH integration suite without a tailnet or provider credentials:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
+  -project RoamPi.xcodeproj \
+  -scheme RoamPiIntegrationTests \
+  -destination 'platform=macOS' \
   test
 ```
 
@@ -70,6 +80,15 @@ xcrun simctl launch booted com.hemsoft.RoamPi --transport-proof-demo
 ```
 
 The proof uses one fixed non-mutating command and discards its output after checking the expected response. See [`docs/SSH_TRANSPORT_DECISION.md`](docs/SSH_TRANSPORT_DECISION.md) for the library comparison and [`docs/SSH_PHYSICAL_DEVICE_RESULTS.md`](docs/SSH_PHYSICAL_DEVICE_RESULTS.md) for the physical test matrix.
+
+Launch deterministic terminal and RPC screens without a network connection:
+
+```bash
+xcrun simctl launch booted com.hemsoft.RoamPi --terminal-demo
+xcrun simctl launch booted com.hemsoft.RoamPi --rpc-demo
+```
+
+SwiftTerm findings are in [`docs/SWIFTTERM_EVALUATION.md`](docs/SWIFTTERM_EVALUATION.md). Session ownership, reconnect rules, strict JSONL framing, and security boundaries are in [`docs/SESSION_ARCHITECTURE.md`](docs/SESSION_ARCHITECTURE.md).
 
 ## Formatting and dependency audit
 

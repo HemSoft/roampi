@@ -36,36 +36,37 @@ This keeps the app small and gives each module a narrow interface:
 
 ## Phase 0: prove the risky parts
 
-- [ ] Install full [Xcode](https://apps.apple.com/us/app/xcode/id497799835) on `air` and select it with `xcode-select`.
-- [ ] Choose the app name, bundle identifier, minimum iOS version, repository license, and distribution target.
-- [ ] Create a minimal Swift app and run it on a physical iPhone or iPad.
-- [ ] With the Tailscale app connected, prove that the test app can resolve a [MagicDNS](https://tailscale.com/docs/features/magicdns) hostname and open TCP port 22.
-- [ ] Prove connections over Wi-Fi and cellular, including a DERP-relayed connection.
-- [ ] Compare [SwiftNIO SSH](https://github.com/apple/swift-nio-ssh) with [Citadel](https://github.com/orlandos-nl/Citadel) for client authentication, PTY allocation, resize events, keepalives, host-key verification, and async cancellation.
-- [ ] Evaluate [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) for terminal rendering, selection, Unicode, hardware keyboards, and touch input.
-- [ ] Verify standard key-based SSH first. Separately test whether the chosen SSH library interoperates with Tailscale SSH's authentication flow.
-- [ ] Start Pi inside tmux, background the app, change networks, reconnect, and confirm that the same process remains usable.
-- [ ] Start `pi --mode rpc` over an SSH exec channel and prove LF-delimited JSONL request and response handling.
+- [x] Install full [Xcode](https://apps.apple.com/us/app/xcode/id497799835) on `air` and select it explicitly for validation commands; the machine-wide selection remains Command Line Tools.
+- [x] Choose the app name, bundle identifier, minimum iOS version, repository license, and distribution target.
+- [x] Create a minimal Swift app and run it on a physical iPhone or iPad.
+- [x] With the Tailscale app connected, prove that the test app can resolve a [MagicDNS](https://tailscale.com/docs/features/magicdns) hostname and open TCP port 22.
+- [ ] Prove connections over Wi-Fi and cellular, including a DERP-relayed connection. Direct Wi-Fi and cellular paths passed; the current tailnet could not force or independently verify DERP.
+- [x] Compare [SwiftNIO SSH](https://github.com/apple/swift-nio-ssh) with [Citadel](https://github.com/orlandos-nl/Citadel) for client authentication, PTY allocation, resize events, keepalives, host-key verification, and async cancellation.
+- [x] Evaluate [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) for terminal rendering, selection, Unicode, hardware keyboards, and touch input.
+- [x] Verify standard key-based SSH first.
+- [ ] Separately verify Tailscale SSH `none` acceptance. Standard OpenSSH rejected `none`; the measured Ed25519 fallback passed.
+- [x] Start Pi inside tmux, background the app, change networks, reconnect, and confirm that the same process remains usable.
+- [x] Start `pi --mode rpc` over an SSH exec channel and prove LF-delimited JSONL request and response handling.
 - [ ] Review the relevant [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) before committing to the terminal and remote-command design.
 
 Exit criterion: one physical iOS device can connect through Tailscale, authenticate with SSH, render a tmux-hosted Pi session, and exchange one Pi RPC prompt.
 
 ## Phase 1: project foundation
 
-- [ ] Initialize the Git repository and create an Xcode project with SwiftUI and Swift Testing.
-- [ ] Add CI for build, unit tests, formatting, and dependency auditing.
+- [x] Initialize the Git repository and create an Xcode project with SwiftUI and Swift Testing.
+- [x] Add CI for build, unit tests, formatting, and dependency auditing.
 - [ ] Document supported remote systems. Start with macOS and common Linux distributions.
-- [ ] Add a small test SSH server fixture for protocol tests. Do not make production tests depend on the live tailnet.
+- [x] Add a small test SSH server fixture for protocol tests. Do not make production tests depend on the live tailnet.
 - [ ] Define typed errors for DNS, reachability, host-key mismatch, SSH authentication, remote prerequisites, tmux, Pi, and provider login.
 
 ## Phase 2: connection and security model
 
 - [ ] Define a connection profile with display name, hostname, port, username, project directory, Pi session choice, and tmux session name.
-- [ ] Generate an Ed25519 SSH key on device and store the private key in Keychain. Prefer Secure Enclave support if the selected SSH library can use it without exporting key material.
+- [x] Generate an Ed25519 SSH key on device and store the private key in Keychain. SwiftNIO SSH requires exportable Ed25519 key material, so Secure Enclave storage is not available for this path.
 - [ ] Support importing an existing key through the document picker. Never place private keys in logs, analytics, app state restoration, or crash metadata.
-- [ ] Implement strict host-key verification and a visible first-connection fingerprint confirmation. Treat changed host keys as blocking errors.
+- [x] Implement strict host-key verification and a visible first-connection fingerprint confirmation. Treat changed host keys as blocking errors.
 - [ ] Add optional Face ID or Touch ID protection for opening saved connections.
-- [ ] Redact usernames, hostnames, commands, project paths, tokens, and terminal text from diagnostics by default.
+- [x] Redact usernames, hostnames, commands, project paths, tokens, and terminal text from diagnostics by default.
 - [ ] Add configurable keepalive and reconnect behavior.
 
 ## Phase 3: onboarding and host setup
@@ -91,24 +92,24 @@ Exit criterion: one physical iOS device can connect through Tailscale, authentic
 
 ## Phase 4: terminal and tmux MVP
 
-- [ ] Open an SSH PTY with the remote `$TERM` and current iOS viewport dimensions.
-- [ ] Render the terminal with selection, copy, paste, links, Unicode, and dynamic resize support.
-- [ ] Add a mobile key row for Escape, Control, Tab, arrows, Page Up, Page Down, and Pi's common shortcuts.
-- [ ] Support hardware keyboard commands without stealing ordinary Pi input.
+- [x] Open an SSH PTY with the remote `$TERM` and current iOS viewport dimensions.
+- [x] Render the terminal with selection, copy, paste, links, Unicode, and dynamic resize support.
+- [x] Add a mobile key row for Escape, Control, Tab, arrows, Page Up, Page Down, and Pi's common shortcuts.
+- [x] Support hardware keyboard commands without stealing ordinary Pi input.
 - [ ] List tmux sessions and show whether each is attached.
-- [ ] Create or attach with a safe equivalent of `tmux new-session -A -s <name>`.
+- [x] Create or attach with a safe equivalent of `tmux new-session -A -s <name>`.
 - [ ] Let the user set a project directory and launch `pi -c` there.
-- [ ] Provide explicit detach, interrupt, reconnect, and close actions. Closing the iOS view must not kill tmux or Pi.
-- [ ] Restore the terminal after app suspension, network loss, and Tailscale reconnection.
-- [ ] Handle stale SSH channels and tmux sessions without creating duplicate Pi processes.
+- [x] Provide explicit detach, interrupt, reconnect, and close actions. Closing the iOS view must not kill tmux or Pi.
+- [x] Restore the terminal after app suspension, network loss, and Tailscale reconnection.
+- [x] Handle stale SSH channels and tmux sessions without creating duplicate Pi processes.
 
 Exit criterion: a user can configure a host once, tap a project, and return to the same tmux-hosted Pi process after the app or network disappears.
 
 ## Phase 5: native Pi interface over RPC
 
-- [ ] Treat terminal mode and native mode as two adapters behind the `PiSession` interface. Keep their transport details out of views.
-- [ ] Launch Pi remotely with `pi --mode rpc` in the chosen project directory.
-- [ ] Implement strict LF-delimited JSONL framing. Do not use a line reader that also splits Unicode separators.
+- [x] Treat terminal mode and native mode as two adapters behind the `PiSession` interface. Keep their transport details out of views.
+- [x] Launch Pi remotely with `pi --mode rpc` in the chosen project directory.
+- [x] Implement strict LF-delimited JSONL framing. Do not use a line reader that also splits Unicode separators.
 - [ ] Render streamed assistant text, thinking state, tool calls, tool results, token usage, and errors in SwiftUI.
 - [ ] Support submit, steering messages, follow-up messages, interrupt, new session, resume, fork, model selection, and thinking level.
 - [ ] Resume by Pi session ID or file after reconnecting.
@@ -127,8 +128,8 @@ Exit criterion: a user can configure a host once, tap a project, and return to t
 
 ## Phase 7: reliability and testing
 
-- [ ] Unit-test profile validation, command quoting, bootstrap planning, JSONL framing, reconnection state, and redaction.
-- [ ] Integration-test SSH key authentication, host-key changes, PTY resize, tmux attach, and Pi RPC against disposable hosts.
+- [ ] Unit-test profile validation, command quoting, bootstrap planning, JSONL framing, reconnection state, and redaction. Command quoting, framing, reconnection, and redaction are covered; profile and bootstrap coverage remains.
+- [x] Integration-test SSH key authentication, host-key changes, PTY resize, tmux attach, and Pi RPC against disposable hosts. Host-key changes remain covered by the transport tests; session protocol tests use a disposable user-level SSH daemon.
 - [ ] Test IPv4 Tailscale addresses, MagicDNS short names, full `*.ts.net` names, and offline hosts.
 - [ ] Test Wi-Fi to cellular handoff, airplane mode, VPN disable and re-enable, server reboot, and app process termination.
 - [ ] Test small iPhone screens, iPad split view, Dynamic Type, VoiceOver, hardware keyboards, and non-English input.

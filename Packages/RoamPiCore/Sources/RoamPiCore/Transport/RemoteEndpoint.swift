@@ -1,17 +1,17 @@
 import Foundation
 
-struct RemoteEndpoint: Equatable, Sendable {
-    static let defaultPort = 22
+public struct RemoteEndpoint: Equatable, Sendable {
+    public static let defaultPort = 22
 
-    let username: String
-    let host: String
-    let port: Int
+    public let username: String
+    public let host: String
+    public let port: Int
 
-    var hostIdentity: String {
+    public var hostIdentity: String {
         "\(host.lowercased()):\(port)"
     }
 
-    init(connectionString: String, advancedPort: String? = nil) throws {
+    public init(connectionString: String, advancedPort: String? = nil) throws {
         let input = connectionString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty,
               !input.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
@@ -134,7 +134,7 @@ struct RemoteEndpoint: Equatable, Sendable {
     }
 }
 
-enum RemoteEndpointError: Error, Equatable {
+public enum RemoteEndpointError: Error, Equatable {
     case duplicatePort
     case invalidConnectionString
     case invalidHost

@@ -1,5 +1,6 @@
 import Foundation
 @testable import RoamPi
+@testable import RoamPiCore
 import Testing
 
 @Suite("SSH transport foundation")
