@@ -1,6 +1,23 @@
 import Foundation
 import RoamPiCore
 
+private final class TerminalOutputOverflowGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+
+    func claim() -> Bool {
+        lock.withLock {
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
+    }
+
+    func reset() {
+        lock.withLock { claimed = false }
+    }
+}
+
 /// Observable bridge between the terminal adapter and its SwiftUI screen.
 @MainActor
 final class TerminalScreenModel: ObservableObject {
@@ -12,6 +29,7 @@ final class TerminalScreenModel: ObservableObject {
     let session: TerminalSession
     private weak var coordinator: TerminalCoordinator?
     private let outputContinuation: AsyncStream<Data>.Continuation
+    private let outputOverflowGate = TerminalOutputOverflowGate()
     private var outputTask: Task<Void, Never>?
 
     var canReconnect: Bool {
@@ -60,11 +78,14 @@ final class TerminalScreenModel: ObservableObject {
                 switch outputContinuation.yield(boundedChunk) {
                 case .enqueued:
                     continue
-                case .dropped, .terminated:
+                case .dropped:
+                    guard self?.outputOverflowGate.claim() == true else { return }
                     Task { @MainActor [weak self] in
                         self?.phaseDetail = "Terminal output exceeded the local display buffer."
                         try? await self?.session.detach()
                     }
+                    return
+                case .terminated:
                     return
                 @unknown default:
                     return
@@ -113,6 +134,7 @@ final class TerminalScreenModel: ObservableObject {
 
     func reconnect() {
         phaseDetail = nil
+        outputOverflowGate.reset()
         Task {
             try? await session.reconnect()
         }

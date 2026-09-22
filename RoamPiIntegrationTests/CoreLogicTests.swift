@@ -564,6 +564,93 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("Detach resumes pending requests and preserves the detached phase")
+    func detachDrainsPendingRequests() async throws {
+        let transport = ControlledRPCTransport(respondsAfterStartup: false)
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(80)
+        )
+        try await session.start()
+
+        let request = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "detach-pending", kind: .getState)
+            )
+        }
+        while transport.requestCount < 2 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try await session.detach()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected detach cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(session.phase == .detached)
+    }
+
+    @Test("Close resumes pending requests and preserves the closed phase")
+    func closeDrainsPendingRequests() async throws {
+        let transport = ControlledRPCTransport(respondsAfterStartup: false)
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(80)
+        )
+        try await session.start()
+
+        let request = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "close-pending", kind: .getState)
+            )
+        }
+        while transport.requestCount < 2 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try await session.close()
+
+        do {
+            _ = try await request.value
+            Issue.record("Expected close cancellation")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .cancelled)
+        }
+        try await Task.sleep(for: .milliseconds(120))
+        #expect(session.phase == .closed)
+    }
+
+    @Test("An obsolete timed-out open cannot fail its replacement")
+    func timeoutReconnectKeepsReplacement() async throws {
+        let transport = BlockingCloseRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(30)
+        )
+
+        let initialStart = Task { try await session.start() }
+        for _ in 0 ..< 100 where session.phase != .failed(.timedOut) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .failed(.timedOut))
+
+        try await session.reconnect()
+        #expect(session.phase == .attached)
+        transport.releaseCloses()
+        try await initialStart.value
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(session.phase == .attached)
+        try await session.close()
+    }
+
     @Test("A superseded RPC stream cannot disconnect its replacement")
     func ignoresSupersededStreamClosure() async throws {
         let transport = GenerationRPCTransport()
@@ -666,6 +753,83 @@ private final class ControlledRPCChannel: @unchecked Sendable, RPCChannel {
 
     func write(_ data: Data) async throws {
         transport?.receive(data)
+    }
+
+    func close() async {}
+}
+
+private final class BlockingCloseRPCTransport: @unchecked Sendable, RPCTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var openCount = 0
+    private var closeWaiters: [CheckedContinuation<Void, Never>] = []
+    private var closesReleased = false
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    func open() async throws -> any RPCChannel {
+        let index = lock.withLock {
+            openCount += 1
+            return openCount
+        }
+        return BlockingCloseRPCChannel(transport: self, openIndex: index)
+    }
+
+    func close() async throws {
+        await withCheckedContinuation { continuation in
+            let resumeNow = lock.withLock {
+                guard !closesReleased else { return true }
+                closeWaiters.append(continuation)
+                return false
+            }
+            if resumeNow {
+                continuation.resume()
+            }
+        }
+    }
+
+    func releaseCloses() {
+        let waiters = lock.withLock {
+            closesReleased = true
+            let waiters = closeWaiters
+            closeWaiters = []
+            return waiters
+        }
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+
+    func receive(_ data: Data, openIndex: Int) {
+        guard openIndex > 1,
+              let request = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+              let identifier = request["id"]?.stringValue
+        else { return }
+        let response = "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\",\"success\":true}\n"
+        lock.withLock { outputHandler }?(Data(response.utf8))
+    }
+}
+
+private final class BlockingCloseRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: BlockingCloseRPCTransport?
+    private let openIndex: Int
+
+    init(transport: BlockingCloseRPCTransport, openIndex: Int) {
+        self.transport = transport
+        self.openIndex = openIndex
+    }
+
+    func write(_ data: Data) async throws {
+        transport?.receive(data, openIndex: openIndex)
     }
 
     func close() async {}

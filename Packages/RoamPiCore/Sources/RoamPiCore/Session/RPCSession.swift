@@ -138,6 +138,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private struct Resources {
         let channel: (any RPCChannel)?
         let transport: (any RPCTransport)?
+        let pending: [String: CheckedContinuation<PiRPCFrame, Error>]
     }
 
     private struct ProtocolFailureResources {
@@ -245,27 +246,40 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let resources: Resources = try lock.withLock {
             try stateMachine.detach()
             streamGeneration &+= 1
-            let resources = Resources(channel: channel, transport: transport)
+            let resources = Resources(
+                channel: channel,
+                transport: transport,
+                pending: pendingRequests
+            )
+            pendingRequests = [:]
             channel = nil
             transport = nil
             return resources
         }
         publishPhase()
+        resume(resources.pending, diagnostic: .cancelled, phase: .detached)
         await resources.channel?.close()
         try await resources.transport?.close()
     }
 
     public func reconnect() async throws {
-        let staleTransport: (any RPCTransport)? = try lock.withLock {
+        let staleResources: Resources = try lock.withLock {
             try stateMachine.beginReconnect()
             streamGeneration &+= 1
-            let staleTransport = transport
+            let resources = Resources(
+                channel: channel,
+                transport: transport,
+                pending: pendingRequests
+            )
+            pendingRequests = [:]
             transport = nil
             channel = nil
-            return staleTransport
+            return resources
         }
         publishPhase()
-        try? await staleTransport?.close()
+        resume(staleResources.pending, diagnostic: .cancelled, phase: .detached)
+        await staleResources.channel?.close()
+        try? await staleResources.transport?.close()
         await openExchange()
     }
 
@@ -273,12 +287,18 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let resources: Resources = try lock.withLock {
             try stateMachine.beginClose()
             streamGeneration &+= 1
-            let resources = Resources(channel: channel, transport: transport)
+            let resources = Resources(
+                channel: channel,
+                transport: transport,
+                pending: pendingRequests
+            )
+            pendingRequests = [:]
             channel = nil
             transport = nil
             return resources
         }
         publishPhase()
+        resume(resources.pending, diagnostic: .cancelled, phase: .closing)
         await resources.channel?.close()
         try await resources.transport?.close()
         try lock.withLock {
@@ -294,17 +314,16 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     private func openExchange() async {
+        let generation: UInt64 = lock.withLock {
+            streamGeneration &+= 1
+            decoder = JSONLFrameDecoder()
+            responseFrameCount = 0
+            eventFrameCount = 0
+            recordedExchange = nil
+            return streamGeneration
+        }
         var candidateTransport: (any RPCTransport)?
         do {
-            let generation: UInt64 = lock.withLock {
-                streamGeneration &+= 1
-                decoder = JSONLFrameDecoder()
-                responseFrameCount = 0
-                eventFrameCount = 0
-                recordedExchange = nil
-                return streamGeneration
-            }
-
             // Keep this as a statement for Xcode 26.6: its Swift compiler can
             // hang while lowering a conditional expression to an existential.
             // swiftformat:disable conditionalAssignment
@@ -361,26 +380,25 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             if didRecord {
                 publishPhase()
             }
-        } catch is CancellationError {
-            try? await candidateTransport?.close()
-            clearTransportReferences()
-            markFailure(.cancelled)
-        } catch let failure as SessionFailure {
-            try? await candidateTransport?.close()
-            clearTransportReferences()
-            markFailure(failure.diagnostic)
-        } catch let diagnostic as SessionDiagnostic {
-            try? await candidateTransport?.close()
-            clearTransportReferences()
-            markFailure(diagnostic)
-        } catch let transportError as TransportError {
-            try? await candidateTransport?.close()
-            clearTransportReferences()
-            markFailure(Self.diagnostic(for: transportError))
         } catch {
+            let diagnostic: SessionDiagnostic = switch error {
+            case is CancellationError:
+                .cancelled
+            case let failure as SessionFailure:
+                failure.diagnostic
+            case let sessionDiagnostic as SessionDiagnostic:
+                sessionDiagnostic
+            case let transportError as TransportError:
+                Self.diagnostic(for: transportError)
+            default:
+                .connectionFailed
+            }
             try? await candidateTransport?.close()
-            clearTransportReferences()
-            markFailure(.connectionFailed)
+            finishOpenFailure(
+                diagnostic,
+                generation: generation,
+                candidateTransport: candidateTransport
+            )
         }
     }
 
@@ -438,17 +456,20 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     private func stopTimedOutRequest(_ identifier: String) {
-        let isPending = lock.withLock { pendingRequests[identifier] != nil }
-        if isPending {
-            stopAfterProtocolFailure(.timedOut)
-        }
+        stopRequest(identifier, diagnostic: .timedOut)
     }
 
     private func stopCancelledRequest(_ identifier: String) {
-        let isPending = lock.withLock { pendingRequests[identifier] != nil }
-        if isPending {
-            stopAfterProtocolFailure(.cancelled)
-        }
+        stopRequest(identifier, diagnostic: .cancelled)
+    }
+
+    private func stopRequest(_ identifier: String, diagnostic: SessionDiagnostic) {
+        let continuation = lock.withLock { pendingRequests.removeValue(forKey: identifier) }
+        guard let continuation else { return }
+        stopAfterProtocolFailure(diagnostic)
+        continuation.resume(
+            throwing: SessionFailure(diagnostic: diagnostic, phase: .failed(diagnostic))
+        )
     }
 
     private func handleOutput(_ data: Data, generation: UInt64) {
@@ -585,18 +606,34 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         publishPhase()
     }
 
-    private func clearTransportReferences() {
-        lock.withLock {
+    private func finishOpenFailure(
+        _ diagnostic: SessionDiagnostic,
+        generation: UInt64,
+        candidateTransport: (any RPCTransport)?
+    ) {
+        let didFail = lock.withLock {
+            guard generation == streamGeneration else { return false }
+            if let candidateTransport, let transport, transport !== candidateTransport {
+                return false
+            }
             channel = nil
             transport = nil
+            try? stateMachine.fail(diagnostic)
+            return true
+        }
+        if didFail {
+            publishPhase()
         }
     }
 
-    private func markFailure(_ diagnostic: SessionDiagnostic) {
-        lock.withLock {
-            try? stateMachine.fail(diagnostic)
+    private func resume(
+        _ pending: [String: CheckedContinuation<PiRPCFrame, Error>],
+        diagnostic: SessionDiagnostic,
+        phase: PiSessionPhase
+    ) {
+        for continuation in pending.values {
+            continuation.resume(throwing: SessionFailure(diagnostic: diagnostic, phase: phase))
         }
-        publishPhase()
     }
 
     private func publishPhase() {
