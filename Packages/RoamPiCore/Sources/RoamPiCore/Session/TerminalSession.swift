@@ -390,22 +390,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     private func attach() async {
         var candidateTransport: (any TerminalTransport)?
         do {
-            // Keep this as a statement for Xcode 26.6: its Swift compiler can
-            // hang while lowering a conditional expression to an existential.
-            // swiftformat:disable conditionalAssignment
-            let transport: any TerminalTransport
-            if let scripted = configuration.scriptedTransport {
-                transport = scripted
-            } else {
-                transport = SSHPTYTransport(
-                    endpoint: configuration.endpoint,
-                    authentication: configuration.authentication,
-                    sessionName: configuration.sessionName,
-                    workingDirectory: configuration.workingDirectory,
-                    credentials: configuration.credentials ?? SecureTransportStore.shared
-                )
-            }
-            // swiftformat:enable conditionalAssignment
+            let transport = makeTransport()
 
             transport.onOutput = { [weak self] data in
                 guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
@@ -424,23 +409,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             let opened = try await transport.open(columns: initialColumns, rows: initialRows)
 
             do {
-                if let sshTransport = transport as? SSHPTYTransport {
-                    let previous = lock.withLock { recordedPaneProcessID }
-                    let observed = try await observePaneProcessID(transport: sshTransport)
-                    guard previous == nil || previous == observed else {
-                        lock.withLock { processIdentityUnchanged = false }
-                        throw SessionFailure(
-                            diagnostic: .processIdentityChanged,
-                            phase: .failed(.processIdentityChanged)
-                        )
-                    }
-                    lock.withLock {
-                        recordedPaneProcessID = observed
-                        if previous != nil {
-                            processIdentityUnchanged = true
-                        }
-                    }
-                }
+                try await verifyProcessIdentity(for: transport)
 
                 try lock.withLock {
                     try stateMachine.markAttached()
@@ -469,6 +438,41 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         } catch {
             try? await candidateTransport?.close()
             markFailure(.connectionFailed)
+        }
+    }
+
+    private func makeTransport() -> any TerminalTransport {
+        if let scripted = configuration.scriptedTransport {
+            return scripted
+        }
+        return SSHPTYTransport(
+            endpoint: configuration.endpoint,
+            authentication: configuration.authentication,
+            sessionName: configuration.sessionName,
+            workingDirectory: configuration.workingDirectory,
+            credentials: configuration.credentials ?? SecureTransportStore.shared
+        )
+    }
+
+    private func verifyProcessIdentity(for transport: any TerminalTransport) async throws {
+        guard let sshTransport = transport as? SSHPTYTransport else {
+            return
+        }
+
+        let previous = lock.withLock { recordedPaneProcessID }
+        let observed = try await observePaneProcessID(transport: sshTransport)
+        guard previous == nil || previous == observed else {
+            lock.withLock { processIdentityUnchanged = false }
+            throw SessionFailure(
+                diagnostic: .processIdentityChanged,
+                phase: .failed(.processIdentityChanged)
+            )
+        }
+        lock.withLock {
+            recordedPaneProcessID = observed
+            if previous != nil {
+                processIdentityUnchanged = true
+            }
         }
     }
 
