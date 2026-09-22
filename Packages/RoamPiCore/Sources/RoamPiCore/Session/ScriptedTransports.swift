@@ -104,20 +104,30 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
     public init() {
         responseCommandOverride = nil
         responseIdentifierOverride = nil
+        startupEventInResponseBatch = false
     }
 
     init(responseCommandOverride: String) {
         self.responseCommandOverride = responseCommandOverride
         responseIdentifierOverride = nil
+        startupEventInResponseBatch = false
     }
 
     init(responseIdentifierOverride: String) {
         responseCommandOverride = nil
         self.responseIdentifierOverride = responseIdentifierOverride
+        startupEventInResponseBatch = false
+    }
+
+    init(startupEventInResponseBatch: Bool) {
+        responseCommandOverride = nil
+        responseIdentifierOverride = nil
+        self.startupEventInResponseBatch = startupEventInResponseBatch
     }
 
     private let responseCommandOverride: String?
     private let responseIdentifierOverride: String?
+    private let startupEventInResponseBatch: Bool
     private let lock = NSLock()
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
@@ -166,10 +176,13 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
         let responseIdentifier = responseIdentifierOverride ?? identifier
         if request["type"]?.stringValue == "get_state" {
             let command = responseCommandOverride ?? "get_state"
-            feed(
-                "{\"id\":\"\(responseIdentifier)\",\"type\":\"response\",\"command\":\"\(command)\","
-                    + "\"success\":true,\"data\":{\"isStreaming\":false,\"messageCount\":0}}"
-            )
+            let response = "{\"id\":\"\(responseIdentifier)\",\"type\":\"response\",\"command\":\"\(command)\","
+                + "\"success\":true,\"data\":{\"isStreaming\":false,\"messageCount\":0}}"
+            if startupEventInResponseBatch {
+                feed(response + "\n{\"type\":\"startup_complete\"}")
+            } else {
+                feed(response)
+            }
         } else {
             feed(
                 "{\"id\":\"\(responseIdentifier)\",\"type\":\"response\",\"command\":\"\(request["type"]?.stringValue ?? "")\","

@@ -616,6 +616,21 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("Startup records every event in the response transport batch")
+    func startupAccountsForWholeResponseBatch() async throws {
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: ScriptedRPCTransport(startupEventInResponseBatch: true)
+        )
+
+        try await session.start()
+
+        #expect(session.lastExchange?.responseFrameCount == 1)
+        #expect(session.lastExchange?.eventFrameCount == 2)
+        try await session.close()
+    }
+
     @Test("Duplicate pending request identifiers are rejected")
     func rejectsDuplicatePendingIdentifiers() async throws {
         let transport = ControlledRPCTransport(respondsAfterStartup: false)
@@ -1964,9 +1979,24 @@ struct PaneProcessIdentityTests {
 
     @Test("Reconnect identity follows the stable pane PID")
     func stablePIDIgnoresForegroundTool() {
-        let pi = TmuxPaneIdentity(processID: 12345, executable: "node", startCommand: "exec pi")
-        let childTool = TmuxPaneIdentity(processID: 12345, executable: "sh", startCommand: "exec pi")
-        let replacement = TmuxPaneIdentity(processID: 12346, executable: "node", startCommand: "exec pi")
+        let pi = TmuxPaneIdentity(
+            processID: 12345,
+            executable: "node",
+            startCommand: "exec pi",
+            creationIdentifier: "create-1"
+        )
+        let childTool = TmuxPaneIdentity(
+            processID: 12345,
+            executable: "sh",
+            startCommand: "exec pi",
+            creationIdentifier: "create-1"
+        )
+        let replacement = TmuxPaneIdentity(
+            processID: 12345,
+            executable: "node",
+            startCommand: "exec pi",
+            creationIdentifier: "create-2"
+        )
 
         #expect(pi.hasSameProcess(as: childTool))
         #expect(!pi.hasSameProcess(as: replacement))

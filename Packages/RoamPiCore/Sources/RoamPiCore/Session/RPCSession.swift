@@ -700,6 +700,19 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
             frames.append(rpcFrame)
         }
+        let didAccountBatch = lock.withLock {
+            guard generation == streamGeneration else { return false }
+            for frame in frames {
+                switch frame.body {
+                case .response:
+                    responseFrameCount += 1
+                case .event:
+                    eventFrameCount += 1
+                }
+            }
+            return true
+        }
+        guard didAccountBatch else { return }
         for frame in frames {
             dispatch(frame, generation: generation)
         }
@@ -712,7 +725,6 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 guard generation == streamGeneration,
                       stateMachine.phase == .attached || stateMachine.phase == .interrupted
                 else { return (nil, false) }
-                responseFrameCount += 1
                 guard let identifier = frame.identifier,
                       let pending = pendingRequests[identifier]
                 else { return (nil, true) }
@@ -732,10 +744,6 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 }
             }
         case let .event(type, _):
-            lock.withLock {
-                guard generation == streamGeneration else { return }
-                eventFrameCount += 1
-            }
             _ = type
         }
     }

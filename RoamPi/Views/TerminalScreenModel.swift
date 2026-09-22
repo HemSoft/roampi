@@ -136,9 +136,11 @@ final class TerminalScreenModel: ObservableObject {
 
     func sendKey(_ data: Data) {
         let outgoingData: Data
-        if controlModifierArmed {
+        if controlModifierArmed,
+           let controlledData = Self.applyingControlModifier(to: data)
+        {
             controlModifierArmed = false
-            outgoingData = Self.applyingControlModifier(to: data)
+            outgoingData = controlledData
         } else {
             outgoingData = data
         }
@@ -160,8 +162,8 @@ final class TerminalScreenModel: ObservableObject {
         }
     }
 
-    static func applyingControlModifier(to data: Data) -> Data {
-        guard data.count == 1, let byte = data.first else { return data }
+    static func applyingControlModifier(to data: Data) -> Data? {
+        guard data.count == 1, let byte = data.first else { return nil }
         let controlByte: UInt8? = switch byte {
         case 0x20:
             0x00
@@ -172,7 +174,7 @@ final class TerminalScreenModel: ObservableObject {
         default:
             nil
         }
-        return controlByte.map { Data([$0]) } ?? data
+        return controlByte.map { Data([$0]) }
     }
 
     func viewportChanged(columns: Int, rows: Int) {

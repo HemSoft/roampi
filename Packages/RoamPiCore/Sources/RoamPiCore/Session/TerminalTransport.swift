@@ -101,9 +101,11 @@ struct TmuxPaneIdentity: Equatable, Sendable {
     let processID: Int32
     let executable: String
     let startCommand: String
+    let creationIdentifier: String?
 
     func hasSameProcess(as other: TmuxPaneIdentity) -> Bool {
         processID == other.processID
+            && creationIdentifier == other.creationIdentifier
     }
 }
 
@@ -392,7 +394,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         return TmuxPaneIdentity(
             processID: identity.processID,
             executable: identity.command,
-            startCommand: identity.startCommand
+            startCommand: identity.startCommand,
+            creationIdentifier: identity.creationIdentifier
         )
     }
 

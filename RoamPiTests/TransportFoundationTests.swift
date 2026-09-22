@@ -72,12 +72,19 @@ struct TerminalScreenBufferingTests {
         model.toggleControlModifier()
         #expect(model.controlModifierArmed)
         #expect(transport.recordedWrites.isEmpty)
-        model.sendKey(Data("d".utf8))
+        let arrow = Data([0x1B, 0x5B, 0x41])
+        model.sendKey(arrow)
         for _ in 0 ..< 100 where transport.recordedWrites.isEmpty {
             try await Task.sleep(for: .milliseconds(10))
         }
+        #expect(model.controlModifierArmed)
 
-        #expect(transport.recordedWrites == [Data([0x04])])
+        model.sendKey(Data("d".utf8))
+        for _ in 0 ..< 100 where transport.recordedWrites.count < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(transport.recordedWrites == [arrow, Data([0x04])])
         #expect(!model.controlModifierArmed)
         #expect(TerminalScreenModel.applyingControlModifier(to: Data("z".utf8)) == Data([0x1A]))
         #expect(TerminalScreenModel.applyingControlModifier(to: Data("?".utf8)) == Data([0x7F]))
