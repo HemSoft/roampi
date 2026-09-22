@@ -3,6 +3,31 @@ import Foundation
 @testable import RoamPiCore
 import Testing
 
+@Suite("Terminal screen buffering")
+struct TerminalScreenBufferingTests {
+    @MainActor
+    @Test("Display buffering is bounded and detaches on overflow")
+    func detachesOnOutputOverflow() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-buffer-test")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let model = TerminalScreenModel(session: session)
+        try await session.start()
+
+        transport.feed(String(repeating: "x", count: 5 * 1024 * 1024))
+        for _ in 0 ..< 100 where session.phase != .detached {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(session.phase == .detached)
+        #expect(model.phaseDetail == "Terminal output exceeded the local display buffer.")
+    }
+}
+
 @Suite("SSH transport foundation")
 struct TransportFoundationTests {
     @Test(

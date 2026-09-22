@@ -32,7 +32,9 @@ final class TerminalScreenModel: ObservableObject {
     }
 
     init(session: TerminalSession) {
-        let (outputStream, outputContinuation) = AsyncStream<Data>.makeStream()
+        let (outputStream, outputContinuation) = AsyncStream<Data>.makeStream(
+            bufferingPolicy: .bufferingOldest(64)
+        )
         self.session = session
         self.outputContinuation = outputContinuation
         outputTask = Task { @MainActor [weak self] in
@@ -43,15 +45,31 @@ final class TerminalScreenModel: ObservableObject {
         }
         session.onPhaseChange = { [weak self] newPhase in
             Task { @MainActor in
-                self?.phase = newPhase
+                guard let self, self.session.phase == newPhase else { return }
+                self.phase = newPhase
                 if case let .failed(diagnostic) = newPhase {
-                    self?.phaseDetail = diagnostic.userMessage
+                    self.phaseDetail = diagnostic.userMessage
                 }
-                self?.refreshIdentityNote()
+                self.refreshIdentityNote()
             }
         }
-        session.onOutput = { data in
-            outputContinuation.yield(data)
+        session.onOutput = { [weak self] data in
+            for offset in stride(from: 0, to: data.count, by: 64 * 1024) {
+                let end = min(offset + 64 * 1024, data.count)
+                let boundedChunk = data.subdata(in: offset ..< end)
+                switch outputContinuation.yield(boundedChunk) {
+                case .enqueued:
+                    continue
+                case .dropped, .terminated:
+                    Task { @MainActor [weak self] in
+                        self?.phaseDetail = "Terminal output exceeded the local display buffer."
+                        try? await self?.session.detach()
+                    }
+                    return
+                @unknown default:
+                    return
+                }
+            }
         }
     }
 

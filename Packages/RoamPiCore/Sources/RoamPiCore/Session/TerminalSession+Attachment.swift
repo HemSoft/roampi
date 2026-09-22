@@ -73,6 +73,7 @@ extension TerminalSession {
                 authentication: configuration.authentication,
                 sessionName: configuration.sessionName,
                 workingDirectory: configuration.workingDirectory,
+                paneCommand: configuration.paneCommand,
                 attachExisting: attachExisting,
                 credentials: configuration.credentials ?? SecureTransportStore.shared
             )

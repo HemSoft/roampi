@@ -102,11 +102,12 @@ final class RPCScreenModel: ObservableObject {
         self.session = session
         session.onPhaseChange = { [weak self] newPhase in
             Task { @MainActor in
-                self?.phase = newPhase
+                guard let self, self.session.phase == newPhase else { return }
+                self.phase = newPhase
                 if case let .failed(diagnostic) = newPhase {
-                    self?.phaseDetail = diagnostic.userMessage
+                    self.phaseDetail = diagnostic.userMessage
                 }
-                self?.refreshExchange()
+                self.refreshExchange()
             }
         }
     }

@@ -92,6 +92,14 @@ final class SSHRPCTransport: @unchecked Sendable, RPCTransport {
                 }
                 handler(data)
             }
+            sessionChannel.onOutputOverflow = { [weak self] in
+                guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
+                    return
+                }
+                // Feed a bounded explicit oversized record into the strict
+                // decoder rather than silently dropping protocol bytes.
+                handler(Data(repeating: 0, count: JSONLFraming.maxFrameBytes + 1))
+            }
             sessionChannel.onClosed = { [weak self] in
                 guard let handler = self?.lock.withLock({ self?.closedHandler }) else {
                     return
@@ -164,6 +172,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var responseFrameCount = 0
     private var eventFrameCount = 0
     private var identifierCounter = 0
+    private var streamGeneration: UInt64 = 0
     private var recordedExchange: ExchangeResult?
     private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
 
@@ -235,6 +244,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     public func detach() async throws {
         let resources: Resources = try lock.withLock {
             try stateMachine.detach()
+            streamGeneration &+= 1
             let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
@@ -248,6 +258,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     public func reconnect() async throws {
         let staleTransport: (any RPCTransport)? = try lock.withLock {
             try stateMachine.beginReconnect()
+            streamGeneration &+= 1
             let staleTransport = transport
             transport = nil
             channel = nil
@@ -261,6 +272,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     public func close() async throws {
         let resources: Resources = try lock.withLock {
             try stateMachine.beginClose()
+            streamGeneration &+= 1
             let resources = Resources(channel: channel, transport: transport)
             channel = nil
             transport = nil
@@ -284,11 +296,13 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func openExchange() async {
         var candidateTransport: (any RPCTransport)?
         do {
-            lock.withLock {
+            let generation: UInt64 = lock.withLock {
+                streamGeneration &+= 1
                 decoder = JSONLFrameDecoder()
                 responseFrameCount = 0
                 eventFrameCount = 0
                 recordedExchange = nil
+                return streamGeneration
             }
 
             // Keep this as a statement for Xcode 26.6: its Swift compiler can
@@ -309,10 +323,10 @@ public final class RPCSession: @unchecked Sendable, PiSession {
 
             candidateTransport = transport
             transport.onOutput = { [weak self] data in
-                self?.handleOutput(data)
+                self?.handleOutput(data, generation: generation)
             }
             transport.onClosed = { [weak self] _ in
-                self?.handleProcessEnded()
+                self?.handleProcessEnded(generation: generation)
             }
             try lock.withLock {
                 guard stateMachine.phase == .connecting || stateMachine.phase == .reconnecting else {
@@ -437,42 +451,47 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         }
     }
 
-    private func handleOutput(_ data: Data) {
-        let payloads: [Data]
+    private func handleOutput(_ data: Data, generation: UInt64) {
+        let payloads: [Data]?
         do {
             payloads = try lock.withLock {
-                try decoder.feed(data)
+                guard generation == streamGeneration else { return nil }
+                return try decoder.feed(data)
             }
         } catch let error as JSONLFraming.FrameError {
-            stopAfterProtocolFailure(Self.diagnostic(for: error))
+            stopAfterProtocolFailure(Self.diagnostic(for: error), generation: generation)
             return
         } catch {
-            stopAfterProtocolFailure(.malformedFrame)
+            stopAfterProtocolFailure(.malformedFrame, generation: generation)
             return
         }
 
+        guard let payloads else { return }
         var frames: [PiRPCFrame] = []
         for payload in payloads {
             guard let frame = try? JSONLFrameDecoder.decode(payload),
                   let rpcFrame = PiRPCFrameDecoder.decode(frame)
             else {
-                stopAfterProtocolFailure(.malformedFrame)
+                stopAfterProtocolFailure(.malformedFrame, generation: generation)
                 return
             }
             frames.append(rpcFrame)
         }
         for frame in frames {
-            dispatch(frame)
+            dispatch(frame, generation: generation)
         }
     }
 
-    private func dispatch(_ frame: PiRPCFrame) {
+    private func dispatch(_ frame: PiRPCFrame, generation: UInt64) {
         switch frame.body {
         case let .response(command, success, _):
-            lock.withLock { responseFrameCount += 1 }
-            if let identifier = frame.identifier,
-               let continuation = lock.withLock({ pendingRequests.removeValue(forKey: identifier) })
-            {
+            let continuation: CheckedContinuation<PiRPCFrame, Error>? = lock.withLock {
+                guard generation == streamGeneration else { return nil }
+                responseFrameCount += 1
+                guard let identifier = frame.identifier else { return nil }
+                return pendingRequests.removeValue(forKey: identifier)
+            }
+            if let continuation {
                 if success {
                     continuation.resume(returning: frame)
                 } else {
@@ -485,40 +504,43 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 _ = success
             }
         case let .event(type, _):
-            lock.withLock { eventFrameCount += 1 }
+            lock.withLock {
+                guard generation == streamGeneration else { return }
+                eventFrameCount += 1
+            }
             _ = type
         }
     }
 
-    private func handleProcessEnded() {
-        // Drain the decoder first so a trailing partial frame is reported
-        // instead of being silently dropped at process end.
-        var endingDiagnostic: SessionDiagnostic?
-        do {
-            try lock.withLock {
-                try decoder.finish()
+    private func handleProcessEnded(generation: UInt64) {
+        // Finish and retire only the stream that emitted this callback. An old
+        // channel may close after reconnect has already installed its successor.
+        let result: (SessionDiagnostic?, [String: CheckedContinuation<PiRPCFrame, Error>])? =
+            lock.withLock {
+                guard generation == streamGeneration else { return nil }
+
+                let endingDiagnostic: SessionDiagnostic?
+                do {
+                    try decoder.finish()
+                    endingDiagnostic = nil
+                } catch let error as JSONLFraming.FrameError {
+                    endingDiagnostic = Self.diagnostic(for: error)
+                } catch {
+                    endingDiagnostic = .malformedFrame
+                }
+
+                let pending = pendingRequests
+                pendingRequests = [:]
+                channel = nil
+                if let endingDiagnostic {
+                    try? stateMachine.fail(endingDiagnostic)
+                } else if stateMachine.phase.isConnectedOrRecovering {
+                    try? stateMachine.markDisconnected()
+                }
+                return (endingDiagnostic, pending)
             }
-        } catch let error as JSONLFraming.FrameError {
-            endingDiagnostic = Self.diagnostic(for: error)
-        } catch {
-            endingDiagnostic = .malformedFrame
-        }
 
-        let pending: [String: CheckedContinuation<PiRPCFrame, Error>] = lock.withLock {
-            let drained = pendingRequests
-            pendingRequests = [:]
-            channel = nil
-            return drained
-        }
-
-        lock.withLock {
-            if let endingDiagnostic {
-                try? stateMachine.fail(endingDiagnostic)
-            } else if stateMachine.phase.isConnectedOrRecovering {
-                try? stateMachine.markDisconnected()
-            }
-        }
-
+        guard let (endingDiagnostic, pending) = result else { return }
         for continuation in pending.values {
             continuation.resume(
                 throwing: SessionFailure(
@@ -530,8 +552,14 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         publishPhase()
     }
 
-    private func stopAfterProtocolFailure(_ diagnostic: SessionDiagnostic) {
-        let resources: ProtocolFailureResources = lock.withLock {
+    private func stopAfterProtocolFailure(
+        _ diagnostic: SessionDiagnostic,
+        generation: UInt64? = nil
+    ) {
+        let resources: ProtocolFailureResources? = lock.withLock {
+            if let generation, generation != streamGeneration {
+                return nil
+            }
             try? stateMachine.fail(diagnostic)
             let resources = ProtocolFailureResources(
                 channel: channel,
@@ -544,6 +572,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             return resources
         }
 
+        guard let resources else { return }
         for continuation in resources.pending.values {
             continuation.resume(
                 throwing: SessionFailure(diagnostic: diagnostic, phase: .failed(diagnostic))

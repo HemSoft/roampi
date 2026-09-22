@@ -185,6 +185,12 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 }
                 handler(data)
             }
+            sessionChannel.onOutputOverflow = { [weak self] in
+                guard let handler = self?.lock.withLock({ self?.closedHandler }) else {
+                    return
+                }
+                handler(1)
+            }
             sessionChannel.onExit = { [weak self] status in
                 self?.lock.withLock { self?.exitStatus = status }
             }

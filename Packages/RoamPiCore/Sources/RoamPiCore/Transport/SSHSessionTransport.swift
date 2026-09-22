@@ -299,6 +299,13 @@ final class SSHSessionChannel: @unchecked Sendable, TerminalChannel, RPCChannel 
         set { handler.outputCallback = newValue }
     }
 
+    /// Reports that bytes arrived before the consumer was installed and could
+    /// not all be retained within the fixed pre-handler bound.
+    var onOutputOverflow: (@Sendable () -> Void)? {
+        get { handler.outputOverflowCallback }
+        set { handler.outputOverflowCallback = newValue }
+    }
+
     /// Observes the remote exit status when the process ends.
     var onExit: (@Sendable (Int32) -> Void)? {
         get { handler.exitCallback }
@@ -357,10 +364,12 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
     private var replyContinuations: [PendingReply] = []
     private var nextReplyIdentifier = 0
     private var outputHandler: (@Sendable (Data, Bool) -> Void)?
+    private var outputOverflowHandler: (@Sendable () -> Void)?
     private var exitHandler: (@Sendable (Int32) -> Void)?
     private var closedHandler: (@Sendable () -> Void)?
     private var pendingOutput: [(Data, Bool)] = []
     private var pendingOutputBytes = 0
+    private var pendingOutputOverflow = false
     private var pendingExitStatus: Int32?
     private var didClose = false
 
@@ -377,6 +386,19 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
                 pendingOutputBytes = 0
             }
             lock.unlock()
+        }
+    }
+
+    var outputOverflowCallback: (@Sendable () -> Void)? {
+        get { lock.withLock { outputOverflowHandler } }
+        set {
+            let overflowed = lock.withLock {
+                outputOverflowHandler = newValue
+                return pendingOutputOverflow
+            }
+            if overflowed {
+                newValue?()
+            }
         }
     }
 
@@ -431,6 +453,9 @@ final class SessionChannelDataHandler: ChannelInboundHandler, @unchecked Sendabl
                 let buffered = Data(payload.prefix(capacity))
                 pendingOutput.append((buffered, isStdErr))
                 pendingOutputBytes += buffered.count
+            }
+            if payload.count > max(capacity, 0) {
+                pendingOutputOverflow = true
             }
         }
         lock.unlock()

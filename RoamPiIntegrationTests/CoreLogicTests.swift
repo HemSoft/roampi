@@ -564,6 +564,30 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A superseded RPC stream cannot disconnect its replacement")
+    func ignoresSupersededStreamClosure() async throws {
+        let transport = GenerationRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        try await session.start()
+        transport.fireCurrentClosure()
+        #expect(session.phase == .disconnected)
+        try await session.reconnect()
+        transport.fireSupersededClosure()
+        try await Task.sleep(for: .milliseconds(20))
+
+        #expect(session.phase == .attached)
+        let response = try await session.exchange(
+            PiRPCRequest(identifier: "after-reconnect", kind: .getState)
+        )
+        #expect(response.isSuccessResponse(command: "get_state"))
+        try await session.close()
+    }
+
     @Test("A malformed frame later in one batch prevents recording success")
     func validatesWholeRPCBatchBeforeDispatch() async throws {
         let transport = InvalidBatchRPCTransport()
@@ -637,6 +661,66 @@ private final class ControlledRPCChannel: @unchecked Sendable, RPCChannel {
     private weak var transport: ControlledRPCTransport?
 
     init(transport: ControlledRPCTransport) {
+        self.transport = transport
+    }
+
+    func write(_ data: Data) async throws {
+        transport?.receive(data)
+    }
+
+    func close() async {}
+}
+
+private final class GenerationRPCTransport: @unchecked Sendable, RPCTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var supersededClosures: [@Sendable (Int32?) -> Void] = []
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    func open() async throws -> any RPCChannel {
+        GenerationRPCChannel(transport: self)
+    }
+
+    func close() async throws {
+        lock.withLock {
+            if let closedHandler {
+                supersededClosures.append(closedHandler)
+            }
+        }
+    }
+
+    func fireCurrentClosure() {
+        lock.withLock { closedHandler }?(0)
+    }
+
+    func fireSupersededClosure() {
+        let callback = lock.withLock { supersededClosures.first }
+        callback?(0)
+    }
+
+    func receive(_ data: Data) {
+        guard let request = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+              let identifier = request["id"]?.stringValue
+        else { return }
+        let response = "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\",\"success\":true}\n"
+        lock.withLock { outputHandler }?(Data(response.utf8))
+    }
+}
+
+private final class GenerationRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: GenerationRPCTransport?
+
+    init(transport: GenerationRPCTransport) {
         self.transport = transport
     }
 

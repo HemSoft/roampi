@@ -26,6 +26,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         let workingDirectory: RemoteWorkingDirectory
         let scriptedTransport: TerminalTransportBox?
         let credentials: (any SSHSessionCredentials)?
+        let paneCommand: String
     }
 
     let lock = NSLock()
@@ -79,7 +80,8 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             sessionName: sessionName,
             workingDirectory: workingDirectory,
             scriptedTransport: transport.map(TerminalTransportBox.init),
-            credentials: nil
+            credentials: nil,
+            paneCommand: "exec pi"
         )
         self.deferredResizeInterval = deferredResizeInterval
     }
@@ -90,6 +92,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         sessionName: TmuxSessionName,
         workingDirectory: RemoteWorkingDirectory,
         credentials: any SSHSessionCredentials,
+        paneCommand: String = "exec pi",
         deferredResizeInterval: Duration = .milliseconds(150)
     ) {
         configuration = Configuration(
@@ -98,7 +101,8 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             sessionName: sessionName,
             workingDirectory: workingDirectory,
             scriptedTransport: nil,
-            credentials: credentials
+            credentials: credentials,
+            paneCommand: paneCommand
         )
         self.deferredResizeInterval = deferredResizeInterval
     }

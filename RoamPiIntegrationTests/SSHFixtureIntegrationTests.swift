@@ -57,37 +57,31 @@ struct SSHFixtureIntegrationTests {
         defer { fixture.stop() }
 
         let sessionName = fixture.sessionName("reconnect")
-        let firstTransport = fixture.makeTransport(sessionName: sessionName)
-        let firstSession = try TerminalSession(
+        let session = try TerminalSession(
             endpoint: fixture.endpoint,
             sessionName: #require(TmuxSessionName(sessionName)),
             workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
-            transport: firstTransport
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
         )
-        try await firstSession.start()
-        #expect(firstSession.phase == .attached)
+        try await session.start()
+        #expect(session.phase == .attached)
 
         let firstPID = try await #require(fixture.paneProcessID(sessionName: sessionName))
-        try await firstSession.detach()
-        #expect(firstSession.phase == .detached)
+        try await session.detach()
+        #expect(session.phase == .detached)
 
         try await Task.sleep(for: .milliseconds(200))
 
-        let secondTransport = fixture.makeTransport(sessionName: sessionName)
-        let secondSession = try TerminalSession(
-            endpoint: fixture.endpoint,
-            sessionName: #require(TmuxSessionName(sessionName)),
-            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
-            transport: secondTransport
-        )
-        try await secondSession.start()
-        #expect(secondSession.phase == .attached)
+        try await session.reconnect()
+        #expect(session.phase == .attached)
+        #expect(session.lastProcessIdentityUnchanged == true)
 
         let secondPID = try await #require(fixture.paneProcessID(sessionName: sessionName))
         #expect(secondPID == firstPID)
         #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
 
-        try await secondSession.detach()
+        try await session.detach()
         try await fixture.killSession(name: sessionName)
     }
 
