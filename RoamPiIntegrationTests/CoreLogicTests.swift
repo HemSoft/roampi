@@ -716,6 +716,71 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("The startup request ID is reserved before attachment is published")
+    func startupIdentifierIsReservedBeforeAttachedPhase() async throws {
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: ScriptedRPCTransport()
+        )
+        let probe = RequestFailureProbe()
+        let gate = RequestRegistrationGate()
+        session.setStartupSendHook { await gate.pause() }
+        session.onPhaseChange = { phase in
+            guard phase == .attached, probe.claim() else { return }
+            Task {
+                do {
+                    _ = try await session.exchange(
+                        PiRPCRequest(identifier: "r1", kind: .getState)
+                    )
+                } catch let failure as SessionFailure {
+                    probe.record(failure)
+                } catch {}
+            }
+        }
+
+        let startup = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        for _ in 0 ..< 100 where probe.failure == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(probe.failure?.diagnostic == .duplicateRequest)
+        await gate.release()
+        try await startup.value
+        #expect(session.lastExchange?.succeeded == true)
+        #expect(session.phase == .attached)
+        try await session.close()
+    }
+
+    @Test("A retiring RPC stream ignores an in-flight protocol failure")
+    func retiringStreamIgnoresProtocolFailure() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        try await session.start()
+        let gate = SynchronousDeliveryGate()
+        session.setProtocolFailureHook { gate.pause() }
+
+        let staleOutput = Task.detached { transport.feed("not-json") }
+        for _ in 0 ..< 100 where !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let detach = Task { try await session.detach() }
+        try await Task.sleep(for: .milliseconds(20))
+        gate.release()
+        await staleOutput.value
+        try await detach.value
+
+        #expect(session.phase == .detached)
+        try await session.close()
+    }
+
     @Test("Duplicate pending request identifiers are rejected")
     func rejectsDuplicatePendingIdentifiers() async throws {
         let transport = ControlledRPCTransport(respondsAfterStartup: false)
@@ -1605,6 +1670,28 @@ private actor RequestCompletionFlag {
 
     func markComplete() {
         isComplete = true
+    }
+}
+
+private final class RequestFailureProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+    private var storedFailure: SessionFailure?
+
+    var failure: SessionFailure? {
+        lock.withLock { storedFailure }
+    }
+
+    func claim() -> Bool {
+        lock.withLock {
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
+    }
+
+    func record(_ failure: SessionFailure) {
+        lock.withLock { storedFailure = failure }
     }
 }
 
