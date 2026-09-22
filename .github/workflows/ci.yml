@@ -48,13 +48,14 @@ jobs:
           xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
 
       - name: Build and test iPhone 17
-        # `test` builds the app before executing the suites, avoiding a second
-        # cold compilation of the package graph.
-        run: xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
+        # `test` builds the app before executing the suites. Coverage is off
+        # because Xcode 26.6 hangs while instrumenting TerminalSession's async
+        # protocol-existential path; the same path remains fully tested.
+        run: xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' -enableCodeCoverage NO test
 
       - name: Run disposable SSH integration tests
         run: |
-          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPiIntegrationTests -destination 'platform=macOS' test
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPiIntegrationTests -destination 'platform=macOS' -enableCodeCoverage NO test
 
       - name: Check Swift formatting
         run: swiftformat --lint .
