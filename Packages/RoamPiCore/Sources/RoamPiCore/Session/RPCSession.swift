@@ -366,6 +366,12 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             let channel = try await transport.open()
 
             try lock.withLock {
+                guard generation == streamGeneration,
+                      self.transport === transport,
+                      stateMachine.phase == .connecting || stateMachine.phase == .reconnecting
+                else {
+                    throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
+                }
                 try stateMachine.markAttached()
                 self.transport = transport
                 self.channel = channel

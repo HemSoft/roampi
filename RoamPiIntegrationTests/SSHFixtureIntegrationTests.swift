@@ -85,7 +85,7 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
-    @Test("First attach rejects an existing pane owned by another process")
+    @Test("First attach rejects an unrelated existing Node pane")
     func rejectsIncompatibleExistingPane() async throws {
         let fixture = try makeFixture()
         defer { fixture.stop() }
@@ -96,7 +96,7 @@ struct SSHFixtureIntegrationTests {
             sessionName: #require(TmuxSessionName(sessionName)),
             workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
             credentials: fixture.credentials,
-            paneCommand: "exec cat"
+            paneCommand: "exec node"
         )
         try await existing.start()
         #expect(existing.phase == .attached)

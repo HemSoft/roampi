@@ -696,6 +696,29 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A fast RPC exit cannot install over its replacement")
+    func fastExitCannotReplaceReconnect() async throws {
+        let transport = FastExitRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        let initialStart = Task { try await session.start() }
+        for _ in 0 ..< 100 where session.phase != .failed(.commandFailed) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .failed(.commandFailed))
+
+        try await session.reconnect()
+        #expect(session.phase == .attached)
+        transport.releaseFirstOpen()
+        try await initialStart.value
+        #expect(session.phase == .attached)
+        try await session.close()
+    }
+
     @Test("A nonzero RPC process exit reports command failure")
     func nonzeroExitIsCommandFailure() async throws {
         let transport = ScriptedRPCTransport()
@@ -919,6 +942,83 @@ private actor RequestRegistrationGate {
         continuation?.resume()
         continuation = nil
     }
+}
+
+private final class FastExitRPCTransport: @unchecked Sendable, RPCTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var openCount = 0
+    private var releaseRequested = false
+    private var firstOpenContinuation: CheckedContinuation<Void, Never>?
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    func open() async throws -> any RPCChannel {
+        let index = lock.withLock {
+            openCount += 1
+            return openCount
+        }
+        if index == 1 {
+            lock.withLock { closedHandler }?(127)
+            await withCheckedContinuation { continuation in
+                let resumeNow = lock.withLock {
+                    guard !releaseRequested else { return true }
+                    firstOpenContinuation = continuation
+                    return false
+                }
+                if resumeNow {
+                    continuation.resume()
+                }
+            }
+        }
+        return FastExitRPCChannel(transport: self, openIndex: index)
+    }
+
+    func close() async throws {}
+
+    func releaseFirstOpen() {
+        let continuation = lock.withLock {
+            releaseRequested = true
+            let continuation = firstOpenContinuation
+            firstOpenContinuation = nil
+            return continuation
+        }
+        continuation?.resume()
+    }
+
+    func receive(_ data: Data, openIndex: Int) {
+        guard openIndex > 1,
+              let request = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+              let identifier = request["id"]?.stringValue
+        else { return }
+        let response = "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\",\"success\":true}\n"
+        lock.withLock { outputHandler }?(Data(response.utf8))
+    }
+}
+
+private final class FastExitRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: FastExitRPCTransport?
+    private let openIndex: Int
+
+    init(transport: FastExitRPCTransport, openIndex: Int) {
+        self.transport = transport
+        self.openIndex = openIndex
+    }
+
+    func write(_ data: Data) async throws {
+        transport?.receive(data, openIndex: openIndex)
+    }
+
+    func close() async {}
 }
 
 private final class BlockingCloseRPCTransport: @unchecked Sendable, RPCTransport {
@@ -1222,6 +1322,8 @@ struct PaneProcessIdentityTests {
 
         #expect(piExecutables == ["pi", "node"])
         #expect(catExecutables == ["cat"])
+        #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec pi") == "pi")
+        #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec node") == "node")
     }
 
     @Test("Pane PID collection accepts one bounded decimal line")

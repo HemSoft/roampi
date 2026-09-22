@@ -112,6 +112,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let workingDirectory: RemoteWorkingDirectory
     private let terminalType: String
     private let paneCommand: String
+    private let launcherPaneExecutable: String
     private let compatiblePaneExecutables: Set<String>
     private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
@@ -151,6 +152,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         self.workingDirectory = workingDirectory
         self.terminalType = terminalType
         self.paneCommand = paneCommand
+        launcherPaneExecutable = Self.launcherPaneExecutable(for: paneCommand)
         compatiblePaneExecutables = Self.compatiblePaneExecutables(for: paneCommand)
         self.attachExisting = attachExisting
         self.credentials = credentials
@@ -188,7 +190,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 try await queryPaneIdentity(connection: connection)
             }
             if let existingIdentity,
-               !compatiblePaneExecutables.contains(existingIdentity.command)
+               existingIdentity.command != launcherPaneExecutable
             {
                 throw SessionDiagnostic.processIdentityChanged
             }
@@ -243,15 +245,18 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
     }
 
-    static func compatiblePaneExecutables(for paneCommand: String) -> Set<String> {
+    static func launcherPaneExecutable(for paneCommand: String) -> String {
         let commandParts = paneCommand.split(separator: " ")
-        let launcher: String = if commandParts.count == 2, commandParts[0] == "exec" {
-            URL(fileURLWithPath: String(commandParts[1])).lastPathComponent
-        } else {
-            "pi"
+        if commandParts.count == 2, commandParts[0] == "exec" {
+            return URL(fileURLWithPath: String(commandParts[1])).lastPathComponent
         }
-        // The npm-installed Pi launcher uses a Node shebang, so tmux reports
-        // the direct pane process as `node` even though the command was `pi`.
+        return "pi"
+    }
+
+    static func compatiblePaneExecutables(for paneCommand: String) -> Set<String> {
+        let launcher = launcherPaneExecutable(for: paneCommand)
+        // A pane created by this transport may resolve Pi's Node shebang. An
+        // unrecorded pre-existing Node pane remains ambiguous and is rejected.
         return launcher == "pi" ? ["pi", "node"] : [launcher]
     }
 
