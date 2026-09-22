@@ -647,8 +647,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         do {
             payloads = try lock.withLock {
                 guard generation == streamGeneration,
-                      retiringStreamGeneration != generation,
-                      stateMachine.phase == .attached
+                      retiringStreamGeneration != generation
                 else { return nil }
                 return try decoder.feed(data)
             }
@@ -680,7 +679,9 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         switch frame.body {
         case let .response(command, success, _):
             let result: (pending: PendingRequest?, protocolMismatch: Bool) = lock.withLock {
-                guard generation == streamGeneration else { return (nil, false) }
+                guard generation == streamGeneration,
+                      stateMachine.phase == .attached
+                else { return (nil, false) }
                 responseFrameCount += 1
                 guard let identifier = frame.identifier,
                       let pending = pendingRequests[identifier]
