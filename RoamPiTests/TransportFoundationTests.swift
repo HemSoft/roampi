@@ -1,6 +1,7 @@
 import Foundation
 @testable import RoamPi
 @testable import RoamPiCore
+import SwiftTerm
 import Testing
 
 @Suite("Terminal screen buffering")
@@ -38,11 +39,14 @@ struct TerminalScreenBufferingTests {
             transport: transport
         )
         let model = TerminalScreenModel(session: session)
+        let coordinator = TerminalCoordinator()
+        let terminalView = TerminalView(frame: .zero)
+        coordinator.bind(model: model, view: terminalView)
         try await session.start()
 
         let expected = Array(0 ..< 100).map { Data([UInt8($0)]) }
         for data in expected {
-            model.sendKey(data)
+            coordinator.send(source: terminalView, data: ArraySlice(data))
         }
         for _ in 0 ..< 100 where transport.recordedWrites.count < expected.count {
             try await Task.sleep(for: .milliseconds(10))

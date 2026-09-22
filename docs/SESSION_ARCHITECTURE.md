@@ -31,7 +31,7 @@ Detach and close end the iOS-side PTY and SSH connection. They do not send `tmux
 
 The SSH session requests a PTY with terminal type `xterm-256color` and the current column and row counts before executing tmux. Viewport updates are clamped to 2–500 columns and 1–500 rows. The first update is sent immediately; a short coalescing window retains only the newest later size. Resize requests use the existing SSH child channel and do not reconnect or execute another command.
 
-Terminal input is byte-oriented. The system keyboard and hardware keyboard feed SwiftTerm, and the mobile row supplies Escape, Control-C, Tab, arrows, Page Up, and Page Down.
+Terminal input is byte-oriented. SwiftTerm delegate callbacks enter a synchronous ordered dispatcher before the main-actor input stream, preserving callback order across actor hops. The system keyboard and hardware keyboard feed SwiftTerm, and the mobile row supplies Escape, Control-C, Tab, arrows, Page Up, and Page Down.
 
 ## RPC framing
 
@@ -47,7 +47,7 @@ Inbound framing:
 - rejects malformed JSON and an unterminated final record;
 - stops the channel and fails pending requests after a protocol error.
 
-Responses are correlated by request ID and expected command name; either mismatch stops the protocol exchange. Duplicate pending identifiers are rejected, and each response wait has a 30-second deadline. One ordered writer preserves registration order for side-effecting commands. Cancellation removes a queued frame; once a write is claimed, cancellation is recorded but not reported until that write finishes, eliminating a post-cancellation remote-write window. Every reopened RPC stream starts with a fresh decoder and per-exchange counters. Event frames can arrive alongside responses and are counted separately. Prompt and response contents are not logged or included in diagnostics.
+Responses are correlated by request ID and expected command name; either mismatch stops the protocol exchange. Duplicate pending identifiers are rejected, and each response wait has a 30-second deadline. One ordered writer preserves registration order for side-effecting commands. Cancellation removes a queued frame; once a write is claimed, cancellation is recorded but not reported until channel shutdown or that write finishes, eliminating a post-cancellation remote-write window. Detach and close apply the same ordering before retiring the stream generation. Every reopened RPC stream starts with a fresh decoder and per-exchange counters. Event frames can arrive alongside responses and are counted separately. Prompt and response contents are not logged or included in diagnostics.
 
 ## Security boundaries
 

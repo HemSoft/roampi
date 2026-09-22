@@ -127,7 +127,23 @@ struct TerminalRepresentable: UIViewRepresentable {
 }
 
 /// Bridge between SwiftTerm callbacks and the session model.
+private final class OrderedMainActorDispatcher: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tail: Task<Void, Never>?
+
+    func enqueue(_ operation: @escaping @MainActor @Sendable () -> Void) {
+        lock.withLock {
+            let predecessor = tail
+            tail = Task {
+                await predecessor?.value
+                await operation()
+            }
+        }
+    }
+}
+
 final class TerminalCoordinator: NSObject, TerminalViewDelegate {
+    private let inputDispatcher = OrderedMainActorDispatcher()
     private weak var model: TerminalScreenModel?
     private weak var terminalView: TerminalView?
 
@@ -147,7 +163,7 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
 
     func send(source _: TerminalView, data: ArraySlice<UInt8>) {
         let bytes = Data(data)
-        Task { @MainActor [weak model] in
+        inputDispatcher.enqueue { [weak model] in
             model?.sendKey(bytes)
         }
     }

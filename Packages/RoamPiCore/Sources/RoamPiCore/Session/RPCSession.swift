@@ -164,6 +164,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let expectedCommand: String
         var writeState: RequestWriteState = .queued
         var deferredFailure: SessionDiagnostic?
+        var deferredByLifecycle = false
     }
 
     private struct Resources {
@@ -206,6 +207,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var eventFrameCount = 0
     private var identifierCounter = 0
     private var streamGeneration: UInt64 = 0
+    private var retiringStreamGeneration: UInt64?
     private var recordedExchange: ExchangeResult?
     private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
     private var requestRegistrationHook: (@Sendable () async -> Void)?
@@ -293,68 +295,61 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     }
 
     public func detach() async throws {
-        let resources: Resources = try lock.withLock {
-            try stateMachine.detach()
-            streamGeneration &+= 1
-            let resources = Resources(
-                channel: channel,
-                transport: transport,
-                pending: pendingRequests
-            )
-            pendingRequests = [:]
-            channel = nil
-            transport = nil
-            return resources
-        }
+        let resources = try beginLifecycleRetirement { try stateMachine.detach() }
         publishPhase()
-        resume(resources.pending, diagnostic: .cancelled, phase: .detached)
         await resources.channel?.close()
         try await resources.transport?.close()
+        let pending = finishLifecycleRetirement()
+        resume(pending, diagnostic: .cancelled, phase: .detached)
     }
 
     public func reconnect() async throws {
-        let staleResources: Resources = try lock.withLock {
-            try stateMachine.beginReconnect()
-            streamGeneration &+= 1
-            let resources = Resources(
-                channel: channel,
-                transport: transport,
-                pending: pendingRequests
-            )
-            pendingRequests = [:]
-            transport = nil
-            channel = nil
-            return resources
-        }
+        let resources = try beginLifecycleRetirement { try stateMachine.beginReconnect() }
         publishPhase()
-        resume(staleResources.pending, diagnostic: .cancelled, phase: .detached)
-        await staleResources.channel?.close()
-        try? await staleResources.transport?.close()
+        await resources.channel?.close()
+        try? await resources.transport?.close()
+        let pending = finishLifecycleRetirement()
+        resume(pending, diagnostic: .cancelled, phase: .detached)
         await openExchange()
     }
 
     public func close() async throws {
-        let resources: Resources = try lock.withLock {
-            try stateMachine.beginClose()
-            streamGeneration &+= 1
-            let resources = Resources(
-                channel: channel,
-                transport: transport,
-                pending: pendingRequests
-            )
-            pendingRequests = [:]
-            channel = nil
-            transport = nil
-            return resources
-        }
+        let resources = try beginLifecycleRetirement { try stateMachine.beginClose() }
         publishPhase()
-        resume(resources.pending, diagnostic: .cancelled, phase: .closing)
         await resources.channel?.close()
         try await resources.transport?.close()
+        let pending = finishLifecycleRetirement()
+        resume(pending, diagnostic: .cancelled, phase: .closing)
         try lock.withLock {
             try stateMachine.markClosed()
         }
         publishPhase()
+    }
+
+    private func beginLifecycleRetirement(
+        _ transition: () throws -> Void
+    ) throws -> Resources {
+        try lock.withLock {
+            try transition()
+            retiringStreamGeneration = streamGeneration
+            for identifier in Array(pendingRequests.keys) {
+                pendingRequests[identifier]?.deferredFailure = .cancelled
+                pendingRequests[identifier]?.deferredByLifecycle = true
+            }
+            return Resources(channel: channel, transport: transport, pending: [:])
+        }
+    }
+
+    private func finishLifecycleRetirement() -> [String: PendingRequest] {
+        lock.withLock {
+            streamGeneration &+= 1
+            retiringStreamGeneration = nil
+            let pending = pendingRequests
+            pendingRequests = [:]
+            channel = nil
+            transport = nil
+            return pending
+        }
     }
 
     /// Sends one bounded request and awaits the correlated response frame.
@@ -556,19 +551,23 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         generation: UInt64,
         writeError: SessionDiagnostic?
     ) {
-        let outcome: (deferred: SessionDiagnostic?, failure: PendingRequest?) = lock.withLock {
+        let outcome: (
+            deferred: SessionDiagnostic?,
+            deferredByLifecycle: Bool,
+            failure: PendingRequest?
+        ) = lock.withLock {
             guard generation == streamGeneration,
                   var pending = pendingRequests[identifier]
-            else { return (nil, nil) }
+            else { return (nil, false, nil) }
             pending.writeState = .written
             pendingRequests[identifier] = pending
             if let deferred = pending.deferredFailure {
-                return (deferred, nil)
+                return (deferred, pending.deferredByLifecycle, nil)
             }
-            guard writeError != nil else { return (nil, nil) }
-            return (nil, pendingRequests.removeValue(forKey: identifier))
+            guard writeError != nil else { return (nil, false, nil) }
+            return (nil, false, pendingRequests.removeValue(forKey: identifier))
         }
-        if let deferred = outcome.deferred {
+        if let deferred = outcome.deferred, !outcome.deferredByLifecycle {
             stopRequest(identifier, generation: generation, diagnostic: deferred)
         } else if let failure = outcome.failure, let writeError {
             failure.continuation.resume(
@@ -645,7 +644,9 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         let payloads: [Data]?
         do {
             payloads = try lock.withLock {
-                guard generation == streamGeneration else { return nil }
+                guard generation == streamGeneration,
+                      retiringStreamGeneration != generation
+                else { return nil }
                 return try decoder.feed(data)
             }
         } catch let error as JSONLFraming.FrameError {
@@ -728,12 +729,15 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             let pending = pendingRequests
             let sessionDiagnostic = pending.values.compactMap(\.deferredFailure).first
                 ?? endingDiagnostic
+            let isLifecycleRetirement = retiringStreamGeneration == generation
             pendingRequests = [:]
             channel = nil
-            if let sessionDiagnostic {
-                try? stateMachine.fail(sessionDiagnostic)
-            } else if stateMachine.phase.isConnectedOrRecovering {
-                try? stateMachine.markDisconnected()
+            if !isLifecycleRetirement {
+                if let sessionDiagnostic {
+                    try? stateMachine.fail(sessionDiagnostic)
+                } else if stateMachine.phase.isConnectedOrRecovering {
+                    try? stateMachine.markDisconnected()
+                }
             }
             return (sessionDiagnostic, pending)
         }

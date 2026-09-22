@@ -652,6 +652,49 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("Lifecycle transitions stop claimed writes before reporting cancellation")
+    func lifecycleTransitionsStopClaimedWrites() async throws {
+        for action in ["detach", "close"] {
+            let transport = StallingWriteRPCTransport()
+            let session = try RPCSession(
+                endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+                workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+                transport: transport,
+                requestTimeout: .seconds(5)
+            )
+            try await session.start()
+            let request = Task {
+                try await session.exchange(
+                    PiRPCRequest(identifier: "claimed-\(action)", kind: .prompt(action))
+                )
+            }
+            for _ in 0 ..< 100 where !transport.isWriteStalled {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect(transport.isWriteStalled)
+
+            switch action {
+            case "detach": try await session.detach()
+            default: try await session.close()
+            }
+
+            do {
+                _ = try await request.value
+                Issue.record("Expected lifecycle cancellation for \(action)")
+            } catch let failure as SessionFailure {
+                #expect(failure.diagnostic == .cancelled)
+            }
+            #expect(transport.didClose)
+            switch action {
+            case "detach":
+                #expect(session.phase == .detached)
+                try await session.close()
+            default:
+                #expect(session.phase == .closed)
+            }
+        }
+    }
+
     @Test("A request cannot register against a retired RPC stream")
     func requestRegistrationRejectsRetiredStream() async throws {
         let transport = ScriptedRPCTransport()
@@ -1170,8 +1213,16 @@ private final class StallingWriteRPCTransport: @unchecked Sendable, RPCTransport
         lock.withLock { closed }
     }
 
+    var isWriteStalled: Bool {
+        lock.withLock { stalledWrite != nil }
+    }
+
     func open() async throws -> any RPCChannel {
-        StallingWriteRPCChannel(transport: self)
+        lock.withLock {
+            closed = false
+            writeCount = 0
+        }
+        return StallingWriteRPCChannel(transport: self)
     }
 
     func close() async throws {
