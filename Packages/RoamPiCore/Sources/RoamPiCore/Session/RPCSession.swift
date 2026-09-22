@@ -523,6 +523,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                     responseFrameCount: counts.0,
                     eventFrameCount: counts.1
                 )
+                reservedRequestIdentifiers.remove(startupRequest.identifier)
                 startupRequestIdentifier = nil
                 return true
             }
@@ -593,7 +594,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                             return .cancelled
                         }
                         if consumesReservedIdentifier {
-                            guard reservedRequestIdentifiers.remove(request.identifier) != nil else {
+                            guard reservedRequestIdentifiers.contains(request.identifier) else {
                                 return .cancelled
                             }
                         }

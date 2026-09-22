@@ -35,7 +35,7 @@ Terminal input is byte-oriented. SwiftTerm input and viewport delegate callbacks
 
 ## RPC framing
 
-RPC mode resolves `pi` through the account's configured `$SHELL` in login mode, but redirects login-profile output away from the protocol stream until the fixed `pi --mode rpc --no-session` command restores the SSH descriptors. `--no-session` keeps the bounded proof out of the user's Pi session history. The startup proof reserves its generated request ID before publishing `.attached`, then sends `get_state`; a public request cannot claim that ID, and generated interrupt IDs skip all pending or reserved IDs. The proof does not submit a prompt or invoke a model provider.
+RPC mode resolves `pi` through the account's configured `$SHELL` in login mode, but redirects login-profile output away from the protocol stream until the fixed `pi --mode rpc --no-session` command restores the SSH descriptors. `--no-session` keeps the bounded proof out of the user's Pi session history. The startup proof reserves its generated request ID before publishing `.attached` and retains that reservation until the exchange is recorded, then sends `get_state`; a public request cannot claim that ID during either startup gap, and generated interrupt IDs skip all pending or reserved IDs. The proof does not submit a prompt or invoke a model provider.
 
 Inbound framing:
 

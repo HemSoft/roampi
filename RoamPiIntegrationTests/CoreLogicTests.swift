@@ -755,6 +755,36 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("The startup ID remains reserved until exchange recording")
+    func startupIdentifierRemainsReservedThroughRecording() async throws {
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: ScriptedRPCTransport()
+        )
+        let gate = RequestRegistrationGate()
+        session.setStartupExchangeHook { await gate.pause() }
+        let startup = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        do {
+            _ = try await session.exchange(
+                PiRPCRequest(identifier: "r1", kind: .getState)
+            )
+            Issue.record("Expected reserved startup ID rejection")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .duplicateRequest)
+            #expect(failure.phase == .attached)
+        }
+        #expect(session.phase == .attached)
+        await gate.release()
+        try await startup.value
+        #expect(session.lastExchange?.succeeded == true)
+        try await session.close()
+    }
+
     @Test("A retiring RPC stream ignores an in-flight protocol failure")
     func retiringStreamIgnoresProtocolFailure() async throws {
         let transport = ScriptedRPCTransport()
