@@ -211,7 +211,7 @@ struct SessionFoundationTests {
     @Test("Session names accept the documented safe alphabet")
     func acceptsSessionNames() {
         #expect(TmuxSessionName("roampi-work")?.rawValue == "roampi-work")
-        #expect(TmuxSessionName("RoamPi_1.a-b") != nil)
+        #expect(TmuxSessionName("RoamPi_1-a-b") != nil)
         #expect(TmuxSessionName(String(repeating: "a", count: 64)) != nil)
     }
 
@@ -222,6 +222,7 @@ struct SessionFoundationTests {
             "   ",
             "has space",
             "has:colon",
+            "has.period",
             "semicolon;injection",
             "$(command)",
             "`command`",
@@ -1213,6 +1214,15 @@ private final class CancellingTerminalTransport: @unchecked Sendable, TerminalTr
 
 @Suite("Pane process identity")
 struct PaneProcessIdentityTests {
+    @Test("The Pi launcher accepts its direct Node process identity")
+    func acceptsNodeBackedPi() {
+        let piExecutables = SSHPTYTransport.compatiblePaneExecutables(for: "exec pi")
+        let catExecutables = SSHPTYTransport.compatiblePaneExecutables(for: "exec cat")
+
+        #expect(piExecutables == ["pi", "node"])
+        #expect(catExecutables == ["cat"])
+    }
+
     @Test("Pane PID collection accepts one bounded decimal line")
     func acceptsPID() {
         let collector = PaneProcessIDCollector()

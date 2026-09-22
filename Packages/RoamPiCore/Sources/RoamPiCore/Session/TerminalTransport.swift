@@ -93,6 +93,11 @@ final class OneShotTerminalClosureGate: @unchecked Sendable {
     }
 }
 
+struct TmuxPaneIdentity: Equatable, Sendable {
+    let processID: Int32
+    let executable: String
+}
+
 /// The SSH PTY transport: connects, allocates a PTY with an explicit terminal
 /// type and viewport, and runs the approved tmux attach command.
 final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
@@ -107,7 +112,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let workingDirectory: RemoteWorkingDirectory
     private let terminalType: String
     private let paneCommand: String
-    private let expectedPaneExecutable: String
+    private let compatiblePaneExecutables: Set<String>
     private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
     private let closureGate = OneShotTerminalClosureGate()
@@ -146,12 +151,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         self.workingDirectory = workingDirectory
         self.terminalType = terminalType
         self.paneCommand = paneCommand
-        let commandParts = paneCommand.split(separator: " ")
-        if commandParts.count == 2, commandParts[0] == "exec" {
-            expectedPaneExecutable = URL(fileURLWithPath: String(commandParts[1])).lastPathComponent
-        } else {
-            expectedPaneExecutable = "pi"
-        }
+        compatiblePaneExecutables = Self.compatiblePaneExecutables(for: paneCommand)
         self.attachExisting = attachExisting
         self.credentials = credentials
     }
@@ -188,7 +188,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 try await queryPaneIdentity(connection: connection)
             }
             if let existingIdentity,
-               existingIdentity.command != expectedPaneExecutable
+               !compatiblePaneExecutables.contains(existingIdentity.command)
             {
                 throw SessionDiagnostic.processIdentityChanged
             }
@@ -243,6 +243,18 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
     }
 
+    static func compatiblePaneExecutables(for paneCommand: String) -> Set<String> {
+        let commandParts = paneCommand.split(separator: " ")
+        let launcher: String = if commandParts.count == 2, commandParts[0] == "exec" {
+            URL(fileURLWithPath: String(commandParts[1])).lastPathComponent
+        } else {
+            "pi"
+        }
+        // The npm-installed Pi launcher uses a Node shebang, so tmux reports
+        // the direct pane process as `node` even though the command was `pi`.
+        return launcher == "pi" ? ["pi", "node"] : [launcher]
+    }
+
     private func reportClosure(exitStatus: Int32?) {
         guard closureGate.claim() else { return }
         lock.withLock { closedHandler }?(exitStatus)
@@ -251,7 +263,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     /// Queries the tmux pane process ID for the configured session on a second
     /// exec channel of the same connection. Reconnect logic compares this
     /// value against the identity recorded before the interruption.
-    func paneProcessID() async throws -> Int32? {
+    func paneIdentity() async throws -> TmuxPaneIdentity? {
         let connection: SSHSessionConnection? = lock.withLock { self.connection }
         guard let connection else {
             throw SessionDiagnostic.notAttached
@@ -259,10 +271,13 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         guard let identity = try await queryPaneIdentity(connection: connection) else {
             return nil
         }
-        guard identity.command == expectedPaneExecutable else {
+        guard compatiblePaneExecutables.contains(identity.command) else {
             throw SessionDiagnostic.processIdentityChanged
         }
-        return identity.processID
+        return TmuxPaneIdentity(
+            processID: identity.processID,
+            executable: identity.command
+        )
     }
 
     private func queryPaneIdentity(

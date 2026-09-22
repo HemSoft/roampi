@@ -82,7 +82,7 @@ extension TerminalSession {
         if let scripted = configuration.scriptedTransport {
             return scripted
         }
-        let attachExisting = lock.withLock { recordedPaneProcessID != nil }
+        let attachExisting = lock.withLock { recordedPaneIdentity != nil }
         return TerminalTransportBox(
             SSHPTYTransport(
                 endpoint: configuration.endpoint,
@@ -104,8 +104,8 @@ extension TerminalSession {
             return
         }
 
-        let previous = lock.withLock { recordedPaneProcessID }
-        let observed = try await observePaneProcessID(transport: sshTransport)
+        let previous = lock.withLock { recordedPaneIdentity }
+        let observed = try await observePaneIdentity(transport: sshTransport)
         try lock.withLock {
             guard generation == attachmentGeneration, self.transport === transport else {
                 throw SessionFailure(diagnostic: .cancelled, phase: stateMachine.phase)
@@ -117,7 +117,7 @@ extension TerminalSession {
                     phase: .failed(.processIdentityChanged)
                 )
             }
-            recordedPaneProcessID = observed
+            recordedPaneIdentity = observed
             if previous != nil {
                 processIdentityUnchanged = true
             }
@@ -126,11 +126,11 @@ extension TerminalSession {
 
     /// Waits briefly for tmux to expose the attached pane identity. Every SSH
     /// attach records it; reconnects compare against that first observation.
-    func observePaneProcessID(transport: SSHPTYTransport) async throws -> Int32 {
+    func observePaneIdentity(transport: SSHPTYTransport) async throws -> TmuxPaneIdentity {
         var attempts = 0
         while attempts < 40 {
-            if let paneProcessID = try await transport.paneProcessID() {
-                return paneProcessID
+            if let identity = try await transport.paneIdentity() {
+                return identity
             }
             try await Task.sleep(for: .milliseconds(50))
             attempts += 1

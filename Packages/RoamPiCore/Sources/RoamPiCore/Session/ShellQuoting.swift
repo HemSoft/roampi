@@ -18,9 +18,9 @@ enum ShellQuoting {
     }
 }
 
-/// A validated tmux session name. tmux target syntax treats `:` and `.` with
-/// care and the shell treats many characters specially, so only a small safe
-/// alphabet is accepted.
+/// A validated tmux session name. tmux target syntax reserves separators such
+/// as `:` and `.`, and the shell treats many characters specially, so only a
+/// small safe alphabet is accepted.
 public struct TmuxSessionName: Equatable, Sendable {
     static let maximumLength = 64
 
@@ -47,7 +47,7 @@ public struct TmuxSessionName: Equatable, Sendable {
     }
 
     private static func isAllowedScalar(_ scalar: Unicode.Scalar) -> Bool {
-        isAllowedFirstScalar(scalar) || scalar == "." || scalar == "-"
+        isAllowedFirstScalar(scalar) || scalar == "-"
     }
 }
 

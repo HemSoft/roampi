@@ -36,7 +36,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     var transport: TerminalTransportBox?
     var channel: TerminalChannelBox?
     var deferredResizeTask: Task<Void, Never>?
-    var recordedPaneProcessID: Int32?
+    var recordedPaneIdentity: TmuxPaneIdentity?
     var processIdentityUnchanged: Bool?
     var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
     var outputHandler: (@Sendable (Data) -> Void)?
