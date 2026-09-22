@@ -213,6 +213,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private var requestRegistrationHook: (@Sendable () async -> Void)?
     private var requestWriteHook: (@Sendable () async -> Void)?
     private var requestWriteClaimHook: (@Sendable () async -> Void)?
+    private var startupExchangeHook: (@Sendable () async -> Void)?
 
     private let configuration: Configuration
     private let requestTimeout: Duration
@@ -279,6 +280,11 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     /// Installs a post-claim suspension point used only by protocol race tests.
     func setRequestWriteClaimHook(_ hook: (@Sendable () async -> Void)?) {
         lock.withLock { requestWriteClaimHook = hook }
+    }
+
+    /// Installs a post-startup-response suspension point used only by race tests.
+    func setStartupExchangeHook(_ hook: (@Sendable () async -> Void)?) {
+        lock.withLock { startupExchangeHook = hook }
     }
 
     public func start() async throws {
@@ -417,6 +423,9 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             let stateResponse = try await send(
                 PiRPCRequest(identifier: nextIdentifier(), kind: .getState)
             )
+            if let hook = lock.withLock({ startupExchangeHook }) {
+                await hook()
+            }
             let counts = lock.withLock { (responseFrameCount, eventFrameCount) }
             let didRecord = lock.withLock {
                 guard stateMachine.phase == .attached else { return false }
@@ -732,7 +741,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
 
             let pending = pendingRequests
             let cleanStartupClose: SessionDiagnostic? = if endingDiagnostic == nil,
-                                                           !pending.isEmpty
+                                                           recordedExchange == nil
+                                                           || !pending.isEmpty
                                                            || stateMachine.phase == .connecting
                                                            || stateMachine.phase == .reconnecting
             {

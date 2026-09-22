@@ -23,10 +23,9 @@ enum TmuxCommand {
     /// before the recorded pane identity has been verified.
     static func attachExisting(
         session: TmuxSessionName,
-        workingDirectory: RemoteWorkingDirectory
+        workingDirectory _: RemoteWorkingDirectory
     ) -> String {
-        "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec tmux attach-session -t \(ShellQuoting.quote("=\(session.rawValue):"))"
+        "exec tmux attach-session -t \(ShellQuoting.quote("=\(session.rawValue):"))"
     }
 
     /// Detach-proof identity query: the tmux pane process ID for one session.

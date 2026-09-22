@@ -299,7 +299,7 @@ struct SessionFoundationTests {
             try TmuxCommand.attachExisting(
                 session: session,
                 workingDirectory: #require(RemoteWorkingDirectory("/home/user/proj"))
-            ) == "cd '/home/user/proj' && exec tmux attach-session -t '=roampi-proj:'"
+            ) == "exec tmux attach-session -t '=roampi-proj:'"
         )
         #expect(TmuxCommand
             .paneProcessID(session: session) ==
@@ -1020,6 +1020,56 @@ struct RPCSessionReliabilityTests {
         try await initialStart.value
 
         #expect(session.phase == .failed(.unexpectedRemoteClose))
+        try await session.close()
+    }
+
+    @Test("A clean close before startup request registration is unexpected")
+    func cleanCloseBeforeStartupRegistration() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let gate = RequestRegistrationGate()
+        session.setRequestRegistrationHook { await gate.pause() }
+        let start = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        transport.stopProcess(exitStatus: 0)
+        session.setRequestRegistrationHook(nil)
+        await gate.release()
+        try await start.value
+
+        #expect(session.phase == .failed(.unexpectedRemoteClose))
+        #expect(session.lastExchange == nil)
+        try await session.close()
+    }
+
+    @Test("A clean close after startup response but before recording is unexpected")
+    func cleanCloseBeforeStartupRecording() async throws {
+        let transport = ScriptedRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let gate = RequestRegistrationGate()
+        session.setStartupExchangeHook { await gate.pause() }
+        let start = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        transport.stopProcess(exitStatus: 0)
+        session.setStartupExchangeHook(nil)
+        await gate.release()
+        try await start.value
+
+        #expect(session.phase == .failed(.unexpectedRemoteClose))
+        #expect(session.lastExchange == nil)
         try await session.close()
     }
 

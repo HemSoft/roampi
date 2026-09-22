@@ -102,6 +102,33 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("Reconnect attaches when the original project path is gone")
+    func reconnectIgnoresMissingProjectPath() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("missing-path")
+        let session = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
+        )
+        try await session.start()
+        try await session.detach()
+        let movedDirectory = fixture.workDirectory.deletingLastPathComponent()
+            .appendingPathComponent("work-moved")
+        try FileManager.default.moveItem(at: fixture.workDirectory, to: movedDirectory)
+
+        try await session.reconnect()
+
+        #expect(session.phase == .attached)
+        #expect(session.lastProcessIdentityUnchanged == true)
+        try await session.close()
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("Reconnect never forwards output from a replacement pane")
     func reconnectSuppressesReplacementOutput() async throws {
         let fixture = try makeFixture()
