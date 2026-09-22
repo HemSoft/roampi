@@ -557,6 +557,9 @@ struct RPCSessionReliabilityTests {
             #expect(failure.diagnostic == .timedOut)
         }
 
+        for _ in 0 ..< 100 where !transport.didStop {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(transport.didStop)
         try await session.close()
     }
