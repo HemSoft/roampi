@@ -304,6 +304,25 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("Tmux support commands resolve through the account login environment")
+    func tmuxResolvesThroughLoginEnvironment() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("login-path")
+        let session = try #require(TmuxSessionName(sessionName))
+        _ = try await fixture.exec(
+            "cd \(ShellQuoting.quote(fixture.workDirectory.path)) && tmux new-session -d -s "
+                + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote("exec cat"))"
+        )
+
+        let identity = try await fixture.exec(
+            "export PATH=/usr/bin:/bin; \(TmuxCommand.paneProcessID(session: session))"
+        )
+        #expect(identity.split(separator: "|", omittingEmptySubsequences: false).count == 4)
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("Transport creation rejects a concurrent same-name pane")
     func transportCreationRejectsConcurrentPane() async throws {
         let fixture = try makeFixture()

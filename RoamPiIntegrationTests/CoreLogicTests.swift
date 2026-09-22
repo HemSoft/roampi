@@ -285,8 +285,11 @@ struct SessionFoundationTests {
         let command = TmuxCommand.attachOrCreate(session: session, workingDirectory: directory)
 
         #expect(
-            command == "cd '/home/user/proj' && exec tmux new-session -s 'roampi-proj' "
-                + ShellQuoting.quote(PiTerminalCommand.start)
+            command == "cd '/home/user/proj' && "
+                + LoginShellCommand.run(
+                    "exec tmux new-session -s 'roampi-proj' "
+                        + ShellQuoting.quote(PiTerminalCommand.start)
+                )
         )
     }
 
@@ -294,17 +297,24 @@ struct SessionFoundationTests {
     func supportCommands() throws {
         let session = try #require(TmuxSessionName("roampi-proj"))
 
-        #expect(TmuxCommand.hasSession(session: session) == "tmux has-session -t '=roampi-proj:' 2>/dev/null")
+        #expect(
+            TmuxCommand.hasSession(session: session)
+                == LoginShellCommand.run("exec tmux has-session -t '=roampi-proj:' 2>/dev/null")
+        )
         #expect(
             try TmuxCommand.attachExisting(
                 session: session,
                 workingDirectory: #require(RemoteWorkingDirectory("/home/user/proj"))
-            ) == "exec tmux attach-session -t '=roampi-proj:'"
+            ) == LoginShellCommand.run("exec tmux attach-session -t '=roampi-proj:'")
         )
         #expect(TmuxCommand
-            .paneProcessID(session: session) ==
-            "tmux has-session -t '=roampi-proj:' 2>/dev/null && tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'")
-        #expect(TmuxCommand.killSession(session: session) == "tmux kill-session -t '=roampi-proj:' 2>/dev/null")
+            .paneProcessID(session: session) == LoginShellCommand.run(
+                "tmux has-session -t '=roampi-proj:' 2>/dev/null && exec tmux display-message -p -t '=roampi-proj:' '#{pane_pid}|#{pane_current_command}|#{pane_start_command}|#{E:ROAMPI_CREATION_ID}'"
+            ))
+        #expect(
+            TmuxCommand.killSession(session: session)
+                == LoginShellCommand.run("exec tmux kill-session -t '=roampi-proj:' 2>/dev/null")
+        )
     }
 
     @Test("The RPC start command quotes the directory and pins rpc mode")
