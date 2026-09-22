@@ -4,22 +4,22 @@ import Foundation
 /// coalescing, and the reconnect rules that prevent duplicate tmux sessions or
 /// duplicate Pi processes.
 public final class TerminalSession: @unchecked Sendable, PiSession {
-    private struct Resources {
+    struct Resources {
         let channel: (any TerminalChannel)?
         let transport: (any TerminalTransport)?
     }
 
-    private struct ResizeSubmission {
+    struct ResizeSubmission {
         let decision: ResizeCoalescer.Decision?
         let channel: (any TerminalChannel)?
     }
 
-    private struct PendingResize {
+    struct PendingResize {
         let size: ResizeCoalescer.Size?
         let channel: (any TerminalChannel)?
     }
 
-    private struct Configuration: Sendable {
+    struct Configuration: Sendable {
         let endpoint: RemoteEndpoint
         let authentication: SSHAuthenticationMode
         let sessionName: TmuxSessionName
@@ -28,20 +28,20 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         let credentials: (any SSHSessionCredentials)?
     }
 
-    private let lock = NSLock()
-    private var stateMachine = ReconnectStateMachine()
-    private var coalescer = ResizeCoalescer()
-    private var transport: (any TerminalTransport)?
-    private var channel: (any TerminalChannel)?
-    private var deferredResizeTask: Task<Void, Never>?
-    private var recordedPaneProcessID: Int32?
-    private var processIdentityUnchanged: Bool?
-    private var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
-    private var outputHandler: (@Sendable (Data) -> Void)?
-    private var latestColumns = 80
-    private var latestRows = 24
-    private let configuration: Configuration
-    private let deferredResizeInterval: Duration
+    let lock = NSLock()
+    var stateMachine = ReconnectStateMachine()
+    var coalescer = ResizeCoalescer()
+    var transport: (any TerminalTransport)?
+    var channel: (any TerminalChannel)?
+    var deferredResizeTask: Task<Void, Never>?
+    var recordedPaneProcessID: Int32?
+    var processIdentityUnchanged: Bool?
+    var phaseChangeHandler: (@Sendable (PiSessionPhase) -> Void)?
+    var outputHandler: (@Sendable (Data) -> Void)?
+    var latestColumns = 80
+    var latestRows = 24
+    let configuration: Configuration
+    let deferredResizeInterval: Duration
 
     /// Observes session phases as they change. Called from arbitrary threads.
     public var onPhaseChange: (@Sendable (PiSessionPhase) -> Void)? {
@@ -212,7 +212,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         }
     }
 
-    private func flushPendingResize() {
+    func flushPendingResize() {
         let pending: PendingResize = lock.withLock {
             PendingResize(size: coalescer.flush(), channel: channel)
         }
@@ -220,164 +220,5 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             return
         }
         try? channel.requestResize(columns: size.columns, rows: size.rows)
-    }
-
-    /// Runs one attach attempt: connect, allocate the PTY, attach or create the
-    /// tmux session, and verify the remote process identity after a reconnect.
-    private func attach() async {
-        var candidateTransport: (any TerminalTransport)?
-        do {
-            let transport = makeTransport()
-
-            transport.onOutput = { [weak self] data in
-                guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
-                    return
-                }
-                handler(data)
-            }
-            transport.onClosed = { [weak self] exitStatus in
-                self?.handleChannelClosed(exitStatus: exitStatus)
-            }
-
-            candidateTransport = transport
-            let (initialColumns, initialRows) = lock.withLock {
-                (latestColumns, latestRows)
-            }
-            let opened = try await transport.open(columns: initialColumns, rows: initialRows)
-
-            do {
-                try await verifyProcessIdentity(for: transport)
-
-                try lock.withLock {
-                    try stateMachine.markAttached()
-                    self.transport = transport
-                    self.channel = opened
-                    coalescer.clearLastSent()
-                }
-                publishPhase()
-            } catch {
-                await opened.close()
-                try? await transport.close()
-                throw error
-            }
-        } catch is CancellationError {
-            try? await candidateTransport?.close()
-            markFailure(.cancelled)
-        } catch let failure as SessionFailure {
-            try? await candidateTransport?.close()
-            markFailure(failure.diagnostic)
-        } catch let diagnostic as SessionDiagnostic {
-            try? await candidateTransport?.close()
-            markFailure(diagnostic)
-        } catch let transportError as TransportError {
-            try? await candidateTransport?.close()
-            markFailure(Self.diagnostic(for: transportError))
-        } catch {
-            try? await candidateTransport?.close()
-            markFailure(.connectionFailed)
-        }
-    }
-
-    private func makeTransport() -> any TerminalTransport {
-        if let scripted = configuration.scriptedTransport {
-            return scripted
-        }
-        return SSHPTYTransport(
-            endpoint: configuration.endpoint,
-            authentication: configuration.authentication,
-            sessionName: configuration.sessionName,
-            workingDirectory: configuration.workingDirectory,
-            credentials: configuration.credentials ?? SecureTransportStore.shared
-        )
-    }
-
-    private func verifyProcessIdentity(for transport: any TerminalTransport) async throws {
-        guard let sshTransport = transport as? SSHPTYTransport else {
-            return
-        }
-
-        let previous = lock.withLock { recordedPaneProcessID }
-        let observed = try await observePaneProcessID(transport: sshTransport)
-        guard previous == nil || previous == observed else {
-            lock.withLock { processIdentityUnchanged = false }
-            throw SessionFailure(
-                diagnostic: .processIdentityChanged,
-                phase: .failed(.processIdentityChanged)
-            )
-        }
-        lock.withLock {
-            recordedPaneProcessID = observed
-            if previous != nil {
-                processIdentityUnchanged = true
-            }
-        }
-    }
-
-    /// Waits briefly for tmux to expose the attached pane identity. Every SSH
-    /// attach records it; reconnects compare against that first observation.
-    private func observePaneProcessID(transport: SSHPTYTransport) async throws -> Int32 {
-        var attempts = 0
-        while attempts < 40 {
-            if let paneProcessID = try await transport.paneProcessID() {
-                return paneProcessID
-            }
-            try await Task.sleep(for: .milliseconds(50))
-            attempts += 1
-        }
-        throw SessionFailure(diagnostic: .commandFailed, phase: .connecting)
-    }
-
-    private func handleChannelClosed(exitStatus _: Int32?) {
-        lock.withLock {
-            guard stateMachine.phase.isConnectedOrRecovering else {
-                return
-            }
-            try? stateMachine.markDisconnected()
-            channel = nil
-        }
-        publishPhase()
-    }
-
-    private func markFailure(_ diagnostic: SessionDiagnostic) {
-        lock.withLock {
-            try? stateMachine.fail(diagnostic)
-        }
-        publishPhase()
-    }
-
-    private func publishPhase() {
-        lock.withLock { phaseChangeHandler }?(lock.withLock { stateMachine.phase })
-    }
-
-    private static func diagnostic(for transportError: TransportError) -> SessionDiagnostic {
-        switch transportError {
-        case let .diagnostic(diagnostic):
-            sessionDiagnostic(diagnostic)
-        case .hostKeyConfirmationRequired:
-            .hostKeyChanged
-        }
-    }
-
-    private static func sessionDiagnostic(_ diagnostic: TransportDiagnostic) -> SessionDiagnostic {
-        switch diagnostic {
-        case .authenticationFailed:
-            .authenticationFailed
-        case .cancelled:
-            .cancelled
-        case .commandFailed:
-            .commandFailed
-        case .connectionFailed:
-            .connectionFailed
-        case .duplicateProbe:
-            .invalidState
-        case .hostKeyChanged:
-            .hostKeyChanged
-        case .invalidEndpoint:
-            .invalidEndpoint
-        case .keyUnavailable:
-            .keyUnavailable
-        case .timedOut:
-            .timedOut
-        }
     }
 }
