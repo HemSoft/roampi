@@ -1149,6 +1149,25 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A response ID must correlate to a pending request")
+    func responseIDMustMatchPendingRequest() async throws {
+        let transport = ScriptedRPCTransport(responseIdentifierOverride: "unknown-id")
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        try await session.start()
+        for _ in 0 ..< 100 where !transport.stopped {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(session.phase == .failed(.malformedFrame))
+        #expect(transport.stopped)
+        try await session.close()
+    }
+
     @Test("A malformed frame later in one batch prevents recording success")
     func validatesWholeRPCBatchBeforeDispatch() async throws {
         let transport = InvalidBatchRPCTransport()

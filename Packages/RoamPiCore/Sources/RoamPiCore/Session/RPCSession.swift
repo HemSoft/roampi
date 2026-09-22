@@ -647,7 +647,8 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         do {
             payloads = try lock.withLock {
                 guard generation == streamGeneration,
-                      retiringStreamGeneration != generation
+                      retiringStreamGeneration != generation,
+                      stateMachine.phase == .attached
                 else { return nil }
                 return try decoder.feed(data)
             }
@@ -678,17 +679,17 @@ public final class RPCSession: @unchecked Sendable, PiSession {
     private func dispatch(_ frame: PiRPCFrame, generation: UInt64) {
         switch frame.body {
         case let .response(command, success, _):
-            let result: (pending: PendingRequest?, commandMismatch: Bool) = lock.withLock {
+            let result: (pending: PendingRequest?, protocolMismatch: Bool) = lock.withLock {
                 guard generation == streamGeneration else { return (nil, false) }
                 responseFrameCount += 1
                 guard let identifier = frame.identifier,
-                      let pending = pendingRequests[identifier],
-                      pending.deferredFailure == nil
-                else { return (nil, false) }
+                      let pending = pendingRequests[identifier]
+                else { return (nil, true) }
+                guard pending.deferredFailure == nil else { return (nil, false) }
                 guard pending.expectedCommand == command else { return (nil, true) }
                 return (pendingRequests.removeValue(forKey: identifier), false)
             }
-            if result.commandMismatch {
+            if result.protocolMismatch {
                 stopAfterProtocolFailure(.malformedFrame, generation: generation)
             } else if let pending = result.pending {
                 if success {

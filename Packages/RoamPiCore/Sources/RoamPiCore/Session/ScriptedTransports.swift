@@ -72,6 +72,10 @@ public final class ScriptedTerminalTransport: @unchecked Sendable, TerminalTrans
     var recordedWrites: [Data] {
         lock.withLock { wrote }
     }
+
+    var recordedResizes: [ResizeCoalescer.Size] {
+        lock.withLock { resizeRequests }
+    }
 }
 
 final class ScriptedTerminalChannel: @unchecked Sendable, TerminalChannel {
@@ -99,13 +103,21 @@ final class ScriptedTerminalChannel: @unchecked Sendable, TerminalChannel {
 public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
     public init() {
         responseCommandOverride = nil
+        responseIdentifierOverride = nil
     }
 
     init(responseCommandOverride: String) {
         self.responseCommandOverride = responseCommandOverride
+        responseIdentifierOverride = nil
+    }
+
+    init(responseIdentifierOverride: String) {
+        responseCommandOverride = nil
+        self.responseIdentifierOverride = responseIdentifierOverride
     }
 
     private let responseCommandOverride: String?
+    private let responseIdentifierOverride: String?
     private let lock = NSLock()
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
@@ -151,15 +163,16 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
             return
         }
 
+        let responseIdentifier = responseIdentifierOverride ?? identifier
         if request["type"]?.stringValue == "get_state" {
             let command = responseCommandOverride ?? "get_state"
             feed(
-                "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"\(command)\","
+                "{\"id\":\"\(responseIdentifier)\",\"type\":\"response\",\"command\":\"\(command)\","
                     + "\"success\":true,\"data\":{\"isStreaming\":false,\"messageCount\":0}}"
             )
         } else {
             feed(
-                "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"\(request["type"]?.stringValue ?? "")\","
+                "{\"id\":\"\(responseIdentifier)\",\"type\":\"response\",\"command\":\"\(request["type"]?.stringValue ?? "")\","
                     + "\"success\":true}"
             )
         }

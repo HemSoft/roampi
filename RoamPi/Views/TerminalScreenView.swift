@@ -144,6 +144,7 @@ private final class OrderedMainActorDispatcher: @unchecked Sendable {
 
 final class TerminalCoordinator: NSObject, TerminalViewDelegate {
     private let inputDispatcher = OrderedMainActorDispatcher()
+    private let viewportDispatcher = OrderedMainActorDispatcher()
     private weak var model: TerminalScreenModel?
     private weak var terminalView: TerminalView?
 
@@ -169,7 +170,7 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
     }
 
     func sizeChanged(source _: TerminalView, newCols: Int, newRows: Int) {
-        Task { @MainActor [weak model] in
+        viewportDispatcher.enqueue { [weak model] in
             model?.viewportChanged(columns: newCols, rows: newRows)
         }
     }
