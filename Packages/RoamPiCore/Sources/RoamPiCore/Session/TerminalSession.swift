@@ -117,7 +117,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             guard stateMachine.phase == .attached || stateMachine.phase == .interrupted else {
                 return nil
             }
-            return channel
+            return self.channel
         }
         guard let channel else {
             throw SessionFailure(diagnostic: .notAttached, phase: .attached)

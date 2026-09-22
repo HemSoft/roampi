@@ -177,7 +177,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     /// exec channel of the same connection. Reconnect logic compares this
     /// value against the identity recorded before the interruption.
     func paneProcessID() async throws -> Int32? {
-        let connection: SSHSessionConnection? = lock.withLock { connection }
+        let connection: SSHSessionConnection? = lock.withLock { self.connection }
         guard let connection else {
             throw SessionDiagnostic.notAttached
         }
