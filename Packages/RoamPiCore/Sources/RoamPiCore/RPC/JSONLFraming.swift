@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 /// Strict LF-delimited JSONL framing for Pi RPC exchanges.
@@ -127,10 +128,12 @@ enum JSONValue: Equatable, Sendable {
     init(_ any: Any) {
         if any is NSNull {
             self = .null
-        } else if let value = any as? Bool {
-            self = .bool(value)
         } else if let value = any as? NSNumber {
-            self = .number(value.doubleValue)
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+            } else {
+                self = .number(value.doubleValue)
+            }
         } else if let value = any as? String {
             self = .string(value)
         } else if let value = any as? [Any] {

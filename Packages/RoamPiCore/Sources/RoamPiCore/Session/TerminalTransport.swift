@@ -78,6 +78,21 @@ final class TerminalTransportBox: @unchecked Sendable {
     }
 }
 
+/// Ensures one terminal channel reports at most one closure, even when an
+/// overflow-triggered close is followed by the transport's real callback.
+final class OneShotTerminalClosureGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+
+    func claim() -> Bool {
+        lock.withLock {
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
+    }
+}
+
 /// The SSH PTY transport: connects, allocates a PTY with an explicit terminal
 /// type and viewport, and runs the approved tmux attach command.
 final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
@@ -94,6 +109,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let paneCommand: String
     private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
+    private let closureGate = OneShotTerminalClosureGate()
 
     private let lock = NSLock()
     private var connection: SSHSessionConnection?
@@ -185,19 +201,19 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                 }
                 handler(data)
             }
-            sessionChannel.onOutputOverflow = { [weak self] in
-                guard let handler = self?.lock.withLock({ self?.closedHandler }) else {
-                    return
+            sessionChannel.onOutputOverflow = { [weak self, weak sessionChannel] in
+                self?.reportClosure(exitStatus: 1)
+                if let sessionChannel {
+                    Task { await sessionChannel.close() }
                 }
-                handler(1)
             }
             sessionChannel.onExit = { [weak self] status in
                 self?.lock.withLock { self?.exitStatus = status }
             }
             sessionChannel.onClosed = { [weak self] in
                 guard let self else { return }
-                let result = lock.withLock { (closedHandler, exitStatus) }
-                result.0?(result.1)
+                let exitStatus = lock.withLock { self.exitStatus }
+                reportClosure(exitStatus: exitStatus)
             }
 
             lock.withLock { self.channel = sessionChannel }
@@ -207,6 +223,11 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
             lock.withLock { self.connection = nil }
             throw error
         }
+    }
+
+    private func reportClosure(exitStatus: Int32?) {
+        guard closureGate.claim() else { return }
+        lock.withLock { closedHandler }?(exitStatus)
     }
 
     /// Queries the tmux pane process ID for the configured session on a second

@@ -188,6 +188,18 @@ struct JSONLFramingTests {
         }
     }
 
+    @Test("Numeric zero and one remain numbers rather than booleans")
+    func preservesNumericTypes() throws {
+        let value = try JSONLFrameDecoder.decode(
+            Data(#"{"zero":0,"one":1,"false":false,"true":true}"#.utf8)
+        )
+
+        #expect(value["zero"] == .number(0))
+        #expect(value["one"] == .number(1))
+        #expect(value["false"] == .bool(false))
+        #expect(value["true"] == .bool(true))
+    }
+
     @Test("The frame limit is documented as one mebibyte")
     func frameLimit() {
         #expect(JSONLFraming.maxFrameBytes == 1_048_576)
@@ -477,6 +489,26 @@ struct SessionFoundationTests {
         try await task.value
 
         #expect(session.phase == .failed(.cancelled))
+    }
+
+    @Test("An overflow closure is disarmed before one reconnect")
+    func overflowClosureReconnectsOnce() async throws {
+        let transport = OverflowRecoveryTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-overflow")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        try await session.start()
+        #expect(session.phase == .failed(.commandFailed))
+
+        try await session.reconnect()
+        #expect(session.phase == .attached)
+        #expect(transport.openCount == 2)
+        #expect(transport.reportedClosureCount == 1)
+        try await session.detach()
     }
 }
 
@@ -995,6 +1027,64 @@ private final class InvalidBatchRPCChannel: @unchecked Sendable, RPCChannel {
     func close() async {}
 }
 
+private final class OverflowRecoveryTerminalTransport: @unchecked Sendable, TerminalTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var gate = OneShotTerminalClosureGate()
+    private var opens = 0
+    private var reportedClosures = 0
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    var openCount: Int {
+        lock.withLock { opens }
+    }
+
+    var reportedClosureCount: Int {
+        lock.withLock { reportedClosures }
+    }
+
+    func open(columns _: Int, rows _: Int) async throws -> any TerminalChannel {
+        let shouldOverflow = lock.withLock {
+            opens += 1
+            gate = OneShotTerminalClosureGate()
+            return opens == 1
+        }
+        if shouldOverflow {
+            reportClosure(1)
+        }
+        return OverflowRecoveryTerminalChannel()
+    }
+
+    func close() async throws {
+        reportClosure(0)
+    }
+
+    private func reportClosure(_ status: Int32) {
+        guard lock.withLock({ gate }).claim() else { return }
+        let handler = lock.withLock {
+            reportedClosures += 1
+            return closedHandler
+        }
+        handler?(status)
+    }
+}
+
+private struct OverflowRecoveryTerminalChannel: TerminalChannel {
+    func write(_: Data) async throws {}
+    func requestResize(columns _: Int, rows _: Int) throws {}
+    func close() async {}
+}
+
 private final class CancellingTerminalTransport: @unchecked Sendable, TerminalTransport {
     var onOutput: (@Sendable (Data) -> Void)?
     var onClosed: (@Sendable (Int32?) -> Void)?
@@ -1092,6 +1182,15 @@ struct PiRPCMessageTests {
         #expect(command == "get_state")
         #expect(success)
         #expect(data?["isStreaming"]?.boolValue == false)
+    }
+
+    @Test("A numeric success flag is rejected")
+    func rejectsNumericSuccess() throws {
+        let payload = try JSONLFrameDecoder.decode(
+            Data(#"{"id":"r9","type":"response","command":"prompt","success":1}"#.utf8)
+        )
+
+        #expect(PiRPCFrameDecoder.decode(payload) == nil)
     }
 
     @Test("A failed response decodes with success false")
