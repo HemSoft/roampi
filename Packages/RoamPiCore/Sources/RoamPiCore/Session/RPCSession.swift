@@ -586,17 +586,48 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         generation: UInt64,
         diagnostic: SessionDiagnostic
     ) {
-        let pending: PendingRequest? = lock.withLock {
+        let outcome: (
+            pending: PendingRequest?,
+            channel: (any RPCChannel)?,
+            transport: (any RPCTransport)?
+        ) = lock.withLock {
             guard generation == streamGeneration,
                   var pending = pendingRequests[identifier]
-            else { return nil }
+            else { return (nil, nil, nil) }
             if pending.writeState == .writing {
-                if pending.deferredFailure == nil {
-                    pending.deferredFailure = diagnostic
-                    pendingRequests[identifier] = pending
-                }
-                return nil
+                guard pending.deferredFailure == nil else { return (nil, nil, nil) }
+                pending.deferredFailure = diagnostic
+                pendingRequests[identifier] = pending
+                return (nil, channel, transport)
             }
+            return (pendingRequests.removeValue(forKey: identifier), nil, nil)
+        }
+        if let channel = outcome.channel {
+            Task { [weak self] in
+                await channel.close()
+                try? await outcome.transport?.close()
+                self?.finishDeferredStop(
+                    identifier,
+                    generation: generation,
+                    diagnostic: diagnostic
+                )
+            }
+            return
+        }
+        guard let pending = outcome.pending else { return }
+        stopAfterProtocolFailure(diagnostic, generation: generation)
+        pending.continuation.resume(
+            throwing: SessionFailure(diagnostic: diagnostic, phase: .failed(diagnostic))
+        )
+    }
+
+    private func finishDeferredStop(
+        _ identifier: String,
+        generation: UInt64,
+        diagnostic: SessionDiagnostic
+    ) {
+        let pending: PendingRequest? = lock.withLock {
+            guard generation == streamGeneration else { return nil }
             return pendingRequests.removeValue(forKey: identifier)
         }
         guard let pending else { return }
@@ -690,22 +721,27 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
 
             let pending = pendingRequests
+            let sessionDiagnostic = pending.values.compactMap(\.deferredFailure).first
+                ?? endingDiagnostic
             pendingRequests = [:]
             channel = nil
-            if let endingDiagnostic {
-                try? stateMachine.fail(endingDiagnostic)
+            if let sessionDiagnostic {
+                try? stateMachine.fail(sessionDiagnostic)
             } else if stateMachine.phase.isConnectedOrRecovering {
                 try? stateMachine.markDisconnected()
             }
-            return (endingDiagnostic, pending)
+            return (sessionDiagnostic, pending)
         }
 
         guard let (endingDiagnostic, pending) = result else { return }
         for request in pending.values {
+            let diagnostic = request.deferredFailure
+                ?? endingDiagnostic
+                ?? .unexpectedRemoteClose
             request.continuation.resume(
                 throwing: SessionFailure(
-                    diagnostic: endingDiagnostic ?? .unexpectedRemoteClose,
-                    phase: .detached
+                    diagnostic: diagnostic,
+                    phase: endingDiagnostic == nil ? .detached : .failed(diagnostic)
                 )
             )
         }

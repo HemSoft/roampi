@@ -627,6 +627,31 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A stalled RPC write is torn down at its response deadline")
+    func stalledWriteHonorsDeadline() async throws {
+        let transport = StallingWriteRPCTransport()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .milliseconds(40)
+        )
+        try await session.start()
+
+        do {
+            _ = try await session.exchange(
+                PiRPCRequest(identifier: "stalled-write", kind: .prompt("bounded"))
+            )
+            Issue.record("Expected write timeout")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .timedOut)
+        }
+
+        #expect(transport.didClose)
+        #expect(session.phase == .failed(.timedOut))
+        try await session.close()
+    }
+
     @Test("A request cannot register against a retired RPC stream")
     func requestRegistrationRejectsRetiredStream() async throws {
         let transport = ScriptedRPCTransport()
@@ -737,8 +762,8 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
-    @Test("Cancellation waits for an already-claimed RPC write")
-    func cancellationWaitsForClaimedWrite() async throws {
+    @Test("Cancellation tears down an already-claimed RPC write")
+    func cancellationTearsDownClaimedWrite() async throws {
         let transport = ScriptedRPCTransport()
         let session = try RPCSession(
             endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
@@ -766,8 +791,10 @@ struct RPCSessionReliabilityTests {
             try await Task.sleep(for: .milliseconds(5))
         }
         request.cancel()
-        try await Task.sleep(for: .milliseconds(20))
-        #expect(await !completion.isComplete)
+        for _ in 0 ..< 100 where await !completion.isComplete {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await completion.isComplete)
 
         session.setRequestWriteClaimHook(nil)
         await gate.release()
@@ -778,7 +805,7 @@ struct RPCSessionReliabilityTests {
             #expect(failure.diagnostic == .cancelled)
         }
 
-        #expect(transport.requestFrames.count == 2)
+        #expect(transport.requestFrames.count == 1)
         #expect(session.phase == .failed(.cancelled))
         try await session.close()
     }
@@ -1099,6 +1126,84 @@ private actor RequestCompletionFlag {
 
     func markComplete() {
         isComplete = true
+    }
+}
+
+private final class StallingWriteRPCTransport: @unchecked Sendable, RPCTransport {
+    private let lock = NSLock()
+    private var outputHandler: (@Sendable (Data) -> Void)?
+    private var closedHandler: (@Sendable (Int32?) -> Void)?
+    private var writeCount = 0
+    private var stalledWrite: CheckedContinuation<Void, Error>?
+    private var closed = false
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { lock.withLock { outputHandler } }
+        set { lock.withLock { outputHandler = newValue } }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { lock.withLock { closedHandler } }
+        set { lock.withLock { closedHandler = newValue } }
+    }
+
+    var didClose: Bool {
+        lock.withLock { closed }
+    }
+
+    func open() async throws -> any RPCChannel {
+        StallingWriteRPCChannel(transport: self)
+    }
+
+    func close() async throws {
+        closeChannel()
+    }
+
+    func write(_ data: Data) async throws {
+        let index = lock.withLock {
+            writeCount += 1
+            return writeCount
+        }
+        if index == 1,
+           let object = try? JSONLFrameDecoder.decode(Data(data.dropLast())),
+           let identifier = object["id"]?.stringValue
+        {
+            let response = "{\"id\":\"\(identifier)\",\"type\":\"response\",\"command\":\"get_state\",\"success\":true}\n"
+            lock.withLock { outputHandler }?(Data(response.utf8))
+            return
+        }
+        try await withCheckedThrowingContinuation { continuation in
+            lock.withLock { stalledWrite = continuation }
+        }
+    }
+
+    func closeChannel() {
+        let resources: (CheckedContinuation<Void, Error>?, (@Sendable (Int32?) -> Void)?) =
+            lock.withLock {
+                guard !closed else { return (nil, nil) }
+                closed = true
+                let continuation = stalledWrite
+                stalledWrite = nil
+                return (continuation, closedHandler)
+            }
+        resources.0?.resume(throwing: CancellationError())
+        resources.1?(nil)
+    }
+}
+
+private final class StallingWriteRPCChannel: @unchecked Sendable, RPCChannel {
+    private weak var transport: StallingWriteRPCTransport?
+
+    init(transport: StallingWriteRPCTransport) {
+        self.transport = transport
+    }
+
+    func write(_ data: Data) async throws {
+        try await transport?.write(data)
+    }
+
+    func close() async {
+        transport?.closeChannel()
     }
 }
 
@@ -1482,9 +1587,26 @@ struct PaneProcessIdentityTests {
         #expect(catExecutables == ["cat"])
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec pi") == "pi")
         #expect(SSHPTYTransport.launcherPaneExecutable(for: "exec node") == "node")
+        let reportedLauncher = SSHPTYTransport.reportedStartCommand(for: PiTerminalCommand.start)
         #expect(
-            SSHPTYTransport.reportedStartCommand(for: PiTerminalCommand.start)
+            reportedLauncher
                 == #""case \"\$SHELL\" in /*) exec \"\$SHELL\" -lc 'exec pi';; *) exit 127;; esac""#
+        )
+        #expect(
+            SSHPTYTransport.shouldRetryLauncher(
+                startCommand: reportedLauncher,
+                expectedStartCommand: reportedLauncher,
+                executable: "zsh",
+                compatibleExecutables: piExecutables
+            )
+        )
+        #expect(
+            !SSHPTYTransport.shouldRetryLauncher(
+                startCommand: reportedLauncher,
+                expectedStartCommand: reportedLauncher,
+                executable: "node",
+                compatibleExecutables: piExecutables
+            )
         )
     }
 

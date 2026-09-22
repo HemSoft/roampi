@@ -248,6 +248,15 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
     }
 
+    static func shouldRetryLauncher(
+        startCommand: String,
+        expectedStartCommand: String,
+        executable: String,
+        compatibleExecutables: Set<String>
+    ) -> Bool {
+        startCommand == expectedStartCommand && !compatibleExecutables.contains(executable)
+    }
+
     static func reportedStartCommand(for paneCommand: String) -> String {
         let escaped = paneCommand.reduce(into: "") { result, character in
             if character == "\\" || character == "\"" || character == "$" || character == "`" {
@@ -289,11 +298,20 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         guard let identity = try await queryPaneIdentity(connection: connection) else {
             return nil
         }
-        if !attachExisting,
-           identity.startCommand != Self.reportedStartCommand(for: paneCommand)
-           || !compatiblePaneExecutables.contains(identity.command)
-        {
-            throw SessionDiagnostic.processIdentityChanged
+        if !attachExisting {
+            guard identity.startCommand == Self.reportedStartCommand(for: paneCommand) else {
+                throw SessionDiagnostic.processIdentityChanged
+            }
+            guard !Self.shouldRetryLauncher(
+                startCommand: identity.startCommand,
+                expectedStartCommand: Self.reportedStartCommand(for: paneCommand),
+                executable: identity.command,
+                compatibleExecutables: compatiblePaneExecutables
+            ) else {
+                // A validated login-shell launcher may still be loading its
+                // profile before it replaces itself with Pi/Node.
+                return nil
+            }
         }
         return TmuxPaneIdentity(
             processID: identity.processID,
