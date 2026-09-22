@@ -390,10 +390,14 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     private func attach() async {
         var candidateTransport: (any TerminalTransport)?
         do {
-            let transport: any TerminalTransport = if let scripted = configuration.scriptedTransport {
-                scripted
+            // Keep this as a statement for Xcode 26.6: its Swift compiler can
+            // hang while lowering a conditional expression to an existential.
+            // swiftformat:disable conditionalAssignment
+            let transport: any TerminalTransport
+            if let scripted = configuration.scriptedTransport {
+                transport = scripted
             } else {
-                SSHPTYTransport(
+                transport = SSHPTYTransport(
                     endpoint: configuration.endpoint,
                     authentication: configuration.authentication,
                     sessionName: configuration.sessionName,
@@ -401,6 +405,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
                     credentials: configuration.credentials ?? SecureTransportStore.shared
                 )
             }
+            // swiftformat:enable conditionalAssignment
 
             transport.onOutput = { [weak self] data in
                 guard let handler = self?.lock.withLock({ self?.outputHandler }) else {

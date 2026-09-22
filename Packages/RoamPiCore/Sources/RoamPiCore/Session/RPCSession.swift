@@ -277,16 +277,21 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 recordedExchange = nil
             }
 
-            let transport: any RPCTransport = if let scripted = configuration.scriptedTransport {
-                scripted
+            // Keep this as a statement for Xcode 26.6: its Swift compiler can
+            // hang while lowering a conditional expression to an existential.
+            // swiftformat:disable conditionalAssignment
+            let transport: any RPCTransport
+            if let scripted = configuration.scriptedTransport {
+                transport = scripted
             } else {
-                SSHRPCTransport(
+                transport = SSHRPCTransport(
                     endpoint: configuration.endpoint,
                     authentication: configuration.authentication,
                     workingDirectory: configuration.workingDirectory,
                     credentials: configuration.credentials ?? SecureTransportStore.shared
                 )
             }
+            // swiftformat:enable conditionalAssignment
 
             candidateTransport = transport
             transport.onOutput = { [weak self] data in
