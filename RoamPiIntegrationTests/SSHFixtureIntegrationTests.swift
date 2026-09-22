@@ -444,6 +444,24 @@ struct SSHFixtureIntegrationTests {
         try await session.close()
     }
 
+    @Test("RPC startup command failure survives SSH channel teardown")
+    func startupCommandFailureSurvivesChannelTeardown() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let session = try RPCSession(
+            endpoint: fixture.endpoint,
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            transport: fixture.makeRPCTransport(failedResponseMode: true)
+        )
+        try await session.start()
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(session.phase == .failed(.commandFailed))
+        #expect(session.lastExchange == nil)
+        try await session.close()
+    }
+
     @Test("RPC framing rejects a CR-only separator from the remote side")
     func rpcRejectsCROnlyFrames() async throws {
         let fixture = try makeFixture()

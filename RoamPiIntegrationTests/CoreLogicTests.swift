@@ -1376,6 +1376,21 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("An unknown response later in one batch prevents earlier success")
+    func validatesWholeRPCBatchCorrelationBeforeDispatch() async throws {
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: ScriptedRPCTransport(invalidResponseInBatch: true)
+        )
+
+        try await session.start()
+
+        #expect(session.phase == .failed(.malformedFrame))
+        #expect(session.lastExchange == nil)
+        try await session.close()
+    }
+
     @Test("A malformed frame later in one batch prevents recording success")
     func validatesWholeRPCBatchBeforeDispatch() async throws {
         let transport = InvalidBatchRPCTransport()

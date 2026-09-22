@@ -750,11 +750,17 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
             frames.append(rpcFrame)
         }
-        let didAccountBatch = lock.withLock {
+        let batchIsValid = lock.withLock {
             guard generation == streamGeneration else { return false }
+            var responseIdentifiers = Set<String>()
             for frame in frames {
                 switch frame.body {
-                case .response:
+                case let .response(command, _, _):
+                    guard let identifier = frame.identifier,
+                          responseIdentifiers.insert(identifier).inserted,
+                          let pending = pendingRequests[identifier],
+                          pending.expectedCommand == command
+                    else { return false }
                     responseFrameCount += 1
                 case .event:
                     eventFrameCount += 1
@@ -762,7 +768,10 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
             return true
         }
-        guard didAccountBatch else { return }
+        guard batchIsValid else {
+            stopAfterProtocolFailure(.malformedFrame, generation: generation)
+            return
+        }
         for frame in frames {
             dispatch(frame, generation: generation)
         }
@@ -788,8 +797,21 @@ public final class RPCSession: @unchecked Sendable, PiSession {
                 if success {
                     pending.continuation.resume(returning: frame)
                 } else {
+                    let failedStartup = lock.withLock {
+                        guard generation == streamGeneration,
+                              recordedExchange == nil
+                        else { return false }
+                        try? stateMachine.fail(.commandFailed)
+                        return true
+                    }
+                    if failedStartup {
+                        publishPhase()
+                    }
                     pending.continuation.resume(
-                        throwing: SessionFailure(diagnostic: .commandFailed, phase: .attached)
+                        throwing: SessionFailure(
+                            diagnostic: .commandFailed,
+                            phase: failedStartup ? .failed(.commandFailed) : .attached
+                        )
                     )
                 }
             }

@@ -105,29 +105,41 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
         responseCommandOverride = nil
         responseIdentifierOverride = nil
         startupEventInResponseBatch = false
+        invalidResponseInBatch = false
     }
 
     init(responseCommandOverride: String) {
         self.responseCommandOverride = responseCommandOverride
         responseIdentifierOverride = nil
         startupEventInResponseBatch = false
+        invalidResponseInBatch = false
     }
 
     init(responseIdentifierOverride: String) {
         responseCommandOverride = nil
         self.responseIdentifierOverride = responseIdentifierOverride
         startupEventInResponseBatch = false
+        invalidResponseInBatch = false
     }
 
     init(startupEventInResponseBatch: Bool) {
         responseCommandOverride = nil
         responseIdentifierOverride = nil
         self.startupEventInResponseBatch = startupEventInResponseBatch
+        invalidResponseInBatch = false
+    }
+
+    init(invalidResponseInBatch: Bool) {
+        responseCommandOverride = nil
+        responseIdentifierOverride = nil
+        startupEventInResponseBatch = false
+        self.invalidResponseInBatch = invalidResponseInBatch
     }
 
     private let responseCommandOverride: String?
     private let responseIdentifierOverride: String?
     private let startupEventInResponseBatch: Bool
+    private let invalidResponseInBatch: Bool
     private let lock = NSLock()
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
@@ -180,6 +192,12 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
                 + "\"success\":true,\"data\":{\"isStreaming\":false,\"messageCount\":0}}"
             if startupEventInResponseBatch {
                 feed(response + "\n{\"type\":\"startup_complete\"}")
+            } else if invalidResponseInBatch {
+                feed(
+                    response
+                        + "\n{\"id\":\"unknown\",\"type\":\"response\","
+                        + "\"command\":\"get_state\",\"success\":true}"
+                )
             } else {
                 feed(response)
             }
