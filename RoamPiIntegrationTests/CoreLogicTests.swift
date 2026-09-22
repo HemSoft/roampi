@@ -1003,6 +1003,26 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("A clean fast RPC exit reports an unexpected remote close")
+    func cleanFastExitPreservesRemoteClose() async throws {
+        let transport = FastExitRPCTransport(firstExitStatus: 0)
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+
+        let initialStart = Task { try await session.start() }
+        for _ in 0 ..< 100 where session.phase != .failed(.unexpectedRemoteClose) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        transport.releaseFirstOpen()
+        try await initialStart.value
+
+        #expect(session.phase == .failed(.unexpectedRemoteClose))
+        try await session.close()
+    }
+
     @Test("A nonzero RPC process exit reports command failure")
     func nonzeroExitIsCommandFailure() async throws {
         let transport = ScriptedRPCTransport()
@@ -1430,8 +1450,13 @@ private final class FastExitRPCTransport: @unchecked Sendable, RPCTransport {
     private var outputHandler: (@Sendable (Data) -> Void)?
     private var closedHandler: (@Sendable (Int32?) -> Void)?
     private var openCount = 0
+    private let firstExitStatus: Int32
     private var releaseRequested = false
     private var firstOpenContinuation: CheckedContinuation<Void, Never>?
+
+    init(firstExitStatus: Int32 = 127) {
+        self.firstExitStatus = firstExitStatus
+    }
 
     var onOutput: (@Sendable (Data) -> Void)? {
         get { lock.withLock { outputHandler } }
@@ -1449,7 +1474,7 @@ private final class FastExitRPCTransport: @unchecked Sendable, RPCTransport {
             return openCount
         }
         if index == 1 {
-            lock.withLock { closedHandler }?(127)
+            lock.withLock { closedHandler }?(firstExitStatus)
             await withCheckedContinuation { continuation in
                 let resumeNow = lock.withLock {
                     guard !releaseRequested else { return true }

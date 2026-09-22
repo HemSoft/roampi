@@ -731,8 +731,18 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
 
             let pending = pendingRequests
+            let cleanStartupClose: SessionDiagnostic? = if endingDiagnostic == nil,
+                                                           !pending.isEmpty
+                                                           || stateMachine.phase == .connecting
+                                                           || stateMachine.phase == .reconnecting
+            {
+                .unexpectedRemoteClose
+            } else {
+                nil
+            }
             let sessionDiagnostic = pending.values.compactMap(\.deferredFailure).first
                 ?? endingDiagnostic
+                ?? cleanStartupClose
             let isLifecycleRetirement = retiringStreamGeneration == generation
             pendingRequests = [:]
             channel = nil
