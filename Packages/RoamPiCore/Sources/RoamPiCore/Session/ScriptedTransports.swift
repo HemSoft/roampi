@@ -68,6 +68,10 @@ public final class ScriptedTerminalTransport: @unchecked Sendable, TerminalTrans
     var currentChannelRef: ScriptedTerminalChannel? {
         lock.withLock { currentChannel }
     }
+
+    var recordedWrites: [Data] {
+        lock.withLock { wrote }
+    }
 }
 
 final class ScriptedTerminalChannel: @unchecked Sendable, TerminalChannel {

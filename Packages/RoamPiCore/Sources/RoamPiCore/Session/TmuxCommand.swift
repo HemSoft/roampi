@@ -57,7 +57,8 @@ enum PiRPCCommand {
     /// session history.
     static func start(workingDirectory: RemoteWorkingDirectory) -> String {
         "cd \(ShellQuoting.quote(workingDirectory.absolutePath)) "
-            + "&& exec sh -lc 'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
-            + "3>&1 4>&2 1>/dev/null 2>/dev/null"
+            + "&& case \"$SHELL\" in /*) exec \"$SHELL\" -lc "
+            + "'exec 1>&3 2>&4; exec pi --mode rpc --no-session' "
+            + "3>&1 4>&2 1>/dev/null 2>/dev/null ;; *) exit 126 ;; esac"
     }
 }

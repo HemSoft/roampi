@@ -1,7 +1,7 @@
 import Foundation
 import RoamPiCore
 
-private final class TerminalOutputOverflowGate: @unchecked Sendable {
+private final class TerminalBufferOverflowGate: @unchecked Sendable {
     private let lock = NSLock()
     private var claimed = false
 
@@ -29,8 +29,11 @@ final class TerminalScreenModel: ObservableObject {
     let session: TerminalSession
     private weak var coordinator: TerminalCoordinator?
     private let outputContinuation: AsyncStream<Data>.Continuation
-    private let outputOverflowGate = TerminalOutputOverflowGate()
+    private let inputContinuation: AsyncStream<Data>.Continuation
+    private let outputOverflowGate = TerminalBufferOverflowGate()
+    private let inputOverflowGate = TerminalBufferOverflowGate()
     private var outputTask: Task<Void, Never>?
+    private var inputTask: Task<Void, Never>?
 
     var canReconnect: Bool {
         switch phase {
@@ -53,12 +56,26 @@ final class TerminalScreenModel: ObservableObject {
         let (outputStream, outputContinuation) = AsyncStream<Data>.makeStream(
             bufferingPolicy: .bufferingOldest(64)
         )
+        let (inputStream, inputContinuation) = AsyncStream<Data>.makeStream(
+            bufferingPolicy: .bufferingOldest(256)
+        )
         self.session = session
         self.outputContinuation = outputContinuation
+        self.inputContinuation = inputContinuation
         outputTask = Task { @MainActor [weak self] in
             for await data in outputStream {
                 guard !Task.isCancelled else { return }
                 self?.coordinator?.feed(data)
+            }
+        }
+        inputTask = Task { @MainActor [weak self] in
+            for await data in inputStream {
+                guard !Task.isCancelled, let self else { return }
+                do {
+                    try await self.session.send(data)
+                } catch {
+                    self.phaseDetail = "Terminal input could not be sent."
+                }
             }
         }
         session.onPhaseChange = { [weak self] newPhase in
@@ -96,7 +113,9 @@ final class TerminalScreenModel: ObservableObject {
 
     deinit {
         outputContinuation.finish()
+        inputContinuation.finish()
         outputTask?.cancel()
+        inputTask?.cancel()
     }
 
     /// Binds the SwiftTerm bridge so transport bytes reach the view.
@@ -111,8 +130,21 @@ final class TerminalScreenModel: ObservableObject {
     }
 
     func sendKey(_ data: Data) {
-        Task {
-            try? await session.send(data)
+        for offset in stride(from: 0, to: data.count, by: 64 * 1024) {
+            let end = min(offset + 64 * 1024, data.count)
+            switch inputContinuation.yield(data.subdata(in: offset ..< end)) {
+            case .enqueued:
+                continue
+            case .dropped:
+                guard inputOverflowGate.claim() else { return }
+                phaseDetail = "Terminal input exceeded the local send buffer."
+                detach()
+                return
+            case .terminated:
+                return
+            @unknown default:
+                return
+            }
         }
     }
 
@@ -135,6 +167,7 @@ final class TerminalScreenModel: ObservableObject {
     func reconnect() {
         phaseDetail = nil
         outputOverflowGate.reset()
+        inputOverflowGate.reset()
         Task {
             try? await session.reconnect()
         }

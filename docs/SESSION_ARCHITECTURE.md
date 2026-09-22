@@ -35,7 +35,7 @@ Terminal input is byte-oriented. The system keyboard and hardware keyboard feed 
 
 ## RPC framing
 
-RPC mode resolves `pi` through the account's login environment, but redirects login-profile output away from the protocol stream until the fixed `pi --mode rpc --no-session` command restores the SSH descriptors. `--no-session` keeps the bounded proof out of the user's Pi session history. The startup proof sends `get_state`; it does not submit a prompt or invoke a model provider.
+RPC mode resolves `pi` through the account's configured `$SHELL` in login mode, but redirects login-profile output away from the protocol stream until the fixed `pi --mode rpc --no-session` command restores the SSH descriptors. `--no-session` keeps the bounded proof out of the user's Pi session history. The startup proof sends `get_state`; it does not submit a prompt or invoke a model provider.
 
 Inbound framing:
 

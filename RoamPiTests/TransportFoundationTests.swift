@@ -26,6 +26,31 @@ struct TerminalScreenBufferingTests {
         #expect(session.phase == .detached)
         #expect(model.phaseDetail == "Terminal output exceeded the local display buffer.")
     }
+
+    @MainActor
+    @Test("Terminal input preserves callback order")
+    func preservesInputOrder() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-input-order")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let model = TerminalScreenModel(session: session)
+        try await session.start()
+
+        let expected = Array(0 ..< 100).map { Data([UInt8($0)]) }
+        for data in expected {
+            model.sendKey(data)
+        }
+        for _ in 0 ..< 100 where transport.recordedWrites.count < expected.count {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(transport.recordedWrites == expected)
+        try await session.close()
+    }
 }
 
 @Suite("SSH transport foundation")
