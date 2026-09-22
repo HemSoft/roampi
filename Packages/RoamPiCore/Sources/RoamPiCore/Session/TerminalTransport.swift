@@ -124,6 +124,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private let compatiblePaneExecutables: Set<String>
     private let attachExisting: Bool
     private let credentials: any SSHSessionCredentials
+    private let postPreflightHook: (@Sendable () async throws -> Void)?
     private let closureGate = OneShotTerminalClosureGate()
 
     private let lock = NSLock()
@@ -135,6 +136,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
     private var heldOutputBytes = 0
     private var heldOutputOverflowed = false
     private var outputVerified = false
+    private var adoptedPaneProcessID: Int32?
     private var exitStatus: Int32?
     private var isClosed = false
 
@@ -156,7 +158,8 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         terminalType: String = "xterm-256color",
         paneCommand: String = PiTerminalCommand.start,
         attachExisting: Bool = false,
-        credentials: any SSHSessionCredentials = SecureTransportStore.shared
+        credentials: any SSHSessionCredentials = SecureTransportStore.shared,
+        postPreflightHook: (@Sendable () async throws -> Void)? = nil
     ) {
         self.endpoint = endpoint
         self.authentication = authentication
@@ -167,6 +170,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         compatiblePaneExecutables = Self.compatiblePaneExecutables(for: paneCommand)
         self.attachExisting = attachExisting
         self.credentials = credentials
+        self.postPreflightHook = postPreflightHook
     }
 
     func open(columns: Int, rows: Int) async throws -> any TerminalChannel {
@@ -204,6 +208,10 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
                existingIdentity.startCommand != Self.reportedStartCommand(for: paneCommand)
             {
                 throw SessionDiagnostic.processIdentityChanged
+            }
+            if let existingIdentity {
+                lock.withLock { adoptedPaneProcessID = existingIdentity.processID }
+                try await postPreflightHook?()
             }
             let shouldAttachExisting = attachExisting || existingIdentity != nil
             let attachCommand = if shouldAttachExisting {
@@ -344,6 +352,11 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         }
         guard let identity = try await queryPaneIdentity(connection: connection) else {
             return nil
+        }
+        if let adoptedPaneProcessID = lock.withLock({ self.adoptedPaneProcessID }),
+           identity.processID != adoptedPaneProcessID
+        {
+            throw SessionDiagnostic.processIdentityChanged
         }
         if !attachExisting {
             guard identity.startCommand == Self.reportedStartCommand(for: paneCommand) else {

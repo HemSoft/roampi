@@ -135,6 +135,51 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("First attach rejects a same-launcher preflight replacement")
+    func firstAttachRejectsPreflightReplacement() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("preflight-race")
+        let existing = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials,
+            paneCommand: "exec cat"
+        )
+        try await existing.start()
+        try await existing.detach()
+
+        let validatedSessionName = try #require(TmuxSessionName(sessionName))
+        let validatedDirectory = try #require(RemoteWorkingDirectory(fixture.workDirectory.path))
+        let transport = SSHPTYTransport(
+            endpoint: fixture.endpoint,
+            authentication: .standardKey,
+            sessionName: validatedSessionName,
+            workingDirectory: validatedDirectory,
+            paneCommand: "exec cat",
+            credentials: fixture.credentials,
+            postPreflightHook: {
+                try await fixture.killSession(name: sessionName)
+                _ = try await fixture.exec(
+                    "cd \(ShellQuoting.quote(fixture.workDirectory.path)) && tmux new-session -d -s "
+                        + "\(ShellQuoting.quote(sessionName)) \(ShellQuoting.quote("exec cat"))"
+                )
+            }
+        )
+        _ = try await transport.open(columns: 80, rows: 24)
+
+        do {
+            _ = try await transport.paneIdentity()
+            Issue.record("Expected replacement identity rejection")
+        } catch let diagnostic as SessionDiagnostic {
+            #expect(diagnostic == .processIdentityChanged)
+        }
+        try await transport.close()
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("First attach rejects an unrelated existing Node pane")
     func rejectsIncompatibleExistingPane() async throws {
         let fixture = try makeFixture()
