@@ -5,18 +5,18 @@ import Foundation
 /// duplicate Pi processes.
 public final class TerminalSession: @unchecked Sendable, PiSession {
     struct Resources {
-        let channel: (any TerminalChannel)?
-        let transport: (any TerminalTransport)?
+        let channel: TerminalChannelBox?
+        let transport: TerminalTransportBox?
     }
 
     struct ResizeSubmission {
         let decision: ResizeCoalescer.Decision?
-        let channel: (any TerminalChannel)?
+        let channel: TerminalChannelBox?
     }
 
     struct PendingResize {
         let size: ResizeCoalescer.Size?
-        let channel: (any TerminalChannel)?
+        let channel: TerminalChannelBox?
     }
 
     struct Configuration: Sendable {
@@ -24,15 +24,15 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
         let authentication: SSHAuthenticationMode
         let sessionName: TmuxSessionName
         let workingDirectory: RemoteWorkingDirectory
-        let scriptedTransport: (any TerminalTransport)?
+        let scriptedTransport: TerminalTransportBox?
         let credentials: (any SSHSessionCredentials)?
     }
 
     let lock = NSLock()
     var stateMachine = ReconnectStateMachine()
     var coalescer = ResizeCoalescer()
-    var transport: (any TerminalTransport)?
-    var channel: (any TerminalChannel)?
+    var transport: TerminalTransportBox?
+    var channel: TerminalChannelBox?
     var deferredResizeTask: Task<Void, Never>?
     var recordedPaneProcessID: Int32?
     var processIdentityUnchanged: Bool?
@@ -78,7 +78,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
             authentication: authentication,
             sessionName: sessionName,
             workingDirectory: workingDirectory,
-            scriptedTransport: transport,
+            scriptedTransport: transport.map(TerminalTransportBox.init),
             credentials: nil
         )
         self.deferredResizeInterval = deferredResizeInterval
@@ -113,7 +113,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
 
     /// Sends user input bytes through the attached PTY.
     public func send(_ data: Data) async throws {
-        let channel: (any TerminalChannel)? = lock.withLock {
+        let channel: TerminalChannelBox? = lock.withLock {
             guard stateMachine.phase == .attached || stateMachine.phase == .interrupted else {
                 return nil
             }
@@ -154,7 +154,7 @@ public final class TerminalSession: @unchecked Sendable, PiSession {
     }
 
     public func reconnect() async throws {
-        let staleTransport: (any TerminalTransport)? = try lock.withLock {
+        let staleTransport: TerminalTransportBox? = try lock.withLock {
             try stateMachine.beginReconnect()
             let staleTransport = transport
             transport = nil

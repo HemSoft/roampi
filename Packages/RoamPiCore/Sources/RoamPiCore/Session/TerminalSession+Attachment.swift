@@ -15,7 +15,7 @@ extension TerminalSession {
         }
     }
 
-    func configureCallbacks(on transport: any TerminalTransport) {
+    func configureCallbacks(on transport: TerminalTransportBox) {
         transport.onOutput = { [weak self] data in
             guard let handler = self?.lock.withLock({ self?.outputHandler }) else {
                 return
@@ -27,7 +27,7 @@ extension TerminalSession {
         }
     }
 
-    func openAndInstall(_ transport: any TerminalTransport) async throws {
+    func openAndInstall(_ transport: TerminalTransportBox) async throws {
         let (initialColumns, initialRows) = lock.withLock {
             (latestColumns, latestRows)
         }
@@ -48,21 +48,23 @@ extension TerminalSession {
         }
     }
 
-    func makeTransport() -> any TerminalTransport {
+    func makeTransport() -> TerminalTransportBox {
         if let scripted = configuration.scriptedTransport {
             return scripted
         }
-        return SSHPTYTransport(
-            endpoint: configuration.endpoint,
-            authentication: configuration.authentication,
-            sessionName: configuration.sessionName,
-            workingDirectory: configuration.workingDirectory,
-            credentials: configuration.credentials ?? SecureTransportStore.shared
+        return TerminalTransportBox(
+            SSHPTYTransport(
+                endpoint: configuration.endpoint,
+                authentication: configuration.authentication,
+                sessionName: configuration.sessionName,
+                workingDirectory: configuration.workingDirectory,
+                credentials: configuration.credentials ?? SecureTransportStore.shared
+            )
         )
     }
 
-    func verifyProcessIdentity(for transport: any TerminalTransport) async throws {
-        guard let sshTransport = transport as? SSHPTYTransport else {
+    func verifyProcessIdentity(for transport: TerminalTransportBox) async throws {
+        guard let sshTransport = transport.sshTransport else {
             return
         }
 

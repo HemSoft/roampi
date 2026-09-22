@@ -26,6 +26,58 @@ public protocol TerminalChannel: Sendable {
     func close() async
 }
 
+/// Concrete type erasure keeps Swift 6.2 from repeatedly lowering protocol
+/// existentials through TerminalSession's async reconnect path.
+final class TerminalChannelBox: @unchecked Sendable {
+    private let base: any TerminalChannel
+
+    init(_ base: any TerminalChannel) {
+        self.base = base
+    }
+
+    func write(_ data: Data) async throws {
+        try await base.write(data)
+    }
+
+    func requestResize(columns: Int, rows: Int) throws {
+        try base.requestResize(columns: columns, rows: rows)
+    }
+
+    func close() async {
+        await base.close()
+    }
+}
+
+final class TerminalTransportBox: @unchecked Sendable {
+    private let base: any TerminalTransport
+
+    init(_ base: any TerminalTransport) {
+        self.base = base
+    }
+
+    var onOutput: (@Sendable (Data) -> Void)? {
+        get { base.onOutput }
+        set { base.onOutput = newValue }
+    }
+
+    var onClosed: (@Sendable (Int32?) -> Void)? {
+        get { base.onClosed }
+        set { base.onClosed = newValue }
+    }
+
+    var sshTransport: SSHPTYTransport? {
+        base as? SSHPTYTransport
+    }
+
+    func open(columns: Int, rows: Int) async throws -> TerminalChannelBox {
+        try await TerminalChannelBox(base.open(columns: columns, rows: rows))
+    }
+
+    func close() async throws {
+        try await base.close()
+    }
+}
+
 /// The SSH PTY transport: connects, allocates a PTY with an explicit terminal
 /// type and viewport, and runs the approved tmux attach command.
 final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
