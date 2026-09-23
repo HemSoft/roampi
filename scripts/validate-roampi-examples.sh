@@ -20,6 +20,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/deep-result-schema.roampi" \
     "$repo_root/docs/examples/invalid/forward-version.roampi" \
     "$repo_root/docs/examples/invalid/fractional-required.roampi" \
+    "$repo_root/docs/examples/invalid/hostile-exponent.roampi" \
     "$repo_root/docs/examples/invalid/inverted-widths.roampi" \
     "$repo_root/docs/examples/invalid/invalid-supplied-schema-branch.roampi" \
     "$repo_root/docs/examples/invalid/jobs-without-source.roampi" \
@@ -64,6 +65,7 @@ run_validator --expect 'invalid_value@$.machine.homeHost.name' --machine "$repo_
 run_validator --expect 'invalid_value@$.machine.homeHost.id' --machine "$repo_root/docs/examples/invalid/control-character-identifier.roampi"
 run_validator --expect 'unsupported_version@$.version' --machine "$repo_root/docs/examples/invalid/forward-version.roampi"
 run_validator --expect 'invalid_value@$.dataSources[0].resultSchema.required[0]' --machine "$repo_root/docs/examples/invalid/fractional-required.roampi"
+run_validator --expect 'malformed_json@$' --machine "$repo_root/docs/examples/invalid/hostile-exponent.roampi"
 run_validator --expect 'duplicate_key@$[?]' --machine "$repo_root/docs/examples/invalid/duplicate-json-key.roampi"
 run_validator --expect 'invalid_value@$.dataSources[0].resultSchema.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items' --machine "$repo_root/docs/examples/invalid/deep-result-schema.roampi"
 run_validator --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
@@ -86,5 +88,23 @@ run_validator --expect 'invalid_value@$[?]' --project validation-host /Users/dev
 run_validator --expect 'invalid_value@$.machine.homeHost.name' --machine "$repo_root/docs/examples/invalid/unicode-format-name.roampi"
 run_validator --expect 'unsafe_path@$.machine.projects[0].path' --machine "$repo_root/docs/examples/invalid/unsafe-path.roampi"
 run_validator --expect 'undeclared_type@$.pages[0].blocks[0].type' --project validation-host /Users/developer/Projects/Unknown "$repo_root/docs/examples/invalid/unknown-component.roampi"
+
+oversized_document="$(mktemp -t roampi-oversized.XXXXXX)"
+trap 'rm -f "$oversized_document"' EXIT
+python3 - "$repo_root/docs/examples/minimal.roampi" "$oversized_document" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1]) as source:
+    document = json.load(source)
+document["dataSources"] = [{"id": "oversized", "type": "static", "value": "x" * 1_048_576}]
+with open(sys.argv[2], "w") as destination:
+    json.dump(document, destination)
+PY
+python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
+    "$repo_root/docs/roampi.schema.json" "$oversized_document"
+run_validator --expect 'document_too_large@$' --machine "$oversized_document"
+rm -f "$oversized_document"
+trap - EXIT
 
 echo "RoamPi configuration examples passed."

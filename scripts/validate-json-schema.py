@@ -9,7 +9,7 @@ import math
 import re
 import sys
 import unicodedata
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 from pathlib import Path
 from typing import Any
 
@@ -429,9 +429,14 @@ def main() -> int:
     failed = False
     for document_path in arguments.documents:
         try:
-            value = strict_json_loads(document_path.read_text())
-            errors = validate(root, root, value)
-        except (json.JSONDecodeError, ValueError):
+            document_data = document_path.read_bytes()
+            maximum_bytes = root.get("x-roampi-max-document-bytes")
+            if isinstance(maximum_bytes, int) and len(document_data) > maximum_bytes:
+                errors = ["$: document exceeds maximum byte count"]
+            else:
+                value = strict_json_loads(document_data.decode("utf-8"))
+                errors = validate(root, root, value)
+        except (DecimalException, json.JSONDecodeError, UnicodeDecodeError, ValueError):
             errors = ["$: malformed JSON"]
         if arguments.expect_invalid:
             if not errors:

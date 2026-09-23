@@ -4,6 +4,7 @@
   "title": "RoamPi configuration version 1",
   "type": "object",
   "x-roampi-max-document-depth": 64,
+  "x-roampi-max-document-bytes": 1048576,
   "x-roampi-unique-identifiers": true,
   "x-roampi-valid-references": true,
   "x-roampi-no-secret-fields": true,
