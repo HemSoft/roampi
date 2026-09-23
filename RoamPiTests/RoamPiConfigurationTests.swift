@@ -44,7 +44,11 @@ struct RoamPiConfigurationTests {
                 RoamPiConfigurationDiagnosticCode.invalidValue,
                 "$.dataSources[0].value"
             ),
-            ("secret-field.roampi", RoamPiConfigurationDiagnosticCode.secretField, "$[?]"),
+            (
+                "secret-field.roampi",
+                RoamPiConfigurationDiagnosticCode.secretField,
+                "$.dataSources[0].value[?]"
+            ),
             ("unsafe-path.roampi", RoamPiConfigurationDiagnosticCode.unsafePath, "$.machine.projects[0].path"),
         ]
     )

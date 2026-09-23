@@ -207,6 +207,61 @@ def validate_contract_references(value: Any) -> list[str]:
     return errors
 
 
+PROHIBITED_KEYS = {
+    "accesskeyid", "accesstoken", "apikey", "authorization", "clientsecret", "credential", "credentials",
+    "mnemonic", "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "secretaccesskey",
+    "secretkey", "seedphrase", "token",
+}
+PROHIBITED_QUALIFIERS = {
+    "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path",
+    "pem", "string", "value",
+}
+
+
+def prohibited_qualifier_sequence(value: str) -> bool:
+    if not value:
+        return False
+    if value in {"s", "es"} or value.isdigit():
+        return True
+    if value.startswith("v") and len(value) > 1 and value[1:].isdigit():
+        return True
+    return any(
+        value.startswith(qualifier)
+        and (len(value) == len(qualifier) or prohibited_qualifier_sequence(value[len(qualifier):]))
+        for qualifier in PROHIBITED_QUALIFIERS
+    )
+
+
+def prohibited_key(value: str) -> bool:
+    normalized = "".join(character for character in value.lower() if character.isalnum())
+    if normalized in PROHIBITED_KEYS:
+        return True
+    if any(
+        normalized.endswith(key) or normalized.endswith(key + "s") or normalized.endswith(key + "es")
+        for key in PROHIBITED_KEYS
+    ):
+        return True
+    return any(
+        normalized.startswith(key) and prohibited_qualifier_sequence(normalized[len(key):])
+        for key in PROHIBITED_KEYS
+    )
+
+
+def validate_no_secret_fields(value: Any, path: str = "$") -> list[str]:
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}[?]"
+            if prohibited_key(key):
+                errors.append(f"{child_path}: secret-bearing field is prohibited")
+            else:
+                errors.extend(validate_no_secret_fields(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            errors.extend(validate_no_secret_fields(child, f"{path}[{index}]"))
+    return errors
+
+
 def validate_document_depth(value: Any, path: str, depth: int, maximum: int) -> list[str]:
     if depth > maximum:
         return [f"{path}: document exceeds maximum depth"]
@@ -252,6 +307,8 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         errors.extend(validate_unique_identifiers(value))
     if schema.get("x-roampi-valid-references"):
         errors.extend(validate_contract_references(value))
+    if schema.get("x-roampi-no-secret-fields"):
+        errors.extend(validate_no_secret_fields(value))
     expected_type = schema.get("type")
     if expected_type is not None:
         allowed = [expected_type] if isinstance(expected_type, str) else expected_type
@@ -286,8 +343,11 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         if len(value) < schema.get("minItems", 0):
             errors.append(f"{path}: array has too few items")
         if schema.get("uniqueItems"):
-            serialized = [json.dumps(item, sort_keys=True, separators=(",", ":")) for item in value]
-            if len(serialized) != len(set(serialized)):
+            if any(
+                json_equal(value[left], value[right])
+                for left in range(len(value))
+                for right in range(left + 1, len(value))
+            ):
                 errors.append(f"{path}: array items are not unique")
         if "items" in schema:
             for index, item in enumerate(value):

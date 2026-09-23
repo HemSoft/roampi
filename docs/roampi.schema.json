@@ -6,6 +6,7 @@
   "x-roampi-max-document-depth": 64,
   "x-roampi-unique-identifiers": true,
   "x-roampi-valid-references": true,
+  "x-roampi-no-secret-fields": true,
   "additionalProperties": false,
   "required": ["version", "kind", "pages", "dataSources", "actions", "jobs"],
   "properties": {

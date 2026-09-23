@@ -19,10 +19,17 @@
   "pages": [],
   "dataSources": [
     {
-      "id": "unsafe-static",
-      "type": "static",
-      "value": {
-        "password": "not-a-real-password"
+      "id": "bad-required",
+      "type": "command",
+      "command": "printf '{}'",
+      "targetMachineID": "home",
+      "workingDirectory": "/tmp",
+      "resultSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          1.5
+        ]
       }
     }
   ],
