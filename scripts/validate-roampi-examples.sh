@@ -36,7 +36,7 @@ run_validator --project-root /Users/developer/Projects/SampleService "$repo_root
 
 run_validator --expect 'unsupported_version@$.version' --machine "$repo_root/docs/examples/invalid/forward-version.roampi"
 run_validator --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
-run_validator --expect 'secret_field@$.token' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
+run_validator --expect 'secret_field@$[?]' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
 run_validator --expect 'unsafe_path@$.machine.projects[0].path' --machine "$repo_root/docs/examples/invalid/unsafe-path.roampi"
 run_validator --expect 'undeclared_type@$.pages[0].blocks[0].type' --project-root /Users/developer/Projects/Unknown "$repo_root/docs/examples/invalid/unknown-component.roampi"
 

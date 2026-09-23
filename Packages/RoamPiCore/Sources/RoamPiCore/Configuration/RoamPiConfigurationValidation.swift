@@ -432,6 +432,9 @@ public enum RoamPiConfigurationParser {
         diagnostics: inout [RoamPiConfigurationDiagnostic]
     ) {
         registry.register(block.id, at: path + ".id", diagnostics: &diagnostics)
+        if let title = block.title, !isValidDisplayName(title) {
+            append(.invalidValue, at: path + ".title", to: &diagnostics)
+        }
         validateLayout(block.layout, at: path + ".layout", diagnostics: &diagnostics)
         switch block.type {
         case .section, .grid:
@@ -819,9 +822,19 @@ public enum RoamPiConfigurationParser {
     }
 
     private static func jsonPath(_ base: String, key: String) -> String {
-        guard isValidIdentifier(key) else { return base + "[?]" }
+        guard diagnosticKeyAllowlist.contains(key) else { return base + "[?]" }
         return base + "." + key
     }
+
+    private static let diagnosticKeyAllowlist: Set<String> = [
+        "actionID", "actions", "blocks", "builtin", "cancellation", "children", "command", "compactSpan",
+        "concurrency", "content", "dataSourceID", "dataSources", "delivery", "disabledContributions", "discovery",
+        "enabled", "execution", "fallbackBehavior", "group", "homeHost", "host", "id", "inputKind", "items",
+        "jobID", "jobs", "kind", "layout", "machine", "machineID", "machines", "minimumWidth", "name", "pages",
+        "path", "placeholder", "port", "preferredWidth", "presentation", "project", "projectID", "projectOverrides",
+        "projects", "prompt", "properties", "regularSpan", "required", "resultSchema", "schedule", "systemImage",
+        "target", "targetMachineID", "title", "type", "username", "value", "version", "visible", "workingDirectory",
+    ]
 
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }

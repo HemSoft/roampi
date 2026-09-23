@@ -34,7 +34,7 @@ struct RoamPiConfigurationTests {
                 RoamPiConfigurationDiagnosticCode.duplicateIdentifier,
                 "$.machine.machines[0].id"
             ),
-            ("secret-field.roampi", RoamPiConfigurationDiagnosticCode.secretField, "$.token"),
+            ("secret-field.roampi", RoamPiConfigurationDiagnosticCode.secretField, "$[?]"),
             ("unsafe-path.roampi", RoamPiConfigurationDiagnosticCode.unsafePath, "$.machine.projects[0].path"),
         ]
     )
@@ -81,7 +81,7 @@ struct RoamPiConfigurationTests {
         )
 
         #expect(result.diagnostics == [
-            .init(code: .undeclaredField, location: "$.downloadedView"),
+            .init(code: .undeclaredField, location: "$[?]"),
         ])
     }
 
@@ -102,7 +102,7 @@ struct RoamPiConfigurationTests {
         )
 
         #expect(result.diagnostics == [
-            .init(code: .secretField, location: "$.dataSources[0].value.githubToken"),
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
         ])
     }
 
@@ -278,6 +278,28 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics == [
             .init(code: .invalidValue, location: "$.project.name"),
         ])
+    }
+
+    @Test("Optional block titles follow the schema bounds")
+    func blockTitleValidation() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var pages = try #require(object["pages"] as? [[String: Any]])
+        var blocks = try #require(pages[0]["blocks"] as? [[String: Any]])
+        blocks[0]["title"] = ""
+        pages[0]["blocks"] = blocks
+        object["pages"] = pages
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .invalidValue,
+            location: "$.pages[0].blocks[0].title"
+        )))
     }
 
     @Test("Job titles follow the schema bounds")
