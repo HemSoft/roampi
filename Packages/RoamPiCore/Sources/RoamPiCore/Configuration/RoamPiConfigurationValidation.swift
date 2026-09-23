@@ -1213,17 +1213,20 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedQualifierSequence(_ value: String) -> Bool {
         guard !value.isEmpty else { return false }
-        if value == "s" || value == "es" || value.allSatisfy(\.isNumber) {
-            return true
+        var remainder = value[...]
+        while !remainder.isEmpty {
+            if remainder == "s" || remainder == "es" || remainder.allSatisfy(\.isNumber) {
+                return true
+            }
+            if remainder.hasPrefix("v"), remainder.dropFirst().allSatisfy(\.isNumber), remainder.count > 1 {
+                return true
+            }
+            guard let qualifier = prohibitedKeyQualifiers.first(where: { remainder.hasPrefix($0) }) else {
+                return false
+            }
+            remainder = remainder.dropFirst(qualifier.count)
         }
-        if value.hasPrefix("v"), value.dropFirst().allSatisfy(\.isNumber), value.count > 1 {
-            return true
-        }
-        return prohibitedKeyQualifiers.contains { qualifier in
-            guard value.hasPrefix(qualifier) else { return false }
-            let remainder = String(value.dropFirst(qualifier.count))
-            return remainder.isEmpty || isProhibitedQualifierSequence(remainder)
-        }
+        return true
     }
 
     private static func isValidDisplayName(_ value: String) -> Bool {

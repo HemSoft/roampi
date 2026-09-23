@@ -278,6 +278,28 @@ struct RoamPiConfigurationTests {
         ])
     }
 
+    @Test("Long credential qualifier chains are rejected without recursion")
+    func longCredentialQualifierChain() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["password" + String(repeating: "data", count: 10000): true],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
+        ])
+    }
+
     @Test("Passphrase fields are rejected")
     func passphraseSecretField() throws {
         var object = try #require(JSONSerialization.jsonObject(

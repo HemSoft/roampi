@@ -226,15 +226,17 @@ PROHIBITED_QUALIFIERS = {
 def prohibited_qualifier_sequence(value: str) -> bool:
     if not value:
         return False
-    if value in {"s", "es"} or value.isdigit():
-        return True
-    if value.startswith("v") and len(value) > 1 and value[1:].isdigit():
-        return True
-    return any(
-        value.startswith(qualifier)
-        and (len(value) == len(qualifier) or prohibited_qualifier_sequence(value[len(qualifier):]))
-        for qualifier in PROHIBITED_QUALIFIERS
-    )
+    remainder = value
+    while remainder:
+        if remainder in {"s", "es"} or remainder.isdigit():
+            return True
+        if remainder.startswith("v") and len(remainder) > 1 and remainder[1:].isdigit():
+            return True
+        qualifier = next((item for item in PROHIBITED_QUALIFIERS if remainder.startswith(item)), None)
+        if qualifier is None:
+            return False
+        remainder = remainder[len(qualifier):]
+    return True
 
 
 def prohibited_key(value: str) -> bool:
