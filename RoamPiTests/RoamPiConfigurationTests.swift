@@ -197,6 +197,8 @@ struct RoamPiConfigurationTests {
             "id": "benign-static",
             "type": "static",
             "value": [
+                "compat": true,
+                "format": "json",
                 "passwordlessEnabled": true,
                 "secretary": "available",
                 "tokenCount": 3,

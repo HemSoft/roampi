@@ -214,7 +214,7 @@ def validate_contract_references(value: Any) -> list[str]:
 
 PROHIBITED_KEYS = {
     "accesskeyid", "accesstoken", "apikey", "authorization", "bearer", "clientsecret", "cookie", "credential",
-    "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password", "pat", "pin",
+    "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password", "personalaccesstoken", "pin",
     "privatekey", "providerkey", "pwd", "secret", "secretaccesskey", "secretkey", "seedphrase", "sessioncookie", "token", "totp",
 }
 PROHIBITED_QUALIFIERS = (
@@ -241,6 +241,13 @@ def prohibited_qualifier_sequence(value: str) -> bool:
 
 def prohibited_key(value: str) -> bool:
     normalized = "".join(character for character in value.lower() if character.isalnum())
+    segments = [segment for segment in re.split(r"[^A-Za-z0-9]+", value) if segment]
+    if (
+        normalized in {"pat", "githubpat", "gitlabpat", "bitbucketpat"}
+        or value.endswith(("PAT", "Pat"))
+        or any(segment.lower() == "pat" for segment in segments)
+    ):
+        return True
     if normalized in PROHIBITED_KEYS:
         return True
     if any(
@@ -267,6 +274,16 @@ def validate_no_secret_fields(value: Any, path: str = "$") -> list[str]:
         for index, child in enumerate(value):
             errors.extend(validate_no_secret_fields(child, f"{path}[{index}]"))
     return errors
+
+
+def contains_surrogate(value: Any) -> bool:
+    if isinstance(value, str):
+        return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+    if isinstance(value, dict):
+        return any(contains_surrogate(key) or contains_surrogate(child) for key, child in value.items())
+    if isinstance(value, list):
+        return any(contains_surrogate(child) for child in value)
+    return False
 
 
 def validate_number_kind_preservation(value: Any, path: str = "$") -> list[str]:
@@ -368,7 +385,10 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
     if isinstance(value, list):
         if len(value) < schema.get("minItems", 0):
             errors.append(f"{path}: array has too few items")
-        if schema.get("uniqueItems"):
+        maximum_items = schema.get("maxItems", sys.maxsize)
+        if len(value) > maximum_items:
+            errors.append(f"{path}: array has too many items")
+        if schema.get("uniqueItems") and len(value) <= maximum_items:
             if any(
                 json_equal(value[left], value[right])
                 for left in range(len(value))
@@ -443,7 +463,7 @@ def main() -> int:
                 errors = ["$: document exceeds maximum byte count"]
             else:
                 value = strict_json_loads(document_data.decode("utf-8"))
-                errors = validate(root, root, value)
+                errors = ["$: malformed JSON"] if contains_surrogate(value) else validate(root, root, value)
         except (DecimalException, json.JSONDecodeError, RecursionError, UnicodeDecodeError, ValueError):
             errors = ["$: malformed JSON"]
         if arguments.expect_invalid:

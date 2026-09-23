@@ -118,6 +118,7 @@
         "enabled": { "type": "boolean" },
         "disabledContributions": {
           "type": "array",
+          "maxItems": 256,
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/identifier" }
         }
@@ -196,7 +197,7 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/valueSchema" }
         },
-        "required": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "required": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "type": "string" } },
         "items": { "$ref": "#/$defs/valueSchema" }
       },
       "allOf": [

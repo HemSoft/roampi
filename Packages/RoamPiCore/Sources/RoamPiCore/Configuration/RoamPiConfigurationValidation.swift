@@ -428,8 +428,8 @@ public enum RoamPiConfigurationParser {
     private static let maximumDiagnostics = 32
     private static let prohibitedKeys: Set<String> = [
         "accesskeyid", "accesstoken", "apikey", "authorization", "bearer", "clientsecret", "cookie", "credential",
-        "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password", "pat",
-        "pin",
+        "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password",
+        "personalaccesstoken", "pin",
         "privatekey", "providerkey", "pwd", "secret", "secretaccesskey", "secretkey", "seedphrase", "sessioncookie",
         "token",
         "totp",
@@ -628,6 +628,9 @@ public enum RoamPiConfigurationParser {
             var overrideIDs = Set<String>()
             for (index, override) in machine.projectOverrides.enumerated() {
                 let path = "$.machine.projectOverrides[\(index)]"
+                if override.disabledContributions.count > 256 {
+                    append(.invalidValue, at: path + ".disabledContributions", to: &diagnostics)
+                }
                 if !isValidIdentifier(override.projectID) {
                     append(.invalidValue, at: path + ".projectID", to: &diagnostics)
                 } else if !overrideIDs.insert(override.projectID).inserted {
@@ -923,6 +926,9 @@ public enum RoamPiConfigurationParser {
             return
         }
         let properties = schema.properties ?? [:]
+        if schema.required?.count ?? 0 > 256 {
+            append(.invalidValue, at: path + ".required", to: &diagnostics)
+        }
         var requiredNames = Set<String>()
         for (index, required) in (schema.required ?? []).enumerated() {
             if !requiredNames.insert(required).inserted {
@@ -1203,6 +1209,12 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
+        let segments = value.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        if normalized == "pat" || ["githubpat", "gitlabpat", "bitbucketpat"].contains(normalized) ||
+            value.hasSuffix("PAT") || value.hasSuffix("Pat") || segments.contains(where: { $0.lowercased() == "pat" })
+        {
+            return true
+        }
         if prohibitedKeys.contains(normalized) || prohibitedKeys.contains(where: { key in
             normalized.hasSuffix(key) || normalized.hasSuffix(key + "s") || normalized.hasSuffix(key + "es")
         }) {
