@@ -438,6 +438,14 @@ public enum RoamPiConfigurationParser {
         "contents", "material", "content", "encoded", "header", "base64", "string", "value", "data", "file",
         "hash", "json", "path", "pem",
     ]
+    private static let prohibitedKeyWordSequences = [
+        ["access", "key", "id"], ["access", "token"], ["api", "key"], ["authorization"], ["bearer"],
+        ["client", "secret"], ["cookie"], ["credential"], ["credentials"], ["hotp"], ["jwe"], ["jwt"],
+        ["mnemonic"], ["otp"], ["passcode"], ["passphrase"], ["passwd"], ["password"], ["pat"],
+        ["personal", "access", "token"], ["pin"], ["private", "key"], ["provider", "key"], ["pwd"],
+        ["secret", "access", "key"], ["secret", "key"], ["secret"], ["seed", "phrase"],
+        ["session", "cookie"], ["token"], ["totp"],
+    ]
 
     public static func parse(
         _ data: Data,
@@ -1210,6 +1218,9 @@ public enum RoamPiConfigurationParser {
     ]
 
     private static func isProhibitedKey(_ value: String) -> Bool {
+        if containsProhibitedKeyWords(value) {
+            return true
+        }
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
         let segments = value.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
         let patBases = ["bitbucketpat", "githubpat", "gitlabpat", "pat"]
@@ -1231,6 +1242,56 @@ public enum RoamPiConfigurationParser {
             guard normalized.hasPrefix(key) else { return false }
             return isProhibitedQualifierSequence(String(normalized.dropFirst(key.count)))
         }
+    }
+
+    private static func containsProhibitedKeyWords(_ value: String) -> Bool {
+        let scalars = Array(value.unicodeScalars)
+        var words: [String] = []
+        var current = String.UnicodeScalarView()
+        func isLetterOrNumber(_ scalar: UnicodeScalar) -> Bool {
+            CharacterSet.letters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar)
+        }
+        func flush() {
+            if !current.isEmpty {
+                words.append(String(current).lowercased())
+                current = String.UnicodeScalarView()
+            }
+        }
+        for index in scalars.indices {
+            let scalar = scalars[index]
+            guard isLetterOrNumber(scalar) else {
+                flush()
+                continue
+            }
+            if !current.isEmpty, let previous = scalars.indices.contains(index - 1) ? scalars[index - 1] : nil {
+                let next = scalars.indices.contains(index + 1) ? scalars[index + 1] : nil
+                let startsWord = CharacterSet.uppercaseLetters.contains(scalar) &&
+                    (CharacterSet.lowercaseLetters.contains(previous) || CharacterSet.decimalDigits
+                        .contains(previous) ||
+                        (CharacterSet.uppercaseLetters.contains(previous) &&
+                            next.map(CharacterSet.lowercaseLetters.contains) == true))
+                if startsWord {
+                    flush()
+                }
+            }
+            current.append(scalar)
+        }
+        flush()
+
+        let qualifiers = Set(prohibitedKeyQualifiers)
+        func isQualifier(_ word: String) -> Bool {
+            qualifiers.contains(word) || word == "s" || word == "es" || word.allSatisfy(\.isNumber) ||
+                (word.hasPrefix("v") && word.count > 1 && word.dropFirst().allSatisfy(\.isNumber))
+        }
+        for start in words.indices {
+            for sequence in prohibitedKeyWordSequences where start + sequence.count <= words.count {
+                guard Array(words[start ..< start + sequence.count]) == sequence else { continue }
+                if words[(start + sequence.count)...].allSatisfy(isQualifier) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     private static func isProhibitedQualifierSequence(_ value: String) -> Bool {

@@ -236,6 +236,14 @@ PROHIBITED_QUALIFIERS = (
     "contents", "material", "content", "encoded", "header", "base64", "string", "value", "data", "file",
     "hash", "json", "path", "pem",
 )
+PROHIBITED_KEY_WORD_SEQUENCES = (
+    ("access", "key", "id"), ("access", "token"), ("api", "key"), ("authorization",), ("bearer",),
+    ("client", "secret"), ("cookie",), ("credential",), ("credentials",), ("hotp",), ("jwe",), ("jwt",),
+    ("mnemonic",), ("otp",), ("passcode",), ("passphrase",), ("passwd",), ("password",), ("pat",),
+    ("personal", "access", "token"), ("pin",), ("private", "key"), ("provider", "key"), ("pwd",),
+    ("secret", "access", "key"), ("secret", "key"), ("secret",), ("seed", "phrase"),
+    ("session", "cookie"), ("token",), ("totp",),
+)
 
 
 def prohibited_qualifier_sequence(value: str) -> bool:
@@ -265,7 +273,36 @@ def prohibited_qualifier_sequence(value: str) -> bool:
     return True
 
 
+def contains_prohibited_key_words(value: str) -> bool:
+    words: list[str] = []
+    for segment in re.split(r"[^A-Za-z0-9]+", value):
+        words.extend(
+            word.lower()
+            for word in re.findall(
+                r"[A-Z]+(?=[A-Z][a-z]|\d|$)|[A-Z][0-9]+|[A-Z]?[a-z]+|[0-9]+",
+                segment,
+            )
+        )
+
+    def qualifier(word: str) -> bool:
+        return (
+            word in PROHIBITED_QUALIFIERS
+            or word in {"s", "es"}
+            or word.isdigit()
+            or (word.startswith("v") and len(word) > 1 and word[1:].isdigit())
+        )
+
+    return any(
+        tuple(words[start:start + len(sequence)]) == sequence
+        and all(qualifier(word) for word in words[start + len(sequence):])
+        for start in range(len(words))
+        for sequence in PROHIBITED_KEY_WORD_SEQUENCES
+    )
+
+
 def prohibited_key(value: str) -> bool:
+    if contains_prohibited_key_words(value):
+        return True
     normalized = "".join(character for character in value.lower() if character.isalnum())
     segments = [segment for segment in re.split(r"[^A-Za-z0-9]+", value) if segment]
     pat_bases = ("bitbucketpat", "githubpat", "gitlabpat", "pat")
