@@ -20,7 +20,7 @@ public enum TransportDiagnostic: Equatable, Sendable {
         case .commandFailed:
             "The harmless probe did not return the expected result."
         case .connectionFailed:
-            "The SSH connection failed. Check Tailscale and remote SSH availability."
+            "The SSH connection failed. Check the network route and remote SSH availability."
         case .duplicateProbe:
             "A probe is already running."
         case .hostKeyChanged:

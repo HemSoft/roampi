@@ -11,6 +11,8 @@ The two adapters are:
 
 `TerminalTransport` and `RPCTransport` allow deterministic UI demos and disposable integration fixtures without weakening the production interface.
 
+The transport accepts ordinary DNS names and IPv4 or IPv6 addresses, including bounded scope identifiers on link-local IPv6 literals. It has no Tailscale dependency and uses the active iOS network route. Tailscale MagicDNS names and addresses work when the user enables that optional route, while local and publicly reachable SSH hosts use the same connection path.
+
 ## Process ownership and reconnect rules
 
 The iOS app owns SSH connections and channels. The remote host owns tmux and Pi processes.

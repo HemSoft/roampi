@@ -6,9 +6,9 @@ RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and 
 
 ## First-release architecture
 
-- Use the installed Tailscale iOS app for network routing. Do not embed Tailscale.
-- Onboard by connecting to an existing tailnet and selecting the machines to show in the app.
-- Connect to selected hosts over SSH by MagicDNS name or Tailscale IP.
+- Connect to user-authorized hosts over standard SSH using any reachable DNS hostname or IP address.
+- Treat the installed Tailscale iOS app as an optional private network route. Do not embed Tailscale or require it for core functionality.
+- Start onboarding with manual SSH host profiles. Optional tailnet discovery may add machines later.
 - Show each selected machine's availability, projects, and active Pi sessions.
 - Read an optional `.roampi` file from each host. It may define the machine name, projects, global UI behavior, and project-specific prompt or command shortcuts.
 - Keep terminal and native RPC modes behind a shared `PiSession` interface.
@@ -38,4 +38,4 @@ RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and 
 
 ## Current priority
 
-Work through Phase 0 in `TODO.md` before building the full product. Prove physical-device Tailscale connectivity, SSH and tmux behavior, terminal rendering, and one Pi RPC exchange first.
+Phase 0 in `TODO.md` is complete. Preserve route-neutral standard SSH, with Tailscale as an optional route. Define the versioned `.roampi` contract before building dashboard configuration or action execution.

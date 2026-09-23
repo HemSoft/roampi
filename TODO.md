@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build an iPhone and iPad app that connects to Pi installations on machines in a Tailscale network. The app should hide routine SSH, Pi, and tmux setup while preserving explicit approval for remote changes and authentication.
+Build an iPhone and iPad app that connects over standard SSH to Pi installations on user-authorized machines. The app should hide routine SSH, Pi, and tmux setup while preserving explicit approval for remote changes and authentication. Tailscale is an optional private network route, not a requirement.
 
 ## Product decision
 
@@ -10,11 +10,10 @@ Build a remote client first. Do not try to run Pi inside the iOS sandbox, and do
 
 The first release will use this path:
 
-1. The user installs and signs in to the [Tailscale iOS app](https://tailscale.com/docs/install/ios).
-2. iOS routes this app's ordinary network connections through the active Tailscale VPN.
-3. The app opens an SSH connection to a MagicDNS hostname or Tailscale IP.
-4. The app checks the remote machine, offers an approved bootstrap plan, and stores a connection profile.
-5. The user either attaches to a Pi process in tmux or starts a native Pi session over RPC.
+1. The user enters a DNS hostname or IP address that is reachable from the device.
+2. The app opens a standard SSH connection. The route may be a local network, a user-managed public endpoint, or the optional [Tailscale iOS app](https://tailscale.com/docs/install/ios).
+3. The app checks the remote machine, offers an approved bootstrap plan, and stores a connection profile.
+4. The user either attaches to a Pi process in tmux or starts a native Pi session over RPC.
 
 This keeps the app small and gives each module a narrow interface:
 
@@ -25,7 +24,7 @@ This keeps the app small and gives each module a narrow interface:
 
 ## Known constraints
 
-- An ordinary iOS app cannot silently install, sign in to, or enable another app's VPN. Onboarding can open the [Tailscale iOS instructions](https://tailscale.com/docs/install/ios), detect whether a target is reachable, and explain the remaining action.
+- Standard SSH must work without Tailscale. When a user chooses a private Tailscale address, onboarding can open the [Tailscale iOS instructions](https://tailscale.com/docs/install/ios), detect whether the target is reachable, and explain that iOS cannot silently install, sign in to, or enable another app's VPN.
 - Embedding Tailscale would require a Packet Tunnel Network Extension, Apple entitlement work, tailnet authentication, and substantial networking code. Tailscale's supported embedding library, [tsnet](https://tailscale.com/docs/features/tsnet), targets Go programs and is not the first-release path.
 - The app should assume it cannot read the Tailscale app's peer list across the iOS sandbox. Start with manual MagicDNS host profiles. Investigate authenticated machine discovery as a later feature.
 - Tailscale provides connectivity, not the remote SSH daemon. The destination still needs standard SSH or [Tailscale SSH](https://tailscale.com/docs/features/tailscale-ssh).
@@ -40,16 +39,14 @@ This keeps the app small and gives each module a narrow interface:
 - [x] Choose the app name, bundle identifier, minimum iOS version, repository license, and distribution target.
 - [x] Create a minimal Swift app and run it on a physical iPhone or iPad.
 - [x] With the Tailscale app connected, prove that the test app can resolve a [MagicDNS](https://tailscale.com/docs/features/magicdns) hostname and open TCP port 22.
-- [ ] Prove connections over Wi-Fi and cellular, including a DERP-relayed connection. Direct Wi-Fi and cellular paths passed; the current tailnet could not force or independently verify DERP.
 - [x] Compare [SwiftNIO SSH](https://github.com/apple/swift-nio-ssh) with [Citadel](https://github.com/orlandos-nl/Citadel) for client authentication, PTY allocation, resize events, keepalives, host-key verification, and async cancellation.
 - [x] Evaluate [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) for terminal rendering, selection, Unicode, hardware keyboards, and touch input.
-- [x] Verify standard key-based SSH first.
-- [ ] Separately verify Tailscale SSH `none` acceptance. Standard OpenSSH rejected `none`; the measured Ed25519 fallback passed.
+- [x] Verify standard key-based SSH first, including route-neutral connections to the disposable non-Tailscale SSH fixture.
 - [x] Start Pi inside tmux, background the app, change networks, reconnect, and confirm that the same process remains usable.
 - [x] Start `pi --mode rpc` over an SSH exec channel and prove LF-delimited JSONL request and response handling.
-- [ ] Review the relevant [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) before committing to the terminal and remote-command design.
+- [x] Review the relevant [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) before committing to the terminal and remote-command design. Keep standard SSH functional without another app, execute remote code only on user-authorized hosts, and describe Tailscale as optional.
 
-Exit criterion: one physical iOS device can connect through Tailscale, authenticate with SSH, render a tmux-hosted Pi session, and exchange one Pi RPC prompt.
+Exit criterion: one physical iOS device can connect over an active network route, authenticate with SSH, render a tmux-hosted Pi session, and complete one bounded Pi RPC request and response. Provider-backed prompts belong to the native interface work in Phase 5.
 
 ## Phase 1: project foundation
 
@@ -71,8 +68,8 @@ Exit criterion: one physical iOS device can connect through Tailscale, authentic
 
 ## Phase 3: onboarding and host setup
 
-- [ ] Add a Tailscale readiness screen that checks DNS resolution and port 22 reachability without requesting Tailscale account credentials.
-- [ ] Let the user add a host by MagicDNS name, full `*.ts.net` name, or Tailscale IP.
+- [ ] Add an SSH readiness screen that checks DNS resolution and port 22 reachability. If the address is private and unreachable, offer optional Tailscale setup help without requesting Tailscale account credentials.
+- [ ] Let the user add a host by ordinary DNS name, IPv4 or IPv6 address, MagicDNS name, full `*.ts.net` name, or Tailscale IP.
 - [ ] Offer a copyable public key and an exact remote command for adding it to `authorized_keys`.
 - [ ] Add an advanced option for password authentication only long enough to install the generated public key. Do not save the password unless the user explicitly requests it.
 - [ ] Probe the remote operating system, architecture, shell, package manager, SSH mode, Node version, Pi version, tmux version, and writable project directories.
@@ -100,7 +97,7 @@ Exit criterion: one physical iOS device can connect through Tailscale, authentic
 - [x] Create or attach with a safe equivalent of `tmux new-session -A -s <name>`.
 - [ ] Let the user set a project directory and launch `pi -c` there.
 - [x] Provide explicit detach, interrupt, reconnect, and close actions. Closing the iOS view must not kill tmux or Pi.
-- [x] Restore the terminal after app suspension, network loss, and Tailscale reconnection.
+- [x] Restore the terminal after app suspension, network loss, and reconnection over any active route, including Tailscale.
 - [x] Handle stale SSH channels and tmux sessions without creating duplicate Pi processes.
 
 Exit criterion: a user can configure a host once, tap a project, and return to the same tmux-hosted Pi process after the app or network disappears.
@@ -119,6 +116,8 @@ Exit criterion: a user can configure a host once, tap a project, and return to t
 
 ## Phase 6: machine discovery
 
+- [ ] Verify a DERP-relayed optional Tailscale connection; direct Wi-Fi and cellular paths already passed, but the current tailnet could not force or independently verify DERP.
+- [ ] Verify optional Tailscale SSH `none` acceptance; standard OpenSSH rejected `none`, then the measured Ed25519 fallback passed.
 - [ ] Confirm whether Tailscale offers an appropriate end-user OAuth flow for read-only device discovery without shipping a client secret.
 - [ ] If safe discovery is available, request the smallest scope and store the resulting credential in Keychain.
 - [ ] Fetch only the fields required for connection setup, such as machine name, MagicDNS name, Tailscale IP, operating system, and online state.
@@ -156,7 +155,7 @@ Exit criterion: a user can configure a host once, tap a project, and return to t
 
 ## Definition of done for version 1
 
-- A new user with Tailscale already installed can add a remote macOS or Linux host without entering a public IP.
+- A new user can add any reachable macOS or Linux SSH host; Tailscale users can use private MagicDNS names or Tailscale IPs without exposing a public endpoint.
 - The app verifies the SSH host, installs its public key, checks prerequisites, and presents an approved setup plan.
 - The app can install or update Pi after explicit approval and guide Codex device login.
 - The user can create, attach to, detach from, and reconnect to named tmux-hosted Pi sessions.

@@ -12,6 +12,12 @@
 | RoamPi Pro | $19 per year through StoreKit |
 | License | MIT |
 
+## Guideline assessment
+
+RoamPi's core connection path is standard SSH to a user-authorized macOS or Linux host. It accepts ordinary DNS names and IP addresses and does not require another iOS app. Tailscale is optional routing supplied by the separately installed Tailscale app.
+
+Remote commands, Pi, tmux, and provider integrations execute on the user's host. RoamPi does not download or execute remote code on iOS. The native screens are fixed app functionality backed by bounded SSH and RPC protocols, and the terminal remains a general interface to the user's computer. Release review notes must state these boundaries and provide a network-free demo.
+
 ## TestFlight
 
 - [ ] Create the App Store Connect app record.
@@ -46,7 +52,7 @@
 ## Review notes
 
 - [ ] Explain that RoamPi runs user-requested commands only on machines the user has authorized.
-- [ ] Explain that the app relies on the separately installed Tailscale app and does not embed a VPN.
+- [ ] Explain that standard SSH works without Tailscale and that the separately installed Tailscale app is an optional private network route.
 - [ ] Provide exact steps to launch deterministic demo mode without a private tailnet.
 - [ ] Provide a disposable review host if Apple asks to inspect remote-session behavior.
 - [ ] Describe standard SSH, host-key verification, tmux persistence, and Pi authentication once implemented.
