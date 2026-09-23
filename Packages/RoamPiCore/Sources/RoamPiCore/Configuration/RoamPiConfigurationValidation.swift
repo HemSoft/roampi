@@ -1251,7 +1251,7 @@ public enum RoamPiConfigurationParser {
         var words: [String] = []
         var current = String.UnicodeScalarView()
         func isLetterOrNumber(_ scalar: UnicodeScalar) -> Bool {
-            CharacterSet.letters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar)
+            scalar.isASCII && (CharacterSet.letters.contains(scalar) || CharacterSet.decimalDigits.contains(scalar))
         }
         func flush() {
             if !current.isEmpty {
