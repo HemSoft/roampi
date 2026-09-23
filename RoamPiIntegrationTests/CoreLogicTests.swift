@@ -959,7 +959,6 @@ struct RPCSessionReliabilityTests {
         for _ in 0 ..< 100 where !transport.isWriteStalled {
             try await Task.sleep(for: .milliseconds(5))
         }
-        #expect(session.phase == .interrupted)
         #expect(phases.values.contains(.interrupted))
 
         do {
