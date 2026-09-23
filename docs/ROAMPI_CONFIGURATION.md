@@ -32,7 +32,7 @@ Data sources are one of:
 
 - `static`, containing strict JSON; integral values use the exact signed-or-unsigned 64-bit range, while nonintegral values must fit finite binary64;
 - `builtin`, naming typed RoamPi machine, project, session, job, or connection state; or
-- `command`, naming a bounded remote command, target machine, required working directory, and result schema. Result schemas allow at most 16 nested `items`/`properties` levels, declared by `x-roampi-max-schema-depth`. RoamPi must obtain approval for its trust identity before first execution or execution after an identity change; opening or refreshing a page cannot bypass that gate.
+- `command`, naming a bounded remote command, target machine, required working directory, and result schema. Result schemas allow at most 16 nested `items`/`properties` levels, declared by `x-roampi-max-schema-depth`. The `x-roampi-required-properties` rule requires every `required` name to exist in the same schema's `properties` map. RoamPi must obtain approval for its trust identity before first execution or execution after an identity change; opening or refreshing a page cannot bypass that gate.
 
 Actions are either `prompt` or `command`. They declare a target machine and working directory, prompt delivery (`immediate`, `followUp`, or `steering`), presentation, inline or durable execution, cancellation policy, and concurrency policy.
 

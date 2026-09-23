@@ -173,6 +173,14 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
     if "x-roampi-max-schema-depth" in schema:
         errors.extend(validate_schema_depth(value, path, 0, schema["x-roampi-max-schema-depth"]))
 
+    if schema.get("x-roampi-required-properties") and isinstance(value, dict):
+        properties = value.get("properties", {})
+        required = value.get("required", [])
+        if isinstance(properties, dict) and isinstance(required, list):
+            for name in required:
+                if isinstance(name, str) and name not in properties:
+                    errors.append(f"{path}.required: required name is not declared in properties")
+
     if schema.get("x-roampi-width-order") and isinstance(value, dict):
         minimum = value.get("minimumWidth")
         preferred = value.get("preferredWidth")
