@@ -210,7 +210,7 @@ def validate_contract_references(value: Any) -> list[str]:
 
 PROHIBITED_KEYS = {
     "accesskeyid", "accesstoken", "apikey", "authorization", "clientsecret", "credential", "credentials",
-    "mnemonic", "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "secretaccesskey",
+    "mnemonic", "passcode", "passphrase", "passwd", "password", "privatekey", "providerkey", "pwd", "secret", "secretaccesskey",
     "secretkey", "seedphrase", "token",
 }
 PROHIBITED_QUALIFIERS = {

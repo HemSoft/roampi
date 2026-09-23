@@ -428,7 +428,8 @@ public enum RoamPiConfigurationParser {
     private static let maximumDiagnostics = 32
     private static let prohibitedKeys: Set<String> = [
         "accesskeyid", "accesstoken", "apikey", "authorization", "clientsecret", "credential", "credentials",
-        "mnemonic", "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "secretaccesskey",
+        "mnemonic", "passcode", "passphrase", "passwd", "password", "privatekey", "providerkey", "pwd", "secret",
+        "secretaccesskey",
         "secretkey", "seedphrase", "token",
     ]
     private static let prohibitedKeyQualifiers: Set<String> = [
