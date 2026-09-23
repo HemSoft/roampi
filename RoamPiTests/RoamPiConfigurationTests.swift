@@ -481,6 +481,38 @@ struct RoamPiConfigurationTests {
         }
     }
 
+    @Test("Project source roots use exact scalar identity")
+    func projectSourceRootIdentity() throws {
+        var machineObject = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        var machineFields = try #require(machineObject["machine"] as? [String: Any])
+        machineFields["projects"] = [[
+            "id": "unicode-root",
+            "machineID": "home",
+            "path": "/srv/é",
+            "name": "Unicode Root",
+            "visible": true,
+            "discovery": "explicit",
+        ]]
+        machineObject["machine"] = machineFields
+        let machine = try #require(try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: machineObject),
+            source: .machine
+        ).configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "unicode-root", pageID: "unicode-page"),
+            source: .project(root: "/srv/e\u{301}", machineID: "home")
+        ).configuration)
+
+        #expect(throws: RoamPiConfigurationDiagnostic(
+            code: .scopeViolation,
+            location: "$projects[?].source"
+        )) {
+            try RoamPiConfigurationMerger.merge(machine: machine, projects: [project])
+        }
+    }
+
     @Test("Project source validation follows discovered-only precedence")
     func discoveredOnlyProjectSource() throws {
         var machineObject = try #require(JSONSerialization.jsonObject(

@@ -257,7 +257,9 @@ public enum RoamPiConfigurationMerger {
                 )
             }
             if let effective = effectiveSources[contribution.id] {
-                guard effective.machineID == sourceMachineID, effective.path == sourceRoot else {
+                guard effective.machineID == sourceMachineID,
+                      effective.path.utf8.elementsEqual(sourceRoot.utf8)
+                else {
                     throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects[?].source")
                 }
             }
