@@ -258,15 +258,15 @@ struct RoamPiConfigurationTests {
         ])
     }
 
-    @Test("Auth credential fields are rejected")
-    func authCredentialField() throws {
+    @Test("Access-key credential fields are rejected")
+    func accessKeyCredentialField() throws {
         var object = try #require(JSONSerialization.jsonObject(
             with: fixture("minimal.roampi")
         ) as? [String: Any])
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["auth": "not-a-real-credential"],
+            "value": ["accessKeyValue": "not-a-real-credential"],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(

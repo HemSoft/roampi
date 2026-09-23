@@ -237,7 +237,7 @@ PROHIBITED_QUALIFIERS = (
     "hash", "json", "path", "pem",
 )
 PROHIBITED_KEY_WORD_SEQUENCES = (
-    ("access", "key", "id"), ("access", "token"), ("api", "key"), ("auth",), ("authorization",), ("bearer",),
+    ("access", "key", "id"), ("access", "key"), ("access", "token"), ("api", "key"), ("auth",), ("authorization",), ("bearer",),
     ("client", "secret"), ("cookie",), ("credential",), ("credentials",), ("hotp",), ("jwe",), ("jwt",),
     ("mnemonic",), ("otp",), ("passcode",), ("passphrase",), ("passwd",), ("password",), ("pat",),
     ("personal", "access", "token"), ("pin",), ("private", "key"), ("provider", "key"), ("pwd",),
