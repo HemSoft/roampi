@@ -1032,6 +1032,12 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedQualifierSequence(_ value: String) -> Bool {
         guard !value.isEmpty else { return false }
+        if value.allSatisfy(\.isNumber) {
+            return true
+        }
+        if value.hasPrefix("v"), value.dropFirst().allSatisfy(\.isNumber), value.count > 1 {
+            return true
+        }
         return prohibitedKeyQualifiers.contains { qualifier in
             guard value.hasPrefix(qualifier) else { return false }
             let remainder = String(value.dropFirst(qualifier.count))

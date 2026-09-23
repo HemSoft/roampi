@@ -217,10 +217,14 @@ public enum RoamPiConfigurationMerger {
     }
 
     private static func validate(discoveredProjects: [DiscoveredRoamPiProject]) throws {
+        var identifiers = Set<String>()
         for (index, project) in discoveredProjects.enumerated() {
             let path = "$discoveredProjects[\(index)]"
             guard isValidIdentifier(project.id) else {
                 throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: path + ".id")
+            }
+            guard identifiers.insert(project.id).inserted else {
+                throw RoamPiConfigurationDiagnostic(code: .duplicateIdentifier, location: path + ".id")
             }
             guard isValidIdentifier(project.machineID) else {
                 throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: path + ".machineID")
@@ -239,12 +243,7 @@ public enum RoamPiConfigurationMerger {
 
     private static func isValidIdentifier(_ value: String) -> Bool {
         let bytes = Array(value.utf8)
-        guard (1 ... 64).contains(bytes.count), let first = bytes.first,
-              isASCIIAlphaNumeric(first)
-        else {
-            return false
-        }
-        return bytes.dropFirst().allSatisfy {
+        return (1 ... 64).contains(bytes.count) && bytes.allSatisfy {
             isASCIIAlphaNumeric($0) || $0 == 46 || $0 == 95 || $0 == 45
         }
     }

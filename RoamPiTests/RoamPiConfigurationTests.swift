@@ -208,6 +208,28 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics.isEmpty)
     }
 
+    @Test("Version-suffixed secret fields are rejected")
+    func versionSuffixedSecretField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["apiKeyV2": "not-a-real-key"],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
+        ])
+    }
+
     @Test("Undeclared component types fail at their type location")
     func undeclaredComponent() throws {
         let result = try RoamPiConfigurationParser.parse(
@@ -776,6 +798,26 @@ struct RoamPiConfigurationTests {
         #expect(rejected.configuration == accepted.configuration)
         #expect(rejected.diagnostics == [
             .init(code: .unsafePath, location: "$discoveredProjects[0].path"),
+        ])
+    }
+
+    @Test("Duplicate discovered project identifiers reject the complete update")
+    func duplicateDiscoveredProjectIdentifiers() async throws {
+        let store = RoamPiConfigurationStore()
+        let accepted = try await store.update(machineData: fixture("developer-dashboard.roampi"))
+        let rejected = try await store.update(
+            machineData: fixture("developer-dashboard.roampi"),
+            discoveredProjects: [
+                .init(id: "shared-project", machineID: "studio", path: "/srv/studio", name: "Studio Project"),
+                .init(id: "shared-project", machineID: "build-host", path: "/srv/build", name: "Build Project"),
+            ]
+        )
+
+        #expect(accepted.adopted)
+        #expect(!rejected.adopted)
+        #expect(rejected.configuration == accepted.configuration)
+        #expect(rejected.diagnostics == [
+            .init(code: .duplicateIdentifier, location: "$discoveredProjects[1].id"),
         ])
     }
 
