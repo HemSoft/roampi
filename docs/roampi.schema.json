@@ -143,7 +143,8 @@
         { "if": { "properties": { "type": { "enum": ["list", "status"] } } }, "then": { "required": ["dataSourceID"] } },
         { "if": { "properties": { "type": { "const": "markdown" } } }, "then": { "required": ["content"] } },
         { "if": { "properties": { "type": { "const": "input" } } }, "then": { "required": ["inputKind"] } },
-        { "if": { "properties": { "type": { "const": "action" } } }, "then": { "required": ["actionID"] } }
+        { "if": { "properties": { "type": { "const": "action" } } }, "then": { "required": ["actionID"] } },
+        { "if": { "properties": { "type": { "const": "jobs" } } }, "then": { "anyOf": [{ "required": ["jobID"] }, { "required": ["dataSourceID"] }] } }
       ]
     },
     "page": {

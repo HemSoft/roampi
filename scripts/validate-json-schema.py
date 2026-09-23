@@ -94,6 +94,9 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
 
     for subschema in schema.get("allOf", []):
         errors.extend(validate(root, subschema, value, path))
+    if "anyOf" in schema:
+        if not any(not validate(root, subschema, value, path) for subschema in schema["anyOf"]):
+            errors.append(f"{path}: expected at least one matching schema")
     if "oneOf" in schema:
         matches = sum(not validate(root, subschema, value, path) for subschema in schema["oneOf"])
         if matches != 1:

@@ -407,6 +407,9 @@ public enum RoamPiConfigurationParser {
         if !isValidDisplayName(page.title) {
             append(.invalidValue, at: path + ".title", to: &diagnostics)
         }
+        if let systemImage = page.systemImage, !isValidDisplayName(systemImage) {
+            append(.invalidValue, at: path + ".systemImage", to: &diagnostics)
+        }
         for (index, block) in page.blocks.enumerated() {
             validateBlock(
                 block,

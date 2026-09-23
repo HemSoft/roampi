@@ -68,6 +68,20 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics.isEmpty)
     }
 
+    @Test("Static data preserves integers beyond binary floating-point precision")
+    func staticLargeInteger() {
+        let source = String(decoding: minimalMachineData(), as: UTF8.self)
+        let data = Data(source.replacingOccurrences(
+            of: #""dataSources":[]"#,
+            with: #""dataSources":[{"id":"large-integer","type":"static","value":9007199254740993}]"#
+        ).utf8)
+
+        let result = RoamPiConfigurationParser.parse(data, source: .machine)
+
+        #expect(result.configuration?.document.dataSources.first?.value == .integer(9_007_199_254_740_993))
+        #expect(result.diagnostics.isEmpty)
+    }
+
     @Test("Undeclared fields are rejected instead of ignored by Codable")
     func undeclaredField() throws {
         var object = try #require(JSONSerialization.jsonObject(
@@ -278,6 +292,39 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics == [
             .init(code: .invalidValue, location: "$.project.name"),
         ])
+    }
+
+    @Test("Optional page system images follow the schema bounds")
+    func pageSystemImageValidation() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var pages = try #require(object["pages"] as? [[String: Any]])
+        pages[0]["systemImage"] = ""
+        object["pages"] = pages
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .invalidValue,
+            location: "$.pages[0].systemImage"
+        )))
+    }
+
+    @Test("Jobs blocks require a job or data source")
+    func jobsBlockSourceValidation() throws {
+        let result = try RoamPiConfigurationParser.parse(
+            invalidFixture("jobs-without-source.roampi"),
+            source: .project(root: "/Users/developer/Projects/MissingJobSource")
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .missingValue,
+            location: "$.pages[0].blocks[0].jobID"
+        )))
     }
 
     @Test("Optional block titles follow the schema bounds")

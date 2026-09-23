@@ -273,6 +273,8 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
     case object([String: RoamPiJSONValue])
     case array([RoamPiJSONValue])
     case string(String)
+    case integer(Int64)
+    case unsignedInteger(UInt64)
     case number(Double)
     case bool(Bool)
     case null
@@ -283,6 +285,10 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
             self = .null
         } else if let value = try? container.decode(Bool.self) {
             self = .bool(value)
+        } else if let value = try? container.decode(Int64.self) {
+            self = .integer(value)
+        } else if let value = try? container.decode(UInt64.self) {
+            self = .unsignedInteger(value)
         } else if let value = try? container.decode(Double.self) {
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
@@ -302,6 +308,8 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
         case let .object(value): try container.encode(value)
         case let .array(value): try container.encode(value)
         case let .string(value): try container.encode(value)
+        case let .integer(value): try container.encode(value)
+        case let .unsignedInteger(value): try container.encode(value)
         case let .number(value): try container.encode(value)
         case let .bool(value): try container.encode(value)
         case .null: try container.encodeNil()

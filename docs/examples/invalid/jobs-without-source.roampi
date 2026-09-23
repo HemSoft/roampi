@@ -1,0 +1,29 @@
+{
+  "$schema": "../../roampi.schema.json",
+  "version": 1,
+  "kind": "project",
+  "project": {
+    "id": "missing-job-source"
+  },
+  "pages": [
+    {
+      "id": "jobs-page",
+      "title": "Jobs",
+      "blocks": [
+        {
+          "id": "jobs-list",
+          "type": "jobs",
+          "layout": {
+            "compactSpan": 12,
+            "regularSpan": 12
+          },
+          "blocks": []
+        }
+      ],
+      "children": []
+    }
+  ],
+  "dataSources": [],
+  "actions": [],
+  "jobs": []
+}

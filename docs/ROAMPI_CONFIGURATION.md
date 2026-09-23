@@ -70,7 +70,7 @@ Diagnostics contain only a fixed code and a bounded JSON location. They do not i
 - [`examples/minimal.roampi`](examples/minimal.roampi) is the smallest machine configuration.
 - [`examples/developer-dashboard.roampi`](examples/developer-dashboard.roampi) is a fictional multi-machine dashboard with native blocks, data sources, actions, and a durable job.
 - [`examples/project.roampi`](examples/project.roampi) is a fictional repository contribution. Validate it with the developer dashboard to exercise merging and namespace isolation.
-- [`examples/invalid`](examples/invalid) contains fixtures for forward versions, duplicate identifiers, secret fields, unsafe paths, and undeclared components.
+- [`examples/invalid`](examples/invalid) contains fixtures for forward versions, duplicate identifiers, missing jobs sources, secret fields, unsafe paths, and undeclared components.
 
 Validate the schema, every valid example, and every expected invalid fixture with:
 
