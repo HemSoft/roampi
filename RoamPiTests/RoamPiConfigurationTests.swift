@@ -580,6 +580,48 @@ struct RoamPiConfigurationTests {
         #expect(effective.discovery == .session)
     }
 
+    @Test("Disabled project contributions cannot replace discovery metadata")
+    func disabledDiscoveredProjectMetadata() throws {
+        var machineObject = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var machineFields = try #require(machineObject["machine"] as? [String: Any])
+        var overrides = try #require(machineFields["projectOverrides"] as? [[String: Any]])
+        overrides.append([
+            "projectID": "sample-service",
+            "enabled": false,
+            "disabledContributions": [],
+        ])
+        machineFields["projectOverrides"] = overrides
+        machineObject["machine"] = machineFields
+        let machine = try #require(try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: machineObject),
+            source: .machine
+        ).configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .project(root: "/Users/developer/Projects/SampleService", machineID: "studio")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(
+            machine: machine,
+            projects: [project],
+            discoveredProjects: [
+                .init(
+                    id: "sample-service",
+                    machineID: "studio",
+                    path: "/Users/developer/Projects/SampleService",
+                    name: "Discovered Service"
+                ),
+            ]
+        )
+        let effective = try #require(merged.projects.first(where: { $0.id == "sample-service" }))
+
+        #expect(effective.name == "Discovered Service")
+        #expect(effective.group == nil)
+        #expect(!merged.pages.contains(where: { $0.id.hasPrefix("project%sample-service%") }))
+    }
+
     @Test("Project merge order does not depend on input order")
     func deterministicProjectOrder() throws {
         let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)

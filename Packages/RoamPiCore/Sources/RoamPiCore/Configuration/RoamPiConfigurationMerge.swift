@@ -320,6 +320,7 @@ public enum RoamPiConfigurationMerger {
             []
         }
         var identifiers = Set(result.map(\.id))
+        let disabledProjects = Set(machine.projectOverrides.filter { !$0.enabled }.map(\.projectID))
 
         if machine.fallbackBehavior != .declaredOnly {
             for discovered in discoveredProjects.sorted(by: discoveredProjectOrder)
@@ -342,7 +343,9 @@ public enum RoamPiConfigurationMerger {
                   let sourceMachineID = configuration.source.projectMachineID
             else { continue }
             if let index = result.firstIndex(where: { $0.id == contribution.id }) {
-                guard result[index].discovery == .session else { continue }
+                guard result[index].discovery == .session,
+                      !disabledProjects.contains(contribution.id)
+                else { continue }
                 let discovered = result[index]
                 result[index] = RoamPiProject(
                     id: discovered.id,

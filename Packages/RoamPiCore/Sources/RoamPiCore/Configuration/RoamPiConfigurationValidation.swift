@@ -1266,8 +1266,8 @@ public enum RoamPiConfigurationParser {
             if !current.isEmpty, let previous = scalars.indices.contains(index - 1) ? scalars[index - 1] : nil {
                 let next = scalars.indices.contains(index + 1) ? scalars[index + 1] : nil
                 let startsWord = CharacterSet.uppercaseLetters.contains(scalar) &&
-                    (CharacterSet.lowercaseLetters.contains(previous) || CharacterSet.decimalDigits
-                        .contains(previous) ||
+                    ((CharacterSet.letters.contains(previous) && !CharacterSet.uppercaseLetters.contains(previous)) ||
+                        CharacterSet.decimalDigits.contains(previous) ||
                         (CharacterSet.uppercaseLetters.contains(previous) &&
                             next.map(CharacterSet.lowercaseLetters.contains) == true))
                 if startsWord {
