@@ -260,7 +260,7 @@ struct RoamPiConfigurationTests {
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["secretKey": "not-a-real-key"],
+            "value": ["secretAccessKey": "not-a-real-key"],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(
@@ -977,7 +977,7 @@ struct RoamPiConfigurationTests {
     @Test("Excessive nesting stops before decoding")
     func excessiveNesting() throws {
         var nested: Any = "leaf"
-        for _ in 0 ..< 34 {
+        for _ in 0 ..< 66 {
             nested = ["child": nested]
         }
         let data = try JSONSerialization.data(withJSONObject: ["nested": nested])

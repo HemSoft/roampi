@@ -241,16 +241,51 @@ private struct RoamPiJSONDuplicateKeyScanner {
         let token = String(decoding: bytes[start ..< index], as: UTF8.self)
         let significand = token.split(whereSeparator: { $0 == "e" || $0 == "E" }).first ?? ""
         let hasNonzeroDigit = significand.contains(where: { ("1" ... "9").contains($0) })
-        let exactValue = Decimal(string: token, locale: Locale(identifier: "en_US_POSIX"))
         guard let value = Double(token),
               value.isFinite,
               value != 0 || !hasNonzeroDigit,
               hasSupportedMinimumMagnitude(token),
-              !widthBounded || (exactValue.map { decimal in decimal <= Decimal(4096) } ?? (value <= 4096))
+              !widthBounded || isAtMostMaximumWidth(token)
         else {
             containsUnsupportedNumber = true
             return
         }
+    }
+
+    private func isAtMostMaximumWidth(_ token: String) -> Bool {
+        if token.hasPrefix("-") {
+            return true
+        }
+        let parts = token.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "e" || $0 == "E" })
+        guard parts.count <= 2 else { return false }
+        let exponent: Int
+        if parts.count == 2 {
+            guard let parsed = Int(parts[1]) else { return false }
+            exponent = parsed
+        } else {
+            exponent = 0
+        }
+        let coefficient = parts[0]
+        let integerDigits = coefficient.firstIndex(of: ".").map {
+            coefficient.distance(from: coefficient.startIndex, to: $0)
+        } ?? coefficient.count
+        let digits = coefficient.filter(\.isNumber)
+        guard let firstNonzero = digits.firstIndex(where: { $0 != "0" }) else { return true }
+        let leadingZeros = digits.distance(from: digits.startIndex, to: firstNonzero)
+        let (basePower, overflow) = exponent.addingReportingOverflow(integerDigits - 1 - leadingZeros)
+        guard !overflow else { return false }
+        if basePower != 3 {
+            return basePower < 3
+        }
+
+        let significantDigits = digits[firstNonzero...]
+        let comparisonDigits = Array(significantDigits.prefix(4)) +
+            Array(repeating: Character("0"), count: max(0, 4 - significantDigits.count))
+        let maximumDigits = Array("4096")
+        if comparisonDigits != maximumDigits {
+            return comparisonDigits.lexicographicallyPrecedes(maximumDigits)
+        }
+        return significantDigits.dropFirst(4).allSatisfy { $0 == "0" }
     }
 
     private func hasSupportedMinimumMagnitude(_ token: String) -> Bool {
@@ -300,8 +335,9 @@ public enum RoamPiConfigurationParser {
     public static let maximumDocumentBytes = 1_048_576
     private static let maximumDiagnostics = 32
     private static let prohibitedKeys: Set<String> = [
-        "accesstoken", "apikey", "authorization", "credential", "credentials", "mnemonic",
-        "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "secretkey", "seedphrase", "token",
+        "accesskeyid", "accesstoken", "apikey", "authorization", "clientsecret", "credential", "credentials",
+        "mnemonic", "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "secretaccesskey",
+        "secretkey", "seedphrase", "token",
     ]
     private static let prohibitedKeyQualifiers: Set<String> = [
         "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path", "pem",
@@ -916,7 +952,7 @@ public enum RoamPiConfigurationParser {
         depth: Int,
         diagnostics: inout [RoamPiConfigurationDiagnostic]
     ) {
-        guard depth <= 32 else {
+        guard depth <= 64 else {
             append(.nestingTooDeep, at: path, to: &diagnostics)
             return
         }

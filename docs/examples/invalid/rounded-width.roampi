@@ -16,7 +16,7 @@
           "id": "wide",
           "type": "text",
           "text": "Wide",
-          "layout": { "minimumWidth": 4096.0000000000001 }
+          "layout": { "minimumWidth": 4096.0000000000000000000000000000000000000000001 }
         }
       ]
     }

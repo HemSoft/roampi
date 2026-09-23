@@ -3,6 +3,7 @@
   "$id": "https://hemsoft.github.io/roampi/schema/v1/roampi.schema.json",
   "title": "RoamPi configuration version 1",
   "type": "object",
+  "x-roampi-max-document-depth": 64,
   "additionalProperties": false,
   "required": ["version", "kind", "pages", "dataSources", "actions", "jobs"],
   "properties": {

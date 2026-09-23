@@ -8,6 +8,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" \
     "$repo_root/docs/roampi.schema.json" \
     "$repo_root/docs/examples/minimal.roampi" \
     "$repo_root/docs/examples/developer-dashboard.roampi" \
+    "$repo_root/docs/examples/deep-valid-result-schema.roampi" \
     "$repo_root/docs/examples/project.roampi"
 python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/roampi.schema.json" \
@@ -45,6 +46,7 @@ run_validator() {
 
 run_validator --machine "$repo_root/docs/examples/minimal.roampi"
 run_validator --machine "$repo_root/docs/examples/developer-dashboard.roampi"
+run_validator --machine "$repo_root/docs/examples/deep-valid-result-schema.roampi"
 run_validator --project validation-host /Users/developer/Projects/SampleService "$repo_root/docs/examples/project.roampi"
 
 run_validator --expect 'invalid_value@$.version' --machine "$repo_root/docs/examples/invalid/boolean-version.roampi"

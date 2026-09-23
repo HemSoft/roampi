@@ -79,6 +79,19 @@ def type_matches(value: Any, expected: str) -> bool:
     }[expected]
 
 
+def validate_document_depth(value: Any, path: str, depth: int, maximum: int) -> list[str]:
+    if depth > maximum:
+        return [f"{path}: document exceeds maximum depth"]
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for child in value.values():
+            errors.extend(validate_document_depth(child, f"{path}[?]", depth + 1, maximum))
+    elif isinstance(value, list):
+        for child in value:
+            errors.extend(validate_document_depth(child, f"{path}[]", depth + 1, maximum))
+    return errors
+
+
 def validate_schema_depth(value: Any, path: str, depth: int, maximum: int) -> list[str]:
     if depth > maximum:
         return [f"{path}: result schema exceeds maximum depth"]
@@ -105,6 +118,8 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         return errors
 
     errors: list[str] = []
+    if "x-roampi-max-document-depth" in schema:
+        errors.extend(validate_document_depth(value, path, 0, schema["x-roampi-max-document-depth"]))
     expected_type = schema.get("type")
     if expected_type is not None:
         allowed = [expected_type] if isinstance(expected_type, str) else expected_type
