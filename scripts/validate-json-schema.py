@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -137,6 +138,10 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
             errors.append(f"{path}: string is too long")
         if "pattern" in schema and re.search(schema["pattern"], value) is None:
             errors.append(f"{path}: string does not match pattern")
+        if schema.get("x-roampi-no-control-characters") and any(
+            unicodedata.category(character) in {"Cc", "Cf"} for character in value
+        ):
+            errors.append(f"{path}: string contains a control character")
 
     if is_json_number(value):
         if "minimum" in schema and value < schema["minimum"]:

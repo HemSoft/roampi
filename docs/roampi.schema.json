@@ -36,11 +36,12 @@
       "maxLength": 64,
       "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])[A-Za-z0-9._-]+$"
     },
-    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])", "x-roampi-no-control-characters": true },
     "absolutePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
+      "x-roampi-no-control-characters": true,
       "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$)).*$"
     },
     "jsonValue": {
@@ -68,9 +69,9 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/name" },
-        "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])" },
+        "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])", "x-roampi-no-control-characters": true },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])" },
+        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])", "x-roampi-no-control-characters": true },
         "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" }
       }

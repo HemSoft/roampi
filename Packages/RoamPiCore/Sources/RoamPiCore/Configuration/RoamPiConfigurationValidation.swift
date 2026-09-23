@@ -124,6 +124,8 @@ private struct RoamPiJSONDuplicateKeyScanner {
     private let bytes: [UInt8]
     private var index = 0
     private(set) var containsUnsupportedNumber = false
+    private(set) var containsRoundedInvertedWidth = false
+    private var lastNumberToken: String?
 
     init(data: Data) {
         bytes = Array(data)
@@ -164,6 +166,7 @@ private struct RoamPiJSONDuplicateKeyScanner {
             return false
         }
         var keys = Set<String>()
+        var widthTokens: [String: String] = [:]
         while true {
             skipWhitespace()
             let key = try parseString()
@@ -172,11 +175,18 @@ private struct RoamPiJSONDuplicateKeyScanner {
             }
             skipWhitespace()
             guard consume(58) else { throw ScanError.malformed }
+            skipWhitespace()
+            let isDirectNumber = current == 45 || current.map { (48 ... 57).contains($0) } == true
+            lastNumberToken = nil
             if try parseValue(path: path + [key]) {
                 return true
             }
+            if isDirectNumber, isLayoutPath(path), let token = lastNumberToken {
+                widthTokens[key] = token
+            }
             skipWhitespace()
             if consume(125) {
+                checkWidthOrder(widthTokens)
                 return false
             }
             guard consume(44) else { throw ScanError.malformed }
@@ -226,10 +236,64 @@ private struct RoamPiJSONDuplicateKeyScanner {
         throw ScanError.malformed
     }
 
+    private func isLayoutPath(_ path: [String]) -> Bool {
+        path.first == "pages" && Array(path.suffix(3)) == ["blocks", "[]", "layout"]
+    }
+
     private func isWidthPath(_ path: [String]) -> Bool {
-        guard path.first == "pages", path.count >= 5, let key = path.last else { return false }
-        return Array(path.suffix(4).dropLast()) == ["blocks", "[]", "layout"] &&
+        guard let key = path.last else { return false }
+        return isLayoutPath(Array(path.dropLast())) &&
             ["minimumWidth", "preferredWidth", "maximumWidth"].contains(key)
+    }
+
+    private mutating func checkWidthOrder(_ tokens: [String: String]) {
+        guard let minimum = tokens["minimumWidth"],
+              let preferred = tokens["preferredWidth"],
+              Double(minimum) == Double(preferred),
+              comparePositiveNumbers(preferred, minimum) == .orderedAscending
+        else { return }
+        containsRoundedInvertedWidth = true
+    }
+
+    private func comparePositiveNumbers(_ left: String, _ right: String) -> ComparisonResult {
+        guard let leftParts = normalizedPositiveNumber(left),
+              let rightParts = normalizedPositiveNumber(right)
+        else { return .orderedSame }
+        if leftParts.power != rightParts.power {
+            return leftParts.power < rightParts.power ? .orderedAscending : .orderedDescending
+        }
+        let count = max(leftParts.digits.count, rightParts.digits.count)
+        let leftDigits = leftParts.digits + Array(repeating: Character("0"), count: count - leftParts.digits.count)
+        let rightDigits = rightParts.digits + Array(repeating: Character("0"), count: count - rightParts.digits.count)
+        if leftDigits == rightDigits {
+            return .orderedSame
+        }
+        return leftDigits.lexicographicallyPrecedes(rightDigits) ? .orderedAscending : .orderedDescending
+    }
+
+    private func normalizedPositiveNumber(_ token: String) -> (power: Int, digits: [Character])? {
+        guard !token.hasPrefix("-") else { return nil }
+        let parts = token.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "e" || $0 == "E" })
+        guard parts.count <= 2 else { return nil }
+        let exponent: Int
+        if parts.count == 2 {
+            guard let parsed = Int(parts[1]) else { return nil }
+            exponent = parsed
+        } else {
+            exponent = 0
+        }
+        let coefficient = parts[0]
+        let integerDigits = coefficient.firstIndex(of: ".").map {
+            coefficient.distance(from: coefficient.startIndex, to: $0)
+        } ?? coefficient.count
+        let digits = coefficient.filter(\.isNumber)
+        guard let firstNonzero = digits.firstIndex(where: { $0 != "0" }) else {
+            return (0, ["0"])
+        }
+        let leadingZeros = digits.distance(from: digits.startIndex, to: firstNonzero)
+        let (power, overflow) = exponent.addingReportingOverflow(integerDigits - 1 - leadingZeros)
+        guard !overflow else { return nil }
+        return (power, Array(digits[firstNonzero...]))
     }
 
     private mutating func parsePrimitive(widthBounded: Bool) {
@@ -239,6 +303,7 @@ private struct RoamPiJSONDuplicateKeyScanner {
         }
         guard start < index, bytes[start] == 45 || (48 ... 57).contains(bytes[start]) else { return }
         let token = String(decoding: bytes[start ..< index], as: UTF8.self)
+        lastNumberToken = token
         let significand = token.split(whereSeparator: { $0 == "e" || $0 == "E" }).first ?? ""
         let hasNonzeroDigit = significand.contains(where: { ("1" ... "9").contains($0) })
         guard let value = Double(token),
@@ -384,7 +449,7 @@ public enum RoamPiConfigurationParser {
                     diagnostics: [.init(code: .duplicateKey, location: "$[?]")]
                 )
             }
-            if scanner.containsUnsupportedNumber {
+            if scanner.containsUnsupportedNumber || scanner.containsRoundedInvertedWidth {
                 return .init(
                     configuration: nil,
                     diagnostics: [.init(code: .invalidValue, location: "$[?]")]
