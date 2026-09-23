@@ -243,14 +243,25 @@ def prohibited_qualifier_sequence(value: str) -> bool:
         return False
     remainder = value
     while remainder:
-        if remainder in {"s", "es"} or remainder.isdigit():
-            return True
-        if remainder.startswith("v") and len(remainder) > 1 and remainder[1:].isdigit():
-            return True
         qualifier = next((item for item in PROHIBITED_QUALIFIERS if remainder.startswith(item)), None)
-        if qualifier is None:
-            return False
-        remainder = remainder[len(qualifier):]
+        if qualifier is not None:
+            remainder = remainder[len(qualifier):]
+            continue
+        version = re.match(r"v[0-9]+", remainder)
+        if version is not None:
+            remainder = remainder[version.end():]
+            continue
+        digits = re.match(r"[0-9]+", remainder)
+        if digits is not None:
+            remainder = remainder[digits.end():]
+            continue
+        if remainder.startswith("es"):
+            remainder = remainder[2:]
+            continue
+        if remainder.startswith("s"):
+            remainder = remainder[1:]
+            continue
+        return False
     return True
 
 

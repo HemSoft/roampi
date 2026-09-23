@@ -19,10 +19,21 @@
   "pages": [],
   "dataSources": [
     {
-      "id": "unsafe-static",
-      "type": "static",
-      "value": {
-        "githubPatV2Value": "not-a-real-token"
+      "id": "exact-required",
+      "type": "command",
+      "command": "printf '{}'",
+      "targetMachineID": "home",
+      "workingDirectory": "/tmp",
+      "resultSchema": {
+        "type": "object",
+        "properties": {
+          "é": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "e\u0301"
+        ]
       }
     }
   ],

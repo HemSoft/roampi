@@ -929,11 +929,13 @@ public enum RoamPiConfigurationParser {
         if schema.required?.count ?? 0 > 256 {
             append(.invalidValue, at: path + ".required", to: &diagnostics)
         }
-        var requiredNames = Set<String>()
+        let propertyNames = Set(properties.keys.map { $0.unicodeScalars.map(\.value) })
+        var requiredNames = Set<[UInt32]>()
         for (index, required) in (schema.required ?? []).enumerated() {
-            if !requiredNames.insert(required).inserted {
+            let identity = required.unicodeScalars.map(\.value)
+            if !requiredNames.insert(identity).inserted {
                 append(.duplicateIdentifier, at: path + ".required[\(index)]", to: &diagnostics)
-            } else if properties[required] == nil {
+            } else if !propertyNames.contains(identity) {
                 append(.invalidReference, at: path + ".required[\(index)]", to: &diagnostics)
             }
         }
@@ -1235,16 +1237,31 @@ public enum RoamPiConfigurationParser {
         guard !value.isEmpty else { return false }
         var remainder = value[...]
         while !remainder.isEmpty {
-            if remainder == "s" || remainder == "es" || remainder.allSatisfy(\.isNumber) {
-                return true
+            if let qualifier = prohibitedKeyQualifiers.first(where: { remainder.hasPrefix($0) }) {
+                remainder = remainder.dropFirst(qualifier.count)
+                continue
             }
-            if remainder.hasPrefix("v"), remainder.dropFirst().allSatisfy(\.isNumber), remainder.count > 1 {
-                return true
+            if remainder.hasPrefix("v") {
+                let digits = remainder.dropFirst().prefix(while: \.isNumber)
+                if !digits.isEmpty {
+                    remainder = remainder.dropFirst(digits.count + 1)
+                    continue
+                }
             }
-            guard let qualifier = prohibitedKeyQualifiers.first(where: { remainder.hasPrefix($0) }) else {
-                return false
+            let digits = remainder.prefix(while: \.isNumber)
+            if !digits.isEmpty {
+                remainder = remainder.dropFirst(digits.count)
+                continue
             }
-            remainder = remainder.dropFirst(qualifier.count)
+            if remainder.hasPrefix("es") {
+                remainder = remainder.dropFirst(2)
+                continue
+            }
+            if remainder.hasPrefix("s") {
+                remainder = remainder.dropFirst()
+                continue
+            }
+            return false
         }
         return true
     }
