@@ -20,9 +20,12 @@ def reject_nonstandard_constant(value: str) -> None:
 
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    normalized_keys: set[str] = set()
     for key, value in pairs:
-        if key in result:
+        normalized = unicodedata.normalize("NFC", key)
+        if normalized in normalized_keys:
             raise ValueError("duplicate JSON object key")
+        normalized_keys.add(normalized)
         result[key] = value
     return result
 

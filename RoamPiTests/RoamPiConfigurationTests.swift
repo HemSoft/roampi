@@ -481,6 +481,42 @@ struct RoamPiConfigurationTests {
         }
     }
 
+    @Test("Project source validation follows discovered-only precedence")
+    func discoveredOnlyProjectSource() throws {
+        var machineObject = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var machineFields = try #require(machineObject["machine"] as? [String: Any])
+        machineFields["fallbackBehavior"] = "discoveredOnly"
+        machineObject["machine"] = machineFields
+        let machine = try #require(try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: machineObject),
+            source: .machine
+        ).configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "roampi-app", pageID: "discovered-page"),
+            source: .project(root: "/srv/discovered-roampi", machineID: "build-host")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(
+            machine: machine,
+            projects: [project],
+            discoveredProjects: [
+                .init(
+                    id: "roampi-app",
+                    machineID: "build-host",
+                    path: "/srv/discovered-roampi",
+                    name: "Discovered RoamPi"
+                ),
+            ]
+        )
+        let effective = try #require(merged.projects.first(where: { $0.id == "roampi-app" }))
+
+        #expect(effective.machineID == "build-host")
+        #expect(effective.path == "/srv/discovered-roampi")
+        #expect(merged.pages.contains(where: { $0.id == "project%roampi-app%discovered-page" }))
+    }
+
     @Test("Project metadata enriches a matching discovered project")
     func discoveredProjectMetadata() throws {
         let machine = try #require(RoamPiConfigurationParser.parse(

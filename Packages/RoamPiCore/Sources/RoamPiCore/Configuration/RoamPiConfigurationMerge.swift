@@ -228,11 +228,20 @@ public enum RoamPiConfigurationMerger {
         discoveredProjects: [DiscoveredRoamPiProject]
     ) throws {
         let machineIDs = Set([machine.homeHost.id] + machine.machines.map(\.id))
-        let declaredByID = Dictionary(machine.projects.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let discoveredByID = Dictionary(
-            discoveredProjects.map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let declaredSources = machine.projects.map { ($0.id, (machineID: $0.machineID, path: $0.path)) }
+        let discoveredSources = discoveredProjects.map { ($0.id, (machineID: $0.machineID, path: $0.path)) }
+        var effectiveSources: [String: (machineID: String, path: String)]
+        switch machine.fallbackBehavior {
+        case .declaredOnly:
+            effectiveSources = Dictionary(declaredSources, uniquingKeysWith: { first, _ in first })
+        case .includeDiscovered:
+            effectiveSources = Dictionary(discoveredSources, uniquingKeysWith: { first, _ in first })
+            for (identifier, source) in declaredSources {
+                effectiveSources[identifier] = source
+            }
+        case .discoveredOnly:
+            effectiveSources = Dictionary(discoveredSources, uniquingKeysWith: { first, _ in first })
+        }
 
         for configuration in projectConfigurations {
             guard let contribution = configuration.document.project,
@@ -247,12 +256,8 @@ public enum RoamPiConfigurationMerger {
                     location: "$projects[?].source.machineID"
                 )
             }
-            if let declared = declaredByID[contribution.id] {
-                guard declared.machineID == sourceMachineID, declared.path == sourceRoot else {
-                    throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects[?].source")
-                }
-            } else if let discovered = discoveredByID[contribution.id] {
-                guard discovered.machineID == sourceMachineID, discovered.path == sourceRoot else {
+            if let effective = effectiveSources[contribution.id] {
+                guard effective.machineID == sourceMachineID, effective.path == sourceRoot else {
                     throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects[?].source")
                 }
             }

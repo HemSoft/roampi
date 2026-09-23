@@ -13,6 +13,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" \
 python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/roampi.schema.json" \
     "$repo_root/docs/examples/invalid/boolean-version.roampi" \
+    "$repo_root/docs/examples/invalid/canonical-duplicate-key.roampi" \
     "$repo_root/docs/examples/invalid/control-character-name.roampi" \
     "$repo_root/docs/examples/invalid/control-character-identifier.roampi" \
     "$repo_root/docs/examples/invalid/duplicate-json-key.roampi" \
@@ -66,6 +67,7 @@ run_validator --machine "$repo_root/docs/examples/deep-valid-result-schema.roamp
 run_validator --project validation-host /Users/developer/Projects/SampleService "$repo_root/docs/examples/project.roampi"
 
 run_validator --expect 'invalid_value@$.version' --machine "$repo_root/docs/examples/invalid/boolean-version.roampi"
+run_validator --expect 'duplicate_key@$[?]' --machine "$repo_root/docs/examples/invalid/canonical-duplicate-key.roampi"
 run_validator --expect 'invalid_value@$.machine.homeHost.name' --machine "$repo_root/docs/examples/invalid/control-character-name.roampi"
 run_validator --expect 'invalid_value@$.machine.homeHost.id' --machine "$repo_root/docs/examples/invalid/control-character-identifier.roampi"
 run_validator --expect 'unsupported_version@$.version' --machine "$repo_root/docs/examples/invalid/forward-version.roampi"
