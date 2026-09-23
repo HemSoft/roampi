@@ -238,7 +238,7 @@ struct RoamPiConfigurationTests {
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["apiKeys": ["not-a-real-key"]],
+            "value": ["sshPrivateKeys": ["not-a-real-key"]],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(
@@ -667,6 +667,29 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics.contains(.init(
             code: .invalidValue,
             location: "$.dataSources[0].targetMachineID"
+        )))
+    }
+
+    @Test("Optional data-source fields are validated in every variant")
+    func optionalDataSourceFieldValidation() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "static-with-invalid-path",
+            "type": "static",
+            "value": true,
+            "workingDirectory": "relative",
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .unsafePath,
+            location: "$.dataSources[0].workingDirectory"
         )))
     }
 

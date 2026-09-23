@@ -235,10 +235,40 @@ private struct RoamPiJSONDuplicateKeyScanner {
         let token = String(decoding: bytes[start ..< index], as: UTF8.self)
         let significand = token.split(whereSeparator: { $0 == "e" || $0 == "E" }).first ?? ""
         let hasNonzeroDigit = significand.contains(where: { ("1" ... "9").contains($0) })
-        guard let value = Double(token), value.isFinite, value != 0 || !hasNonzeroDigit else {
+        guard let value = Double(token),
+              value.isFinite,
+              value != 0 || !hasNonzeroDigit,
+              hasSupportedMinimumMagnitude(token)
+        else {
             containsUnsupportedNumber = true
             return
         }
+    }
+
+    private func hasSupportedMinimumMagnitude(_ token: String) -> Bool {
+        let unsigned = token.hasPrefix("-") ? String(token.dropFirst()) : token
+        let parts = unsigned.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "e" || $0 == "E" })
+        guard parts.count <= 2 else { return false }
+        let exponent: Int
+        if parts.count == 2 {
+            guard let parsed = Int(parts[1]) else { return false }
+            exponent = parsed
+        } else {
+            exponent = 0
+        }
+        let coefficient = parts[0]
+        let integerDigits = coefficient.firstIndex(of: ".").map {
+            coefficient.distance(from: coefficient.startIndex, to: $0)
+        } ?? coefficient.count
+        let digits = coefficient.filter(\.isNumber)
+        guard let firstNonzero = digits.firstIndex(where: { $0 != "0" }) else { return true }
+        let leadingZeros = digits.distance(from: digits.startIndex, to: firstNonzero)
+        let (basePower, overflow) = exponent.addingReportingOverflow(integerDigits - 1 - leadingZeros)
+        guard !overflow else { return false }
+        if basePower != -324 {
+            return basePower > -324
+        }
+        return digits[firstNonzero] >= "5"
     }
 
     private mutating func skipWhitespace() {
@@ -697,6 +727,23 @@ public enum RoamPiConfigurationParser {
         diagnostics: inout [RoamPiConfigurationDiagnostic]
     ) {
         registry.register(dataSource.id, at: path + ".id", diagnostics: &diagnostics)
+        if let command = dataSource.command {
+            if command.isEmpty {
+                append(.missingValue, at: path + ".command", to: &diagnostics)
+            } else if command.unicodeScalars.count > 65536 {
+                append(.invalidValue, at: path + ".command", to: &diagnostics)
+            }
+        }
+        if let target = dataSource.targetMachineID, !isValidIdentifier(target) {
+            append(.invalidValue, at: path + ".targetMachineID", to: &diagnostics)
+        }
+        if let directory = dataSource.workingDirectory, !isSafeAbsolutePath(directory) {
+            append(.unsafePath, at: path + ".workingDirectory", to: &diagnostics)
+        }
+        if let schema = dataSource.resultSchema {
+            validateValueSchema(schema, at: path + ".resultSchema", depth: 0, diagnostics: &diagnostics)
+        }
+
         switch dataSource.type {
         case .static:
             if dataSource.value == nil {
@@ -707,27 +754,17 @@ public enum RoamPiConfigurationParser {
                 append(.missingValue, at: path + ".builtin", to: &diagnostics)
             }
         case .command:
-            if dataSource.command?.isEmpty != false {
+            if dataSource.command == nil {
                 append(.missingValue, at: path + ".command", to: &diagnostics)
-            } else if let command = dataSource.command, command.unicodeScalars.count > 65536 {
-                append(.invalidValue, at: path + ".command", to: &diagnostics)
             }
-            if dataSource.targetMachineID?.isEmpty != false {
+            if dataSource.targetMachineID == nil {
                 append(.missingValue, at: path + ".targetMachineID", to: &diagnostics)
-            } else if let target = dataSource.targetMachineID, !isValidIdentifier(target) {
-                append(.invalidValue, at: path + ".targetMachineID", to: &diagnostics)
             }
-            if let directory = dataSource.workingDirectory {
-                if !isSafeAbsolutePath(directory) {
-                    append(.unsafePath, at: path + ".workingDirectory", to: &diagnostics)
-                }
-            } else {
+            if dataSource.workingDirectory == nil {
                 append(.missingValue, at: path + ".workingDirectory", to: &diagnostics)
             }
             if dataSource.resultSchema == nil {
                 append(.missingValue, at: path + ".resultSchema", to: &diagnostics)
-            } else if let schema = dataSource.resultSchema {
-                validateValueSchema(schema, at: path + ".resultSchema", depth: 0, diagnostics: &diagnostics)
             }
         }
     }
@@ -1029,7 +1066,9 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
-        if prohibitedKeys.contains(normalized) || prohibitedKeys.contains(where: normalized.hasSuffix) {
+        if prohibitedKeys.contains(normalized) || prohibitedKeys.contains(where: { key in
+            normalized.hasSuffix(key) || normalized.hasSuffix(key + "s") || normalized.hasSuffix(key + "es")
+        }) {
             return true
         }
         return prohibitedKeys.contains { key in

@@ -21,7 +21,7 @@
     {
       "id": "underflow-number",
       "type": "static",
-      "value": 1e-400
+      "value": 4e-324
     }
   ],
   "actions": [],
