@@ -254,7 +254,7 @@ public enum RoamPiConfigurationMerger {
     }
 
     private static func isSafeAbsolutePath(_ value: String) -> Bool {
-        !value.isEmpty && value.utf8.count <= 256 && value.hasPrefix("/") &&
+        !value.isEmpty && value.unicodeScalars.count <= 256 && value.hasPrefix("/") &&
             !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) &&
             !value.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     }

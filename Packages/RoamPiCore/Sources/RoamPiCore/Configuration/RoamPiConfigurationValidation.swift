@@ -601,7 +601,7 @@ public enum RoamPiConfigurationParser {
         case .markdown:
             if block.content?.isEmpty != false {
                 append(.missingValue, at: path + ".content", to: &diagnostics)
-            } else if let content = block.content, content.utf8.count > 65536 {
+            } else if let content = block.content, content.unicodeScalars.count > 65536 {
                 append(.invalidValue, at: path + ".content", to: &diagnostics)
             }
         case .input:
@@ -619,7 +619,7 @@ public enum RoamPiConfigurationParser {
         case .sessions:
             break
         }
-        if let placeholder = block.placeholder, placeholder.utf8.count > 256 {
+        if let placeholder = block.placeholder, placeholder.unicodeScalars.count > 256 {
             append(.invalidValue, at: path + ".placeholder", to: &diagnostics)
         }
         for (index, child) in block.blocks.enumerated() {
@@ -678,7 +678,7 @@ public enum RoamPiConfigurationParser {
         case .command:
             if dataSource.command?.isEmpty != false {
                 append(.missingValue, at: path + ".command", to: &diagnostics)
-            } else if let command = dataSource.command, command.utf8.count > 65536 {
+            } else if let command = dataSource.command, command.unicodeScalars.count > 65536 {
                 append(.invalidValue, at: path + ".command", to: &diagnostics)
             }
             if dataSource.targetMachineID?.isEmpty != false {
@@ -721,7 +721,7 @@ public enum RoamPiConfigurationParser {
                 if let child = properties[key] {
                     validateValueSchema(
                         child,
-                        at: path + ".properties." + key,
+                        at: path + ".properties[?]",
                         depth: depth + 1,
                         diagnostics: &diagnostics
                     )
@@ -752,13 +752,13 @@ public enum RoamPiConfigurationParser {
         case .prompt:
             if action.prompt?.isEmpty != false || action.command != nil {
                 append(.invalidValue, at: path + ".prompt", to: &diagnostics)
-            } else if let prompt = action.prompt, prompt.utf8.count > 65536 {
+            } else if let prompt = action.prompt, prompt.unicodeScalars.count > 65536 {
                 append(.invalidValue, at: path + ".prompt", to: &diagnostics)
             }
         case .command:
             if action.command?.isEmpty != false || action.prompt != nil {
                 append(.invalidValue, at: path + ".command", to: &diagnostics)
-            } else if let command = action.command, command.utf8.count > 65536 {
+            } else if let command = action.command, command.unicodeScalars.count > 65536 {
                 append(.invalidValue, at: path + ".command", to: &diagnostics)
             }
         }
@@ -1012,7 +1012,7 @@ public enum RoamPiConfigurationParser {
     }
 
     private static func isSafeAbsolutePath(_ value: String) -> Bool {
-        guard value.hasPrefix("/"), value.utf8.count <= 256, !containsControlCharacter(value) else {
+        guard value.hasPrefix("/"), value.unicodeScalars.count <= 256, !containsControlCharacter(value) else {
             return false
         }
         return !value.split(separator: "/", omittingEmptySubsequences: false).contains("..")

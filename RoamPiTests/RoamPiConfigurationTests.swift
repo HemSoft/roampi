@@ -437,6 +437,45 @@ struct RoamPiConfigurationTests {
         )))
     }
 
+    @Test("Placeholder limits count Unicode scalars")
+    func placeholderScalarLimit() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var pages = try #require(object["pages"] as? [[String: Any]])
+        var blocks = try #require(pages[0]["blocks"] as? [[String: Any]])
+        blocks[0]["placeholder"] = String(repeating: "🧭", count: 100)
+        pages[0]["blocks"] = blocks
+        object["pages"] = pages
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration != nil)
+        #expect(result.diagnostics.isEmpty)
+    }
+
+    @Test("Result-schema property names are redacted from diagnostics")
+    func resultSchemaDiagnosticRedaction() {
+        let data = Data(
+            #"{"version":1,"kind":"project","project":{"id":"schema-redaction"},"pages":[],"dataSources":[{"id":"command-data","type":"command","command":"true","targetMachineID":"home","workingDirectory":"/srv/project","resultSchema":{"type":"object","properties":{"prod.example.com":{"type":"array"}}}}],"actions":[],"jobs":[]}"#
+                .utf8
+        )
+
+        let result = RoamPiConfigurationParser.parse(
+            data,
+            source: .project(root: "/Users/developer/Projects/SchemaRedaction")
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .missingValue,
+            location: "$.dataSources[0].resultSchema.properties[?].items"
+        )))
+        #expect(result.diagnostics.allSatisfy { !$0.location.contains("prod.example.com") })
+    }
+
     @Test("Project command data sources reject invalid target identifiers")
     func projectDataSourceTargetIdentifier() {
         let data = Data(
