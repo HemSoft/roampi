@@ -872,6 +872,36 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("Startup records while an interrupt is in flight")
+    func startupRecordsDuringInterrupt() async throws {
+        let transport = StallingWriteRPCTransport()
+        let gate = RequestRegistrationGate()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .seconds(5)
+        )
+        session.setStartupExchangeHook { await gate.pause() }
+        let startup = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        let interrupt = Task { try await session.interrupt() }
+        for _ in 0 ..< 100 where !transport.isWriteStalled {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(session.phase == .interrupted)
+        await gate.release()
+        try await startup.value
+
+        #expect(session.lastExchange?.succeeded == true)
+        try await session.close()
+        _ = try? await interrupt.value
+        #expect(session.phase == .closed)
+    }
+
     @Test("A stalled RPC interrupt publishes its in-flight phase")
     func stalledRPCInterruptPublishesPhase() async throws {
         let transport = StallingWriteRPCTransport()

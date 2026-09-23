@@ -516,7 +516,9 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             }
             let counts = lock.withLock { (responseFrameCount, eventFrameCount) }
             let didRecord = lock.withLock {
-                guard stateMachine.phase == .attached else { return false }
+                guard stateMachine.phase == .attached || stateMachine.phase == .interrupted else {
+                    return false
+                }
                 recordedExchange = ExchangeResult(
                     succeeded: stateResponse.isSuccessResponse(command: "get_state"),
                     diagnostic: nil,
