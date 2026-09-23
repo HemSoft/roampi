@@ -229,7 +229,7 @@ public enum RoamPiConfigurationMerger {
                 throw RoamPiConfigurationDiagnostic(code: .unsafePath, location: path + ".path")
             }
             guard !project.name.isEmpty,
-                  project.name.count <= 128,
+                  project.name.unicodeScalars.count <= 128,
                   !project.name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
             else {
                 throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: path + ".name")

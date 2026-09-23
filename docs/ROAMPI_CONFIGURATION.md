@@ -30,7 +30,7 @@ Every block declares `compactSpan` and `regularSpan` from 1 through 12. Optional
 
 Data sources are one of:
 
-- `static`, containing JSON;
+- `static`, containing JSON; integral values use the exact signed-or-unsigned 64-bit range, while nonintegral values use binary64;
 - `builtin`, naming typed RoamPi machine, project, session, job, or connection state; or
 - `command`, naming a bounded remote command, target machine, required working directory, and result schema. RoamPi must obtain approval for its trust identity before first execution or execution after an identity change; opening or refreshing a page cannot bypass that gate.
 
@@ -63,14 +63,14 @@ Changing any bound value changes the identity and invalidates a prior approval. 
 
 ## Diagnostics
 
-Diagnostics contain only a fixed code and a bounded JSON location. They do not include source values. The standalone validator emits fixed labels or fixture basenames rather than supplied file or project-root paths. Version 1 reports unsupported versions, malformed or oversized JSON, missing or invalid values, duplicate identifiers, unsafe paths, undeclared fields or component types, invalid references, scope violations, and secret-bearing fields.
+Diagnostics contain only a fixed code and a bounded JSON location. They do not include source values. The standalone validator emits fixed labels or fixture basenames rather than supplied file or project-root paths. Version 1 reports unsupported versions, malformed or oversized JSON, duplicate object keys, missing or invalid values, duplicate identifiers, unsafe paths, undeclared fields or component types, invalid references, scope violations, and secret-bearing fields.
 
 ## Examples
 
 - [`examples/minimal.roampi`](examples/minimal.roampi) is the smallest machine configuration.
 - [`examples/developer-dashboard.roampi`](examples/developer-dashboard.roampi) is a fictional multi-machine dashboard with native blocks, data sources, actions, and a durable job.
 - [`examples/project.roampi`](examples/project.roampi) is a fictional repository contribution. Validate it with the developer dashboard to exercise merging and namespace isolation.
-- [`examples/invalid`](examples/invalid) contains fixtures for control-character names, forward versions, duplicate identifiers, missing jobs sources, secret fields, unsafe paths, and undeclared components.
+- [`examples/invalid`](examples/invalid) contains fixtures for control-character names, forward versions, duplicate identifiers, missing jobs sources, oversized integers, secret fields, unsafe paths, and undeclared components.
 
 Validate the schema, every valid example, and every expected invalid fixture with:
 

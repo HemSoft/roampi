@@ -9,6 +9,7 @@ public enum RoamPiConfigurationDiagnosticCode: String, Codable, Sendable {
     case missingValue = "missing_value"
     case invalidValue = "invalid_value"
     case duplicateIdentifier = "duplicate_identifier"
+    case duplicateKey = "duplicate_key"
     case unsafePath = "unsafe_path"
     case undeclaredType = "undeclared_type"
     case undeclaredField = "undeclared_field"
@@ -110,6 +111,138 @@ private final class RoamPiConfigurationIdentifierRegistry {
     }
 }
 
+private struct RoamPiJSONDuplicateKeyScanner {
+    private enum ScanError: Error {
+        case malformed
+    }
+
+    private let bytes: [UInt8]
+    private var index = 0
+
+    init(data: Data) {
+        bytes = Array(data)
+    }
+
+    mutating func containsDuplicateKey() throws -> Bool {
+        skipWhitespace()
+        let duplicate = try parseValue()
+        if duplicate {
+            return true
+        }
+        skipWhitespace()
+        guard index == bytes.count else { throw ScanError.malformed }
+        return false
+    }
+
+    private mutating func parseValue() throws -> Bool {
+        skipWhitespace()
+        guard let byte = current else { throw ScanError.malformed }
+        switch byte {
+        case 123:
+            return try parseObject()
+        case 91:
+            return try parseArray()
+        case 34:
+            _ = try parseString()
+            return false
+        default:
+            parsePrimitive()
+            return false
+        }
+    }
+
+    private mutating func parseObject() throws -> Bool {
+        index += 1
+        skipWhitespace()
+        if consume(125) {
+            return false
+        }
+        var keys = Set<String>()
+        while true {
+            skipWhitespace()
+            let key = try parseString()
+            if !keys.insert(key).inserted {
+                return true
+            }
+            skipWhitespace()
+            guard consume(58) else { throw ScanError.malformed }
+            if try parseValue() {
+                return true
+            }
+            skipWhitespace()
+            if consume(125) {
+                return false
+            }
+            guard consume(44) else { throw ScanError.malformed }
+        }
+    }
+
+    private mutating func parseArray() throws -> Bool {
+        index += 1
+        skipWhitespace()
+        if consume(93) {
+            return false
+        }
+        while true {
+            if try parseValue() {
+                return true
+            }
+            skipWhitespace()
+            if consume(93) {
+                return false
+            }
+            guard consume(44) else { throw ScanError.malformed }
+        }
+    }
+
+    private mutating func parseString() throws -> String {
+        guard consume(34) else { throw ScanError.malformed }
+        let contentStart = index
+        var escaped = false
+        while let byte = current {
+            if escaped {
+                escaped = false
+                index += 1
+            } else if byte == 92 {
+                escaped = true
+                index += 1
+            } else if byte == 34 {
+                let contentEnd = index
+                index += 1
+                var quoted = Data([34])
+                quoted.append(contentsOf: bytes[contentStart ..< contentEnd])
+                quoted.append(34)
+                return try JSONDecoder().decode(String.self, from: quoted)
+            } else {
+                index += 1
+            }
+        }
+        throw ScanError.malformed
+    }
+
+    private mutating func parsePrimitive() {
+        while let byte = current, ![9, 10, 13, 32, 44, 93, 125].contains(byte) {
+            index += 1
+        }
+    }
+
+    private mutating func skipWhitespace() {
+        while let byte = current, [9, 10, 13, 32].contains(byte) {
+            index += 1
+        }
+    }
+
+    private mutating func consume(_ byte: UInt8) -> Bool {
+        guard current == byte else { return false }
+        index += 1
+        return true
+    }
+
+    private var current: UInt8? {
+        index < bytes.count ? bytes[index] : nil
+    }
+}
+
 public enum RoamPiConfigurationParser {
     public static let maximumDocumentBytes = 1_048_576
     private static let maximumDiagnostics = 32
@@ -150,6 +283,20 @@ public enum RoamPiConfigurationParser {
         guard diagnostics.isEmpty else {
             return .init(configuration: nil, diagnostics: diagnostics)
         }
+        do {
+            var scanner = RoamPiJSONDuplicateKeyScanner(data: data)
+            if try scanner.containsDuplicateKey() {
+                return .init(
+                    configuration: nil,
+                    diagnostics: [.init(code: .duplicateKey, location: "$[?]")]
+                )
+            }
+        } catch {
+            return .init(
+                configuration: nil,
+                diagnostics: [.init(code: .malformedJSON, location: "$")]
+            )
+        }
         scanForSecretFields(object, path: "$", diagnostics: &diagnostics)
         if let version = object["version"] as? NSNumber, version.intValue != 1 {
             append(.unsupportedVersion, at: "$.version", to: &diagnostics)
@@ -159,9 +306,22 @@ public enum RoamPiConfigurationParser {
             return .init(configuration: nil, diagnostics: diagnostics)
         }
 
+        let canonicalInput: Data
+        do {
+            canonicalInput = try JSONSerialization.data(
+                withJSONObject: object,
+                options: [.sortedKeys, .withoutEscapingSlashes]
+            )
+        } catch {
+            return .init(
+                configuration: nil,
+                diagnostics: [.init(code: .malformedJSON, location: "$")]
+            )
+        }
+
         let document: RoamPiConfigurationDocument
         do {
-            document = try JSONDecoder().decode(RoamPiConfigurationDocument.self, from: data)
+            document = try JSONDecoder().decode(RoamPiConfigurationDocument.self, from: canonicalInput)
         } catch let error as DecodingError {
             return .init(configuration: nil, diagnostics: [diagnostic(for: error)])
         } catch {
@@ -189,20 +349,8 @@ public enum RoamPiConfigurationParser {
             return .init(configuration: nil, diagnostics: diagnostics)
         }
 
-        let canonicalData: Data
-        do {
-            canonicalData = try JSONSerialization.data(
-                withJSONObject: object,
-                options: [.sortedKeys, .withoutEscapingSlashes]
-            )
-        } catch {
-            return .init(
-                configuration: nil,
-                diagnostics: [.init(code: .malformedJSON, location: "$")]
-            )
-        }
         return .init(
-            configuration: .init(document: document, source: source, canonicalData: canonicalData),
+            configuration: .init(document: document, source: source, canonicalData: canonicalInput),
             diagnostics: []
         )
     }
@@ -386,13 +534,15 @@ public enum RoamPiConfigurationParser {
         if let group = machine.group, !isValidDisplayName(group) {
             append(.invalidValue, at: path + ".group", to: &diagnostics)
         }
-        if machine.host.isEmpty || machine.host.count > 253 || containsControlCharacter(machine.host) {
+        if machine.host.isEmpty || machine.host.unicodeScalars.count > 253 || containsControlCharacter(machine.host) {
             append(.invalidValue, at: path + ".host", to: &diagnostics)
         }
         if !(1 ... 65535).contains(machine.port) {
             append(.invalidValue, at: path + ".port", to: &diagnostics)
         }
-        if machine.username.isEmpty || machine.username.count > 64 || containsControlCharacter(machine.username) {
+        if machine.username.isEmpty || machine.username.unicodeScalars
+            .count > 64 || containsControlCharacter(machine.username)
+        {
             append(.invalidValue, at: path + ".username", to: &diagnostics)
         }
     }
@@ -847,7 +997,7 @@ public enum RoamPiConfigurationParser {
     }
 
     private static func isValidDisplayName(_ value: String) -> Bool {
-        !value.isEmpty && value.count <= 128 && !containsControlCharacter(value)
+        !value.isEmpty && value.unicodeScalars.count <= 128 && !containsControlCharacter(value)
     }
 
     private static func isValidIdentifier(_ value: String) -> Bool {

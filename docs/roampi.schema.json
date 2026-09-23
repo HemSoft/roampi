@@ -42,6 +42,17 @@
       "maxLength": 256,
       "pattern": "^/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F]*$"
     },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "string" },
+        { "type": "integer", "minimum": -9223372036854775808, "maximum": 18446744073709551615 },
+        { "type": "number", "not": { "type": "integer" } },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
     "machine": {
       "type": "object",
       "additionalProperties": false,
@@ -183,7 +194,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "type": { "enum": ["static", "builtin", "command"] },
-        "value": true,
+        "value": { "$ref": "#/$defs/jsonValue" },
         "builtin": { "enum": ["machines", "projects", "sessions", "jobs", "connectionStatus"] },
         "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
         "targetMachineID": { "$ref": "#/$defs/identifier" },

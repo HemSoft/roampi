@@ -39,6 +39,11 @@ struct RoamPiConfigurationTests {
                 RoamPiConfigurationDiagnosticCode.duplicateIdentifier,
                 "$.machine.machines[0].id"
             ),
+            (
+                "oversized-integer.roampi",
+                RoamPiConfigurationDiagnosticCode.invalidValue,
+                "$.dataSources[0].value"
+            ),
             ("secret-field.roampi", RoamPiConfigurationDiagnosticCode.secretField, "$[?]"),
             ("unsafe-path.roampi", RoamPiConfigurationDiagnosticCode.unsafePath, "$.machine.projects[0].path"),
         ]
@@ -85,6 +90,44 @@ struct RoamPiConfigurationTests {
 
         #expect(result.configuration?.document.dataSources.first?.value == .integer(9_007_199_254_740_993))
         #expect(result.diagnostics.isEmpty)
+    }
+
+    @Test("Duplicate JSON object keys are rejected before decoding")
+    func duplicateJSONKeyCanonicalization() {
+        let source = String(decoding: minimalMachineData(), as: UTF8.self)
+        let data = Data(source.replacingOccurrences(
+            of: #""dataSources":[]"#,
+            with: #""dataSources":[{"id":"duplicate-value","type":"static","value":{"token":"not-a-real-token"},"\u0076alue":{}}]"#
+        ).utf8)
+
+        let result = RoamPiConfigurationParser.parse(data, source: .machine)
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .duplicateKey, location: "$[?]"),
+        ])
+    }
+
+    @Test("Display-name limits count Unicode scalars")
+    func displayNameScalarLimit() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        var machine = try #require(object["machine"] as? [String: Any])
+        var homeHost = try #require(machine["homeHost"] as? [String: Any])
+        homeHost["name"] = "H" + String(repeating: "\u{0301}", count: 128)
+        machine["homeHost"] = homeHost
+        object["machine"] = machine
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .invalidValue,
+            location: "$.machine.homeHost.name"
+        )))
     }
 
     @Test("Undeclared fields are rejected instead of ignored by Codable")

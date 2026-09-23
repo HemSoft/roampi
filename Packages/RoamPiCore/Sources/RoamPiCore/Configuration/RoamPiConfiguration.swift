@@ -289,6 +289,11 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
             self = .integer(value)
         } else if let value = try? container.decode(UInt64.self) {
             self = .unsignedInteger(value)
+        } else if let value = try? container.decode(Decimal.self), Self.isIntegral(value) {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "JSON integer is outside the supported 64-bit range"
+            )
         } else if let value = try? container.decode(Double.self) {
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
@@ -300,6 +305,13 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
         } else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
         }
+    }
+
+    private static func isIntegral(_ value: Decimal) -> Bool {
+        var value = value
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, 0, .plain)
+        return rounded == value
     }
 
     public func encode(to encoder: Encoder) throws {
