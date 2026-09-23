@@ -16,6 +16,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/control-character-name.roampi" \
     "$repo_root/docs/examples/invalid/control-character-identifier.roampi" \
     "$repo_root/docs/examples/invalid/duplicate-json-key.roampi" \
+    "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi" \
     "$repo_root/docs/examples/invalid/deep-result-schema.roampi" \
     "$repo_root/docs/examples/invalid/forward-version.roampi" \
     "$repo_root/docs/examples/invalid/inverted-widths.roampi" \

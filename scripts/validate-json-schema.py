@@ -80,6 +80,57 @@ def type_matches(value: Any, expected: str) -> bool:
     }[expected]
 
 
+def contract_identifiers(value: Any) -> list[tuple[str, str]]:
+    if not isinstance(value, dict):
+        return []
+    identifiers: list[tuple[str, str]] = []
+
+    def add(item: Any, path: str) -> None:
+        if isinstance(item, dict) and isinstance(item.get("id"), str):
+            identifiers.append((item["id"], f"{path}.id"))
+
+    def add_pages(pages: Any, path: str) -> None:
+        if not isinstance(pages, list):
+            return
+        for index, page in enumerate(pages):
+            page_path = f"{path}[{index}]"
+            add(page, page_path)
+            if isinstance(page, dict):
+                blocks = page.get("blocks", [])
+                if isinstance(blocks, list):
+                    for block_index, block in enumerate(blocks):
+                        add(block, f"{page_path}.blocks[{block_index}]")
+                add_pages(page.get("children"), f"{page_path}.children")
+
+    machine = value.get("machine")
+    if isinstance(machine, dict):
+        add(machine.get("homeHost"), "$.machine.homeHost")
+        for collection in ("machines", "projects"):
+            items = machine.get(collection, [])
+            if isinstance(items, list):
+                for index, item in enumerate(items):
+                    add(item, f"$.machine.{collection}[{index}]")
+    add(value.get("project"), "$.project")
+    add_pages(value.get("pages"), "$.pages")
+    for collection in ("dataSources", "actions", "jobs"):
+        items = value.get(collection, [])
+        if isinstance(items, list):
+            for index, item in enumerate(items):
+                add(item, f"$.{collection}[{index}]")
+    return identifiers
+
+
+def validate_unique_identifiers(value: Any) -> list[str]:
+    errors: list[str] = []
+    seen: set[str] = set()
+    for identifier, path in contract_identifiers(value):
+        if identifier in seen:
+            errors.append(f"{path}: identifier is not unique")
+        else:
+            seen.add(identifier)
+    return errors
+
+
 def validate_document_depth(value: Any, path: str, depth: int, maximum: int) -> list[str]:
     if depth > maximum:
         return [f"{path}: document exceeds maximum depth"]
@@ -121,6 +172,8 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
     errors: list[str] = []
     if "x-roampi-max-document-depth" in schema:
         errors.extend(validate_document_depth(value, path, 0, schema["x-roampi-max-document-depth"]))
+    if schema.get("x-roampi-unique-identifiers"):
+        errors.extend(validate_unique_identifiers(value))
     expected_type = schema.get("type")
     if expected_type is not None:
         allowed = [expected_type] if isinstance(expected_type, str) else expected_type

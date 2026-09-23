@@ -453,6 +453,37 @@ struct RoamPiConfigurationTests {
         }
     }
 
+    @Test("Project metadata enriches a matching discovered project")
+    func discoveredProjectMetadata() throws {
+        let machine = try #require(RoamPiConfigurationParser.parse(
+            fixture("developer-dashboard.roampi"),
+            source: .machine
+        ).configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .project(root: "/Users/developer/Projects/SampleService", machineID: "studio")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(
+            machine: machine,
+            projects: [project],
+            discoveredProjects: [
+                .init(
+                    id: "sample-service",
+                    machineID: "studio",
+                    path: "/Users/developer/Projects/SampleService",
+                    name: "Discovered Service"
+                ),
+            ]
+        )
+        let effective = try #require(merged.projects.first(where: { $0.id == "sample-service" }))
+
+        #expect(effective.name == "Sample Service")
+        #expect(effective.group == "Examples")
+        #expect(effective.visible)
+        #expect(effective.discovery == .session)
+    }
+
     @Test("Project merge order does not depend on input order")
     func deterministicProjectOrder() throws {
         let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)

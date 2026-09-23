@@ -4,6 +4,7 @@
   "title": "RoamPi configuration version 1",
   "type": "object",
   "x-roampi-max-document-depth": 64,
+  "x-roampi-unique-identifiers": true,
   "additionalProperties": false,
   "required": ["version", "kind", "pages", "dataSources", "actions", "jobs"],
   "properties": {

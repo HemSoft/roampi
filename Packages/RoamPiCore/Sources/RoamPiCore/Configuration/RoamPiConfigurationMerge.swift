@@ -331,19 +331,33 @@ public enum RoamPiConfigurationMerger {
 
         for configuration in projectConfigurations {
             guard let contribution = configuration.document.project,
-                  identifiers.insert(contribution.id).inserted,
                   let root = configuration.source.projectRoot,
                   let sourceMachineID = configuration.source.projectMachineID
             else { continue }
-            result.append(RoamPiProject(
-                id: contribution.id,
-                machineID: sourceMachineID,
-                path: root,
-                name: contribution.name ?? contribution.id,
-                group: contribution.group,
-                visible: contribution.visible ?? true,
-                discovery: .explicit
-            ))
+            if let index = result.firstIndex(where: { $0.id == contribution.id }) {
+                guard result[index].discovery == .session else { continue }
+                let discovered = result[index]
+                result[index] = RoamPiProject(
+                    id: discovered.id,
+                    machineID: discovered.machineID,
+                    path: discovered.path,
+                    name: contribution.name ?? discovered.name,
+                    group: contribution.group ?? discovered.group,
+                    visible: contribution.visible ?? discovered.visible,
+                    discovery: .session
+                )
+            } else {
+                _ = identifiers.insert(contribution.id)
+                result.append(RoamPiProject(
+                    id: contribution.id,
+                    machineID: sourceMachineID,
+                    path: root,
+                    name: contribution.name ?? contribution.id,
+                    group: contribution.group,
+                    visible: contribution.visible ?? true,
+                    discovery: .explicit
+                ))
+            }
         }
         return result
     }

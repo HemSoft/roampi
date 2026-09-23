@@ -2,7 +2,7 @@
 
 RoamPi reads one machine configuration from `~/.pi/agent/.roampi` on the selected home host and an optional project configuration from `<repository>/.roampi`. The loader binds each project file to the machine from which it was read; that source machine remains the effective project's SSH destination. Both files are untrusted JSON. RoamPi validates the entire update before replacing the last-known-good configuration.
 
-The normative schema is [`roampi.schema.json`](roampi.schema.json). The Swift models and behavioral validator live in `RoamPiCore/Configuration`. Documents allow at most 64 nested JSON container levels, declared by `x-roampi-max-document-depth` and enforced before adoption. Bounded names, hosts, usernames, and paths declare `x-roampi-no-control-characters`, covering Unicode control and format characters.
+The normative schema is [`roampi.schema.json`](roampi.schema.json). The Swift models and behavioral validator live in `RoamPiCore/Configuration`. Documents allow at most 64 nested JSON container levels, declared by `x-roampi-max-document-depth` and enforced before adoption. Contract entity identifiers are document-wide unique under `x-roampi-unique-identifiers`. Bounded names, hosts, usernames, and paths declare `x-roampi-no-control-characters`, covering Unicode control and format characters.
 
 ## Scope
 
@@ -43,7 +43,7 @@ RoamPi merges a complete update atomically:
 1. The machine document contributes first in file order.
 2. Project documents sort by `project.id`, then source path.
 3. Every project identifier is rewritten into `project%<escaped-project-id>%<escaped-local-id>`. Dots become `%2E`; source identifiers cannot contain `%`, so the separators and mapping are collision-free, including against machine identifiers. References are rewritten with the same rule, and one project cannot address another project's contributions.
-4. Session-discovered projects must have globally unique bounded identifiers and names plus safe absolute paths. An update with the same discovered identifier on two machines is rejected rather than silently dropping a project. Valid discoveries sort by machine ID, path, then project ID, and explicit machine declarations win when IDs match.
+4. Session-discovered projects must have globally unique bounded identifiers and names plus safe absolute paths. An update with the same discovered identifier on two machines is rejected rather than silently dropping a project. Valid discoveries sort by machine ID, path, then project ID, and explicit machine declarations win when IDs match. A matching project file may enrich a discovered project's optional name, group, and visibility.
 5. Machine `projectOverrides` apply last. They may rename, regroup, hide, disable all contributions from a project, or disable named local contributions.
 
 Duplicate project documents fail the whole update. A project file whose ID already exists must match that project's declared or discovered source machine and root; unknown machines and source mismatches fail the update. If any source is malformed or invalid, RoamPi keeps the previous effective configuration and returns bounded diagnostics. An initial invalid update produces no effective configuration but still leaves fixed Settings and recovery UI available.
