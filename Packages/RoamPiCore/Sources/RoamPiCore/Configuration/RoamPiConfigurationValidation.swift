@@ -599,6 +599,9 @@ public enum RoamPiConfigurationParser {
                 if !machineIDs.contains(project.machineID) {
                     append(.invalidReference, at: path + ".machineID", to: &diagnostics)
                 }
+                if project.discovery != .explicit {
+                    append(.invalidValue, at: path + ".discovery", to: &diagnostics)
+                }
                 if !isSafeAbsolutePath(project.path) {
                     append(.unsafePath, at: path + ".path", to: &diagnostics)
                 }

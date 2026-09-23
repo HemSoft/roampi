@@ -35,6 +35,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/rounded-inverted-width.roampi" \
     "$repo_root/docs/examples/invalid/rounded-number-kind.roampi" \
     "$repo_root/docs/examples/invalid/secret-field.roampi" \
+    "$repo_root/docs/examples/invalid/session-declared-project.roampi" \
     "$repo_root/docs/examples/invalid/underflow-number.roampi" \
     "$repo_root/docs/examples/invalid/underflow-width.roampi" \
     "$repo_root/docs/examples/invalid/unicode-format-name.roampi" \
@@ -83,6 +84,7 @@ run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/rounded-inverted-width.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/rounded-number-kind.roampi"
 run_validator --expect 'secret_field@$.dataSources[0].value[?]' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
+run_validator --expect 'invalid_value@$.machine.projects[0].discovery' --machine "$repo_root/docs/examples/invalid/session-declared-project.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/underflow-number.roampi"
 run_validator --expect 'invalid_value@$[?]' --project validation-host /Users/developer/Projects/UnderflowWidth "$repo_root/docs/examples/invalid/underflow-width.roampi"
 run_validator --expect 'invalid_value@$.machine.homeHost.name' --machine "$repo_root/docs/examples/invalid/unicode-format-name.roampi"
@@ -90,21 +92,27 @@ run_validator --expect 'unsafe_path@$.machine.projects[0].path' --machine "$repo
 run_validator --expect 'undeclared_type@$.pages[0].blocks[0].type' --project validation-host /Users/developer/Projects/Unknown "$repo_root/docs/examples/invalid/unknown-component.roampi"
 
 oversized_document="$(mktemp -t roampi-oversized.XXXXXX)"
-trap 'rm -f "$oversized_document"' EXIT
-python3 - "$repo_root/docs/examples/minimal.roampi" "$oversized_document" <<'PY'
+deep_document="$(mktemp -t roampi-deep.XXXXXX)"
+trap 'rm -f "$oversized_document" "$deep_document"' EXIT
+python3 - "$repo_root/docs/examples/minimal.roampi" "$oversized_document" "$deep_document" <<'PY'
 import json
 import sys
 
 with open(sys.argv[1]) as source:
     document = json.load(source)
-document["dataSources"] = [{"id": "oversized", "type": "static", "value": "x" * 1_048_576}]
+oversized = json.loads(json.dumps(document))
+oversized["dataSources"] = [{"id": "oversized", "type": "static", "value": "x" * 1_048_576}]
 with open(sys.argv[2], "w") as destination:
-    json.dump(document, destination)
+    json.dump(oversized, destination)
+serialized = json.dumps(document)
+serialized = serialized[:-1] + ', "untrusted": ' + ('[' * 1100) + '0' + (']' * 1100) + '}'
+with open(sys.argv[3], "w") as destination:
+    destination.write(serialized)
 PY
 python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
-    "$repo_root/docs/roampi.schema.json" "$oversized_document"
+    "$repo_root/docs/roampi.schema.json" "$oversized_document" "$deep_document"
 run_validator --expect 'document_too_large@$' --machine "$oversized_document"
-rm -f "$oversized_document"
+rm -f "$oversized_document" "$deep_document"
 trap - EXIT
 
 echo "RoamPi configuration examples passed."

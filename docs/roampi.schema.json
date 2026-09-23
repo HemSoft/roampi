@@ -92,7 +92,7 @@
         "name": { "$ref": "#/$defs/name" },
         "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" },
-        "discovery": { "enum": ["explicit", "session"] }
+        "discovery": { "const": "explicit" }
       }
     },
     "projectContribution": {

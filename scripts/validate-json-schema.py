@@ -318,7 +318,9 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
 
     errors: list[str] = []
     if "x-roampi-max-document-depth" in schema:
-        errors.extend(validate_document_depth(value, path, 0, schema["x-roampi-max-document-depth"]))
+        depth_errors = validate_document_depth(value, path, 0, schema["x-roampi-max-document-depth"])
+        if depth_errors:
+            return depth_errors
     if schema.get("x-roampi-unique-identifiers"):
         errors.extend(validate_unique_identifiers(value))
     if schema.get("x-roampi-valid-references"):
@@ -436,7 +438,7 @@ def main() -> int:
             else:
                 value = strict_json_loads(document_data.decode("utf-8"))
                 errors = validate(root, root, value)
-        except (DecimalException, json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        except (DecimalException, json.JSONDecodeError, RecursionError, UnicodeDecodeError, ValueError):
             errors = ["$: malformed JSON"]
         if arguments.expect_invalid:
             if not errors:
