@@ -1,0 +1,85 @@
+{
+  "$schema": "../roampi.schema.json",
+  "version": 1,
+  "kind": "machine",
+  "machine": {
+    "homeHost": {
+      "id": "home",
+      "name": "Home Mac",
+      "host": "home.example.test",
+      "port": 22,
+      "username": "operator",
+      "visible": true
+    },
+    "machines": [],
+    "projects": [],
+    "projectOverrides": [],
+    "fallbackBehavior": "includeDiscovered"
+  },
+  "pages": [],
+  "dataSources": [
+    {
+      "id": "deep",
+      "type": "command",
+      "command": "printf '[]'",
+      "targetMachineID": "home",
+      "workingDirectory": "/tmp",
+      "resultSchema": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "actions": [],
+  "jobs": []
+}

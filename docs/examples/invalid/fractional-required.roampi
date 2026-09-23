@@ -1,0 +1,38 @@
+{
+  "$schema": "../roampi.schema.json",
+  "version": 1,
+  "kind": "machine",
+  "machine": {
+    "homeHost": {
+      "id": "home",
+      "name": "Home Mac",
+      "host": "home.example.test",
+      "port": 22,
+      "username": "operator",
+      "visible": true
+    },
+    "machines": [],
+    "projects": [],
+    "projectOverrides": [],
+    "fallbackBehavior": "includeDiscovered"
+  },
+  "pages": [],
+  "dataSources": [
+    {
+      "id": "bad-required",
+      "type": "command",
+      "command": "printf '{}'",
+      "targetMachineID": "home",
+      "workingDirectory": "/tmp",
+      "resultSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [
+          1.5
+        ]
+      }
+    }
+  ],
+  "actions": [],
+  "jobs": []
+}

@@ -55,6 +55,7 @@ Exit criterion: one physical iOS device can connect over an active network route
 - [ ] Document supported remote systems. Start with macOS and common Linux distributions.
 - [x] Add a small test SSH server fixture for protocol tests. Do not make production tests depend on the live tailnet.
 - [ ] Define typed errors for DNS, reachability, host-key mismatch, SSH authentication, remote prerequisites, tmux, Pi, and provider login.
+- [x] Define version 1 of the validated `.roampi` machine and project configuration contract, including deterministic merge and last-known-good behavior.
 
 ## Phase 2: connection and security model
 

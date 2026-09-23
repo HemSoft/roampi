@@ -1,0 +1,31 @@
+{
+  "$schema": "../../roampi.schema.json",
+  "version": 1,
+  "kind": "project",
+  "project": {
+    "id": "underflow-width"
+  },
+  "pages": [
+    {
+      "id": "dashboard",
+      "title": "Dashboard",
+      "blocks": [
+        {
+          "id": "summary",
+          "type": "markdown",
+          "layout": {
+            "minimumWidth": 1e-400,
+            "compactSpan": 12,
+            "regularSpan": 6
+          },
+          "blocks": [],
+          "content": "Summary"
+        }
+      ],
+      "children": []
+    }
+  ],
+  "dataSources": [],
+  "actions": [],
+  "jobs": []
+}

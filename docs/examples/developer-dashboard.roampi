@@ -1,0 +1,192 @@
+{
+  "$schema": "../roampi.schema.json",
+  "version": 1,
+  "kind": "machine",
+  "machine": {
+    "homeHost": {
+      "id": "studio",
+      "name": "Studio Mac",
+      "host": "studio.example.test",
+      "port": 22,
+      "username": "developer",
+      "group": "Local",
+      "visible": true
+    },
+    "machines": [
+      {
+        "id": "build-host",
+        "name": "Build Host",
+        "host": "build.example.test",
+        "port": 2222,
+        "username": "builder",
+        "group": "Build",
+        "visible": true
+      }
+    ],
+    "projects": [
+      {
+        "id": "roampi-app",
+        "machineID": "studio",
+        "path": "/Users/developer/Projects/RoamPiDemo",
+        "name": "RoamPi Demo",
+        "group": "Apps",
+        "visible": true,
+        "discovery": "explicit"
+      }
+    ],
+    "projectOverrides": [
+      {
+        "projectID": "roampi-app",
+        "name": "RoamPi",
+        "group": "Current",
+        "visible": true,
+        "enabled": true,
+        "disabledContributions": []
+      }
+    ],
+    "fallbackBehavior": "includeDiscovered"
+  },
+  "pages": [
+    {
+      "id": "dashboard",
+      "title": "Developer Dashboard",
+      "systemImage": "rectangle.grid.2x2",
+      "blocks": [
+        {
+          "id": "dashboard-grid",
+          "type": "grid",
+          "title": "Overview",
+          "layout": { "minimumWidth": 280, "preferredWidth": 420, "compactSpan": 12, "regularSpan": 8 },
+          "blocks": [
+            {
+              "id": "connection-status",
+              "type": "status",
+              "layout": { "compactSpan": 12, "regularSpan": 4 },
+              "blocks": [],
+              "dataSourceID": "connection-data"
+            },
+            {
+              "id": "project-list",
+              "type": "list",
+              "layout": { "compactSpan": 12, "regularSpan": 8 },
+              "blocks": [],
+              "dataSourceID": "project-data"
+            },
+            {
+              "id": "welcome-markdown",
+              "type": "markdown",
+              "layout": { "compactSpan": 12, "regularSpan": 12 },
+              "blocks": [],
+              "content": "# Welcome\nChoose a fictional project to continue."
+            }
+          ]
+        },
+        {
+          "id": "control-section",
+          "type": "section",
+          "title": "Controls",
+          "layout": { "compactSpan": 12, "regularSpan": 12 },
+          "blocks": [
+            {
+              "id": "prompt-input",
+              "type": "input",
+              "layout": { "compactSpan": 12, "regularSpan": 8 },
+              "blocks": [],
+              "inputKind": "text",
+              "placeholder": "Describe the next task"
+            },
+            {
+              "id": "run-tests-control",
+              "type": "action",
+              "layout": { "compactSpan": 12, "regularSpan": 4 },
+              "blocks": [],
+              "actionID": "run-tests"
+            },
+            {
+              "id": "sessions-panel",
+              "type": "sessions",
+              "layout": { "compactSpan": 12, "regularSpan": 6 },
+              "blocks": []
+            },
+            {
+              "id": "jobs-panel",
+              "type": "jobs",
+              "layout": { "compactSpan": 12, "regularSpan": 6 },
+              "blocks": [],
+              "jobID": "nightly-tests"
+            }
+          ]
+        }
+      ],
+      "children": [
+        {
+          "id": "machine-detail",
+          "title": "Machines",
+          "blocks": [],
+          "children": []
+        }
+      ]
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "connection-data",
+      "type": "builtin",
+      "builtin": "connectionStatus"
+    },
+    {
+      "id": "project-data",
+      "type": "static",
+      "value": [
+        { "name": "RoamPi", "state": "ready" },
+        { "name": "Example Service", "state": "idle" }
+      ]
+    },
+    {
+      "id": "test-summary",
+      "type": "command",
+      "command": "printf '{\"passed\":12}'",
+      "targetMachineID": "studio",
+      "workingDirectory": "/Users/developer/Projects/RoamPiDemo",
+      "resultSchema": {
+        "type": "object",
+        "properties": { "passed": { "type": "integer" } },
+        "required": ["passed"]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "run-tests",
+      "title": "Run Tests",
+      "type": "command",
+      "command": "./scripts/test-demo.sh",
+      "target": { "machineID": "studio", "workingDirectory": "/Users/developer/Projects/RoamPiDemo" },
+      "delivery": "immediate",
+      "presentation": "terminal",
+      "execution": "durable",
+      "cancellation": "allowed",
+      "concurrency": "rejectNew"
+    },
+    {
+      "id": "summarize-project",
+      "title": "Summarize Project",
+      "type": "prompt",
+      "prompt": "Summarize the current fictional project.",
+      "target": { "machineID": "studio", "workingDirectory": "/Users/developer/Projects/RoamPiDemo" },
+      "delivery": "followUp",
+      "presentation": "inline",
+      "execution": "inline",
+      "cancellation": "allowed",
+      "concurrency": "serial"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "nightly-tests",
+      "title": "Nightly Tests",
+      "actionID": "run-tests",
+      "retainResult": true
+    }
+  ]
+}

@@ -47,6 +47,9 @@ jobs:
           ./scripts/audit-dependencies.sh
           xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
 
+      - name: Validate RoamPi configuration examples
+        run: ./scripts/validate-roampi-examples.sh
+
       - name: Build and test iPhone 17
         # `test` builds the app before executing the suites. Coverage is off
         # because Xcode 26.6 hangs while instrumenting TerminalSession's async

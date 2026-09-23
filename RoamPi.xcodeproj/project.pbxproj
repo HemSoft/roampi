@@ -20,8 +20,10 @@
 		6A7B00138246CF9628E88562 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 6BB871E12C75DCB7C7418AFC /* SwiftTerm */; };
 		6DD613E959035A6B06B0C2F3 /* DemoFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */; };
 		7914404EFD09F2607E19BA27 /* TransportProofUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02161DF0FAEBEE91EE19E9DD /* TransportProofUITests.swift */; };
+		826CF05EA3971F2EB0E1D99E /* examples in Resources */ = {isa = PBXBuildFile; fileRef = 535D220487DB81BB2CF29901 /* examples */; };
 		86F3F89F951C31C2047F071F /* DashboardSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1307D1238D2E80DF406E439 /* DashboardSnapshot.swift */; };
 		88B35CF9661B6FB5A1633F98 /* SessionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540434D04EA8AB5E4B05BC50 /* SessionUITests.swift */; };
+		AC4F91C9C6C537B689E5F538 /* RoamPiConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC6E358B4BA5595534D39D5 /* RoamPiConfigurationTests.swift */; };
 		BB38CBCF2FC175AE4FBCC79A /* TerminalScreenModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C031E072E0DC771EE1F21F0 /* TerminalScreenModel.swift */; };
 		C1A5FF71C60D8CC71684CDBE /* CoreLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9FA84531E39A05528523A5 /* CoreLogicTests.swift */; };
 		D152AFF820FD5BC5D183A029 /* TransportProofView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E2A7545CC9ACBAAAAF4752 /* TransportProofView.swift */; };
@@ -56,6 +58,7 @@
 		402DE9719F984718551AD026 /* RoamPiTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoamPiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C031E072E0DC771EE1F21F0 /* TerminalScreenModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalScreenModel.swift; sourceTree = "<group>"; };
 		4FD4068C81BC4F06190C3AEF /* RoamPiUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoamPiUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		535D220487DB81BB2CF29901 /* examples */ = {isa = PBXFileReference; lastKnownFileType = folder; name = examples; path = docs/examples; sourceTree = SOURCE_ROOT; };
 		540434D04EA8AB5E4B05BC50 /* SessionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionUITests.swift; sourceTree = "<group>"; };
 		688BD2419B75648BDA14B871 /* RoamPi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RoamPi.entitlements; sourceTree = "<group>"; };
 		6D06B1CDC0275068D9778B43 /* RoamPiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiApp.swift; sourceTree = "<group>"; };
@@ -75,6 +78,7 @@
 		C6384C71C53CECC1B7E6031C /* TransportFoundationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportFoundationTests.swift; sourceTree = "<group>"; };
 		C827D0B3B14DA72A49B39098 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		CAD1D505354EA89DE506C6CE /* RPCSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RPCSessionView.swift; sourceTree = "<group>"; };
+		CFC6E358B4BA5595534D39D5 /* RoamPiConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoamPiConfigurationTests.swift; sourceTree = "<group>"; };
 		DF2DF968D5B0E11477719BEA /* DemoFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoFixture.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -134,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				81A587BD8E0C9ECE9885D190 /* DemoFixtureTests.swift */,
+				CFC6E358B4BA5595534D39D5 /* RoamPiConfigurationTests.swift */,
 				C6384C71C53CECC1B7E6031C /* TransportFoundationTests.swift */,
 			);
 			path = RoamPiTests;
@@ -155,6 +160,7 @@
 		6FA6D9E59878543AC34D5CC2 = {
 			isa = PBXGroup;
 			children = (
+				7809464C273A79479547BCAC /* docs */,
 				71BB5AD093E74FCDDA4D4B65 /* Packages */,
 				679BE7E3C95776F3A9F97104 /* RoamPi */,
 				A35F82418224CFB2E361C9B2 /* RoamPiIntegrationTests */,
@@ -170,6 +176,14 @@
 				A28AE45415526ED6C9470AB2 /* RoamPiCore */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		7809464C273A79479547BCAC /* docs */ = {
+			isa = PBXGroup;
+			children = (
+				535D220487DB81BB2CF29901 /* examples */,
+			);
+			path = docs;
 			sourceTree = "<group>";
 		};
 		8B4D05DBB0BE768C8856B35F /* RoamPiUITests */ = {
@@ -248,6 +262,7 @@
 			buildConfigurationList = 880367C76EEF8756EA52D85A /* Build configuration list for PBXNativeTarget "RoamPiTests" */;
 			buildPhases = (
 				56CABD907DB65D39C8E5638B /* Sources */,
+				C80DA862F5AA9C331BAEBAB4 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -345,6 +360,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C80DA862F5AA9C331BAEBAB4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				826CF05EA3971F2EB0E1D99E /* examples in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -363,6 +386,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6DD613E959035A6B06B0C2F3 /* DemoFixtureTests.swift in Sources */,
+				AC4F91C9C6C537B689E5F538 /* RoamPiConfigurationTests.swift in Sources */,
 				E45F208C01602F0D61B26975 /* TransportFoundationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

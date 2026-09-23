@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hemsoft.github.io/roampi/schema/v1/roampi.schema.json",
+  "title": "RoamPi configuration version 1",
+  "type": "object",
+  "x-roampi-max-document-depth": 64,
+  "x-roampi-max-document-bytes": 1048576,
+  "x-roampi-unique-identifiers": true,
+  "x-roampi-valid-references": true,
+  "x-roampi-no-secret-fields": true,
+  "x-roampi-preserve-number-kind": true,
+  "additionalProperties": false,
+  "required": ["version", "kind", "pages", "dataSources", "actions", "jobs"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "kind": { "enum": ["machine", "project"] },
+    "machine": { "$ref": "#/$defs/machineConfiguration" },
+    "project": { "$ref": "#/$defs/projectContribution" },
+    "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
+    "dataSources": { "type": "array", "items": { "$ref": "#/$defs/dataSource" } },
+    "actions": { "type": "array", "items": { "$ref": "#/$defs/action" } },
+    "jobs": { "type": "array", "items": { "$ref": "#/$defs/job" } }
+  },
+  "oneOf": [
+    {
+      "properties": { "kind": { "const": "machine" } },
+      "required": ["machine"],
+      "not": { "required": ["project"] }
+    },
+    {
+      "properties": { "kind": { "const": "project" } },
+      "required": ["project"],
+      "not": { "required": ["machine"] }
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])[A-Za-z0-9._-]+$"
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])", "x-roampi-no-control-characters": true },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-roampi-no-control-characters": true,
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$)).*$"
+    },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "string" },
+        { "type": "integer", "minimum": -9223372036854775808, "maximum": 18446744073709551615 },
+        {
+          "type": "number",
+          "not": { "type": "integer" },
+          "anyOf": [
+            { "minimum": 5e-324, "maximum": 1.7976931348623157e308 },
+            { "minimum": -1.7976931348623157e308, "maximum": -5e-324 }
+          ]
+        },
+        { "type": "boolean" },
+        { "type": "null" }
+      ]
+    },
+    "machine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "host", "port", "username", "visible"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/name" },
+        "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])", "x-roampi-no-control-characters": true },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])", "x-roampi-no-control-characters": true },
+        "group": { "$ref": "#/$defs/name" },
+        "visible": { "type": "boolean" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "machineID", "path", "name", "visible", "discovery"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "machineID": { "$ref": "#/$defs/identifier" },
+        "path": { "$ref": "#/$defs/absolutePath" },
+        "name": { "$ref": "#/$defs/name" },
+        "group": { "$ref": "#/$defs/name" },
+        "visible": { "type": "boolean" },
+        "discovery": { "const": "explicit" }
+      }
+    },
+    "projectContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/name" },
+        "group": { "$ref": "#/$defs/name" },
+        "visible": { "type": "boolean" }
+      }
+    },
+    "projectOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectID", "enabled", "disabledContributions"],
+      "properties": {
+        "projectID": { "$ref": "#/$defs/identifier" },
+        "name": { "$ref": "#/$defs/name" },
+        "group": { "$ref": "#/$defs/name" },
+        "visible": { "type": "boolean" },
+        "enabled": { "type": "boolean" },
+        "disabledContributions": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    },
+    "machineConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["homeHost", "machines", "projects", "projectOverrides", "fallbackBehavior"],
+      "properties": {
+        "homeHost": { "$ref": "#/$defs/machine" },
+        "machines": { "type": "array", "items": { "$ref": "#/$defs/machine" } },
+        "projects": { "type": "array", "items": { "$ref": "#/$defs/project" } },
+        "projectOverrides": { "type": "array", "items": { "$ref": "#/$defs/projectOverride" } },
+        "fallbackBehavior": { "enum": ["declaredOnly", "includeDiscovered", "discoveredOnly"] }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "x-roampi-width-order": true,
+      "required": ["compactSpan", "regularSpan"],
+      "properties": {
+        "minimumWidth": { "type": "number", "minimum": 5e-324, "maximum": 4096 },
+        "preferredWidth": { "type": "number", "minimum": 5e-324, "maximum": 4096 },
+        "compactSpan": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "regularSpan": { "type": "integer", "minimum": 1, "maximum": 12 }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "layout", "blocks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "enum": ["section", "grid", "list", "status", "markdown", "input", "sessions", "jobs", "action"] },
+        "title": { "$ref": "#/$defs/name" },
+        "layout": { "$ref": "#/$defs/layout" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
+        "dataSourceID": { "$ref": "#/$defs/identifier" },
+        "content": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "inputKind": { "enum": ["text", "secureText", "toggle", "selection"] },
+        "placeholder": { "type": "string", "maxLength": 256 },
+        "actionID": { "$ref": "#/$defs/identifier" },
+        "jobID": { "$ref": "#/$defs/identifier" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "enum": ["section", "grid"] } } }, "then": { "properties": { "blocks": { "minItems": 1 } } } },
+        { "if": { "properties": { "type": { "enum": ["list", "status"] } } }, "then": { "required": ["dataSourceID"] } },
+        { "if": { "properties": { "type": { "const": "markdown" } } }, "then": { "required": ["content"] } },
+        { "if": { "properties": { "type": { "const": "input" } } }, "then": { "required": ["inputKind"] } },
+        { "if": { "properties": { "type": { "const": "action" } } }, "then": { "required": ["actionID"] } },
+        { "if": { "properties": { "type": { "const": "jobs" } } }, "then": { "anyOf": [{ "required": ["jobID"] }, { "required": ["dataSourceID"] }] } }
+      ]
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "blocks", "children"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/name" },
+        "systemImage": { "$ref": "#/$defs/name" },
+        "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/page" } }
+      }
+    },
+    "valueSchema": {
+      "type": "object",
+      "x-roampi-required-properties": true,
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["object", "array", "string", "number", "integer", "boolean", "null"] },
+        "properties": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/valueSchema" }
+        },
+        "required": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "type": "string" } },
+        "items": { "$ref": "#/$defs/valueSchema" }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "array" } } }, "then": { "required": ["items"] } }
+      ]
+    },
+    "dataSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "enum": ["static", "builtin", "command"] },
+        "value": { "$ref": "#/$defs/jsonValue" },
+        "builtin": { "enum": ["machines", "projects", "sessions", "jobs", "connectionStatus"] },
+        "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "targetMachineID": { "$ref": "#/$defs/identifier" },
+        "workingDirectory": { "$ref": "#/$defs/absolutePath" },
+        "resultSchema": { "$ref": "#/$defs/valueSchema", "x-roampi-max-schema-depth": 16 }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "static" } } }, "then": { "required": ["value"] } },
+        { "if": { "properties": { "type": { "const": "builtin" } } }, "then": { "required": ["builtin"] } },
+        { "if": { "properties": { "type": { "const": "command" } } }, "then": { "required": ["command", "targetMachineID", "workingDirectory", "resultSchema"] } }
+      ]
+    },
+    "actionTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["machineID", "workingDirectory"],
+      "properties": {
+        "machineID": { "$ref": "#/$defs/identifier" },
+        "workingDirectory": { "$ref": "#/$defs/absolutePath" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "type", "target", "delivery", "presentation", "execution", "cancellation", "concurrency"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/name" },
+        "type": { "enum": ["prompt", "command"] },
+        "prompt": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "target": { "$ref": "#/$defs/actionTarget" },
+        "delivery": { "enum": ["immediate", "followUp", "steering"] },
+        "presentation": { "enum": ["inline", "sheet", "terminal", "notification"] },
+        "execution": { "enum": ["inline", "durable"] },
+        "cancellation": { "enum": ["allowed", "disabled"] },
+        "concurrency": { "enum": ["serial", "rejectNew", "replaceCurrent", "parallel"] }
+      },
+      "oneOf": [
+        { "properties": { "type": { "const": "prompt" } }, "required": ["prompt"], "not": { "required": ["command"] } },
+        { "properties": { "type": { "const": "command" } }, "required": ["command"], "not": { "required": ["prompt"] } }
+      ]
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "actionID", "retainResult"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "title": { "$ref": "#/$defs/name" },
+        "actionID": { "$ref": "#/$defs/identifier" },
+        "retainResult": { "type": "boolean" }
+      }
+    }
+  }
+}

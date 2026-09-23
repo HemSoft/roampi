@@ -1,0 +1,35 @@
+{
+  "$schema": "../roampi.schema.json",
+  "version": 1,
+  "kind": "machine",
+  "machine": {
+    "homeHost": {
+      "id": "home",
+      "name": "Home Mac",
+      "host": "home.example.test",
+      "port": 22,
+      "username": "operator",
+      "visible": true
+    },
+    "machines": [],
+    "projects": [],
+    "projectOverrides": [
+      {
+        "projectID": "sample",
+        "enabled": true,
+        "disabledContributions": []
+      },
+      {
+        "projectID": "sample",
+        "visible": false,
+        "enabled": true,
+        "disabledContributions": []
+      }
+    ],
+    "fallbackBehavior": "includeDiscovered"
+  },
+  "pages": [],
+  "dataSources": [],
+  "actions": [],
+  "jobs": []
+}

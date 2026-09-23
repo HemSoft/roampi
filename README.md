@@ -90,6 +90,14 @@ xcrun simctl launch booted com.hemsoft.RoamPi --rpc-demo
 
 SwiftTerm findings are in [`docs/SWIFTTERM_EVALUATION.md`](docs/SWIFTTERM_EVALUATION.md). Session ownership, reconnect rules, strict JSONL framing, and security boundaries are in [`docs/SESSION_ARCHITECTURE.md`](docs/SESSION_ARCHITECTURE.md).
 
+## Remote configuration
+
+The versioned `.roampi` contract, precedence rules, trust identity, and fictional examples are documented in [`docs/ROAMPI_CONFIGURATION.md`](docs/ROAMPI_CONFIGURATION.md). Validate the schema and examples with:
+
+```bash
+./scripts/validate-roampi-examples.sh
+```
+
 ## Formatting and dependency audit
 
 ```bash

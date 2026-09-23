@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "RoamPiCore", targets: ["RoamPiCore"]),
+        .executable(name: "RoamPiConfigValidator", targets: ["RoamPiConfigValidator"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", exact: "2.103.0"),
@@ -21,6 +22,10 @@ let package = Package(
                 .product(name: "NIOSSH", package: "swift-nio-ssh"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ]
+        ),
+        .executableTarget(
+            name: "RoamPiConfigValidator",
+            dependencies: ["RoamPiCore"]
         ),
     ]
 )
