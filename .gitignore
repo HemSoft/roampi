@@ -9,6 +9,9 @@ ValidationMedia/
 *.xcuserstate
 xcuserdata/
 
+# Node extension dependencies
+node_modules/
+
 # Swift Package Manager
 .build/
 .swiftpm/xcode/package.xcworkspace/xcuserdata/

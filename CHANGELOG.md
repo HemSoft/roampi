@@ -17,6 +17,7 @@ RoamPi records notable changes here. Releases follow semantic versioning once pu
 
 ### Developer experience
 
+- Added a versioned owner-only Unix-socket Pi extension prototype for live session discovery, bounded event streaming, renewable control leases, and cooperative approval dialogs. Disposable Pi RPC tests require no provider credentials.
 - Added matching Codable configuration models, bounded diagnostics, project namespace isolation, action trust identities, fictional examples, a schema validator, and CI coverage.
 - Selected and pinned SwiftTerm 1.19.0 after evaluating rendering, selection, clipboard behavior, Unicode, input, maintenance, platform support, and licensing.
 - Added a shared `PiSession` core, redacted reconnect state model, strict bounded JSONL framing, and disposable SSH integration coverage for PTY resize, tmux process continuity, and RPC failures.
