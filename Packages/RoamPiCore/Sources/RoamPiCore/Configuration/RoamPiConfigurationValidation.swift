@@ -350,6 +350,9 @@ public enum RoamPiConfigurationParser {
         for (index, job) in document.jobs.enumerated() {
             let path = "$.jobs[\(index)]"
             identifierRegistry.register(job.id, at: path + ".id", diagnostics: &diagnostics)
+            if !isValidDisplayName(job.title) {
+                append(.invalidValue, at: path + ".title", to: &diagnostics)
+            }
             if !document.actions.contains(where: { $0.id == job.actionID }) {
                 append(.invalidReference, at: path + ".actionID", to: &diagnostics)
             }

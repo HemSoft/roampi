@@ -43,7 +43,7 @@ RoamPi merges a complete update atomically:
 1. The machine document contributes first in file order.
 2. Project documents sort by `project.id`, then source path.
 3. Every project identifier is rewritten into `project%<escaped-project-id>%<escaped-local-id>`. Dots become `%2E`; source identifiers cannot contain `%`, so the separators and mapping are collision-free, including against machine identifiers. References are rewritten with the same rule, and one project cannot address another project's contributions.
-4. Session-discovered projects sort by machine ID, path, then project ID. Explicit machine declarations win when IDs match.
+4. Session-discovered projects must have bounded identifiers and names plus safe absolute paths. They sort by machine ID, path, then project ID. Explicit machine declarations win when IDs match.
 5. Machine `projectOverrides` apply last. They may rename, regroup, hide, disable all contributions from a project, or disable named local contributions.
 
 Duplicate project documents fail the whole update. If any source is malformed or invalid, RoamPi keeps the previous effective configuration and returns bounded diagnostics. An initial invalid update produces no effective configuration but still leaves fixed Settings and recovery UI available.
@@ -63,7 +63,7 @@ Changing any bound value changes the identity and invalidates a prior approval. 
 
 ## Diagnostics
 
-Diagnostics contain only a fixed code and a bounded JSON location. They do not include source values. Version 1 reports unsupported versions, malformed or oversized JSON, missing or invalid values, duplicate identifiers, unsafe paths, undeclared fields or component types, invalid references, scope violations, and secret-bearing fields.
+Diagnostics contain only a fixed code and a bounded JSON location. They do not include source values. The standalone validator emits fixed labels or fixture basenames rather than supplied file or project-root paths. Version 1 reports unsupported versions, malformed or oversized JSON, missing or invalid values, duplicate identifiers, unsafe paths, undeclared fields or component types, invalid references, scope violations, and secret-bearing fields.
 
 ## Examples
 

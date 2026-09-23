@@ -143,7 +143,7 @@ public enum RoamPiActionTrustIdentityBuilder {
         configurationHash: String
     ) throws -> RoamPiActionTrustIdentity {
         guard isBoundedValue(sourceFile, maximumBytes: 512),
-              isBoundedValue(identifier, maximumBytes: 128),
+              isBoundedValue(identifier, maximumBytes: 512),
               isBoundedValue(resolvedDestination.host, maximumBytes: 253),
               isBoundedValue(resolvedDestination.username, maximumBytes: 64),
               (1 ... 65535).contains(resolvedDestination.port),

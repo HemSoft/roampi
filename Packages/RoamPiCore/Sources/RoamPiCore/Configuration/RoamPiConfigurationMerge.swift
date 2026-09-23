@@ -58,6 +58,7 @@ public enum RoamPiConfigurationMerger {
         guard projects.allSatisfy({ $0.document.kind == .project && $0.document.project != nil }) else {
             throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects")
         }
+        try validate(discoveredProjects: discoveredProjects)
 
         let orderedProjectConfigurations = projects.sorted {
             let lhs = $0.document.project?.id ?? ""
@@ -213,6 +214,49 @@ public enum RoamPiConfigurationMerger {
             actions: effectiveActions,
             jobs: jobs
         )
+    }
+
+    private static func validate(discoveredProjects: [DiscoveredRoamPiProject]) throws {
+        for (index, project) in discoveredProjects.enumerated() {
+            let path = "$discoveredProjects[\(index)]"
+            guard isValidIdentifier(project.id) else {
+                throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: path + ".id")
+            }
+            guard isValidIdentifier(project.machineID) else {
+                throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: path + ".machineID")
+            }
+            guard isSafeAbsolutePath(project.path) else {
+                throw RoamPiConfigurationDiagnostic(code: .unsafePath, location: path + ".path")
+            }
+            guard !project.name.isEmpty,
+                  project.name.count <= 128,
+                  !project.name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+            else {
+                throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: path + ".name")
+            }
+        }
+    }
+
+    private static func isValidIdentifier(_ value: String) -> Bool {
+        let bytes = Array(value.utf8)
+        guard (1 ... 64).contains(bytes.count), let first = bytes.first,
+              isASCIIAlphaNumeric(first)
+        else {
+            return false
+        }
+        return bytes.dropFirst().allSatisfy {
+            isASCIIAlphaNumeric($0) || $0 == 46 || $0 == 95 || $0 == 45
+        }
+    }
+
+    private static func isASCIIAlphaNumeric(_ byte: UInt8) -> Bool {
+        (48 ... 57).contains(byte) || (65 ... 90).contains(byte) || (97 ... 122).contains(byte)
+    }
+
+    private static func isSafeAbsolutePath(_ value: String) -> Bool {
+        !value.isEmpty && value.utf8.count <= 256 && value.hasPrefix("/") &&
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) &&
+            !value.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     }
 
     private static func baseProjects(

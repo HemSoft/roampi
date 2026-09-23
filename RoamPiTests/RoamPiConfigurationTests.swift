@@ -190,6 +190,27 @@ struct RoamPiConfigurationTests {
         ]))
     }
 
+    @Test("Maximum project identifiers remain approvable after namespacing")
+    func maximumNamespacedTrustIdentity() throws {
+        let projectID = "a" + String(repeating: ".", count: 63)
+        let actionID = "b" + String(repeating: ".", count: 63)
+        let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)
+            .configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            projectActionData(projectID: projectID, actionID: actionID),
+            source: .project(root: "/srv/maximum")
+        ).configuration)
+        let merged = try RoamPiConfigurationMerger.merge(machine: machine, projects: [project])
+        let action = try #require(merged.actions.first)
+
+        #expect(action.action.id.utf8.count > 128)
+        #expect(try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
+            resolvedWorkingDirectory: "/srv/maximum"
+        ).value.count == 64)
+    }
+
     @Test("Project merge order does not depend on input order")
     func deterministicProjectOrder() throws {
         let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)
@@ -257,6 +278,26 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics == [
             .init(code: .invalidValue, location: "$.project.name"),
         ])
+    }
+
+    @Test("Job titles follow the schema bounds")
+    func jobTitleValidation() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var jobs = try #require(object["jobs"] as? [[String: Any]])
+        jobs[0]["title"] = ""
+        object["jobs"] = jobs
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .invalidValue,
+            location: "$.jobs[0].title"
+        )))
     }
 
     @Test("Command data sources require an explicit working directory")
@@ -451,6 +492,25 @@ struct RoamPiConfigurationTests {
             resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/SampleService"
         ).configurationHash == retainedAction.configurationHash)
+    }
+
+    @Test("Unsafe discovered projects cannot replace last-known-good configuration")
+    func unsafeDiscoveredProject() async throws {
+        let store = RoamPiConfigurationStore()
+        let accepted = try await store.update(machineData: fixture("minimal.roampi"))
+        let rejected = try await store.update(
+            machineData: fixture("minimal.roampi"),
+            discoveredProjects: [
+                .init(id: "unsafe", machineID: "home", path: "../../tmp", name: "Unsafe"),
+            ]
+        )
+
+        #expect(accepted.adopted)
+        #expect(!rejected.adopted)
+        #expect(rejected.configuration == accepted.configuration)
+        #expect(rejected.diagnostics == [
+            .init(code: .unsafePath, location: "$discoveredProjects[0].path"),
+        ])
     }
 
     @Test("Source scope mismatches are rejected")

@@ -55,15 +55,15 @@ private enum RoamPiConfigValidatorCommand {
             else {
                 throw ValidatorCommandError.unexpectedResult
             }
-            print("expected-invalid \(path) \(expectation.code) \(expectation.location)")
+            print("expected-invalid configuration \(expectation.code) \(expectation.location)")
         } else {
             guard result.configuration != nil, result.diagnostics.isEmpty else {
                 for diagnostic in result.diagnostics {
-                    print("invalid \(path) \(diagnostic.code.rawValue) \(diagnostic.location)")
+                    print("invalid configuration \(diagnostic.code.rawValue) \(diagnostic.location)")
                 }
                 throw ValidatorCommandError.unexpectedResult
             }
-            print("valid \(path)")
+            print("valid configuration")
         }
     }
 }

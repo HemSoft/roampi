@@ -119,17 +119,17 @@ def main() -> int:
         errors = validate(root, root, value)
         if arguments.expect_invalid:
             if not errors:
-                print(f"unexpected-valid {document_path}", file=sys.stderr)
+                print(f"unexpected-valid {document_path.name}", file=sys.stderr)
                 failed = True
             else:
-                print(f"schema-expected-invalid {document_path}")
+                print(f"schema-expected-invalid {document_path.name}")
         elif errors:
-            print(f"schema-invalid {document_path}", file=sys.stderr)
+            print(f"schema-invalid {document_path.name}", file=sys.stderr)
             for error in errors[:20]:
                 print(f"  {error}", file=sys.stderr)
             failed = True
         else:
-            print(f"schema-valid {document_path}")
+            print(f"schema-valid {document_path.name}")
     return 1 if failed else 0
 
 

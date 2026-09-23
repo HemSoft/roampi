@@ -20,14 +20,24 @@ swift build --package-path "$package_path" --product RoamPiConfigValidator >/dev
 bin_path="$(swift build --package-path "$package_path" --show-bin-path)"
 validator="$bin_path/RoamPiConfigValidator"
 
-"$validator" --machine "$repo_root/docs/examples/minimal.roampi"
-"$validator" --machine "$repo_root/docs/examples/developer-dashboard.roampi"
-"$validator" --project-root /Users/developer/Projects/SampleService "$repo_root/docs/examples/project.roampi"
+run_validator() {
+    local output
+    output="$("$validator" "$@")"
+    if [[ "$output" == *"$repo_root"* || "$output" == *"/Users/developer/Projects"* ]]; then
+        echo "validator output exposed a project path" >&2
+        return 1
+    fi
+    printf '%s\n' "$output"
+}
 
-"$validator" --expect 'unsupported_version@$.version' --machine "$repo_root/docs/examples/invalid/forward-version.roampi"
-"$validator" --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
-"$validator" --expect 'secret_field@$.token' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
-"$validator" --expect 'unsafe_path@$.machine.projects[0].path' --machine "$repo_root/docs/examples/invalid/unsafe-path.roampi"
-"$validator" --expect 'undeclared_type@$.pages[0].blocks[0].type' --project-root /Users/developer/Projects/Unknown "$repo_root/docs/examples/invalid/unknown-component.roampi"
+run_validator --machine "$repo_root/docs/examples/minimal.roampi"
+run_validator --machine "$repo_root/docs/examples/developer-dashboard.roampi"
+run_validator --project-root /Users/developer/Projects/SampleService "$repo_root/docs/examples/project.roampi"
+
+run_validator --expect 'unsupported_version@$.version' --machine "$repo_root/docs/examples/invalid/forward-version.roampi"
+run_validator --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
+run_validator --expect 'secret_field@$.token' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
+run_validator --expect 'unsafe_path@$.machine.projects[0].path' --machine "$repo_root/docs/examples/invalid/unsafe-path.roampi"
+run_validator --expect 'undeclared_type@$.pages[0].blocks[0].type' --project-root /Users/developer/Projects/Unknown "$repo_root/docs/examples/invalid/unknown-component.roampi"
 
 echo "RoamPi configuration examples passed."
