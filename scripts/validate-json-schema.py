@@ -11,6 +11,14 @@ from pathlib import Path
 from typing import Any
 
 
+def reject_nonstandard_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def strict_json_loads(value: str) -> Any:
+    return json.loads(value, parse_constant=reject_nonstandard_constant)
+
+
 def resolve_ref(root: dict[str, Any], reference: str) -> Any:
     if not reference.startswith("#/"):
         raise ValueError("only local schema references are supported")
@@ -121,11 +129,14 @@ def main() -> int:
     parser.add_argument("--expect-invalid", action="store_true")
     arguments = parser.parse_args()
 
-    root = json.loads(arguments.schema.read_text())
+    root = strict_json_loads(arguments.schema.read_text())
     failed = False
     for document_path in arguments.documents:
-        value = json.loads(document_path.read_text())
-        errors = validate(root, root, value)
+        try:
+            value = strict_json_loads(document_path.read_text())
+            errors = validate(root, root, value)
+        except (json.JSONDecodeError, ValueError):
+            errors = ["$: malformed JSON"]
         if arguments.expect_invalid:
             if not errors:
                 print(f"unexpected-valid {document_path.name}", file=sys.stderr)

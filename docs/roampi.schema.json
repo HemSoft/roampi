@@ -35,12 +35,12 @@
       "maxLength": 64,
       "pattern": "^[A-Za-z0-9._-]+$"
     },
-    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])" },
     "absolutePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F-\\u009F]*$"
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$)).*$"
     },
     "jsonValue": {
       "oneOf": [
@@ -48,7 +48,7 @@
         { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } },
         { "type": "string" },
         { "type": "integer", "minimum": -9223372036854775808, "maximum": 18446744073709551615 },
-        { "type": "number", "not": { "type": "integer" } },
+        { "type": "number", "minimum": -1.7976931348623157e308, "maximum": 1.7976931348623157e308, "not": { "type": "integer" } },
         { "type": "boolean" },
         { "type": "null" }
       ]
@@ -60,9 +60,9 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/name" },
-        "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+        "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])" },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$" },
+        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F-\\u009F])" },
         "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" }
       }

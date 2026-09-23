@@ -5,7 +5,7 @@
   "machine": {
     "homeHost": {
       "id": "home",
-      "name": "Home\n",
+      "name": "Home",
       "host": "home.example.test",
       "port": 22,
       "username": "operator",
@@ -17,7 +17,13 @@
     "fallbackBehavior": "includeDiscovered"
   },
   "pages": [],
-  "dataSources": [],
+  "dataSources": [
+    {
+      "id": "non-finite-number",
+      "type": "static",
+      "value": NaN
+    }
+  ],
   "actions": [],
   "jobs": []
 }
