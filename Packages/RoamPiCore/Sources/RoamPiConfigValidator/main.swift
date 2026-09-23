@@ -9,7 +9,7 @@ private enum ValidatorCommandError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .invalidArguments:
-            "usage: RoamPiConfigValidator [--expect code@location] (--machine <file> | --project-root <root> <file>)"
+            "usage: RoamPiConfigValidator [--expect code@location] (--machine <file> | --project <machine-id> <root> <file>)"
         case .unreadableFile:
             "configuration file could not be read"
         case .unexpectedResult:
@@ -36,9 +36,9 @@ private enum RoamPiConfigValidatorCommand {
         if arguments.count == 2, arguments[0] == "--machine" {
             source = .machine
             path = arguments[1]
-        } else if arguments.count == 3, arguments[0] == "--project-root" {
-            source = .project(root: arguments[1])
-            path = arguments[2]
+        } else if arguments.count == 4, arguments[0] == "--project" {
+            source = .project(root: arguments[2], machineID: arguments[1])
+            path = arguments[3]
         } else {
             throw ValidatorCommandError.invalidArguments
         }

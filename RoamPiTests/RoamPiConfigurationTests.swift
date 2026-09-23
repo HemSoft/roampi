@@ -12,7 +12,7 @@ struct RoamPiConfigurationTests {
         let dashboard = try RoamPiConfigurationParser.parse(fixture("developer-dashboard.roampi"), source: .machine)
         let project = try RoamPiConfigurationParser.parse(
             fixture("project.roampi"),
-            source: .project(root: "/Users/developer/Projects/SampleService")
+            source: .project(root: "/Users/developer/Projects/SampleService", machineID: "studio")
         )
 
         #expect(minimal.configuration != nil)
@@ -230,11 +230,33 @@ struct RoamPiConfigurationTests {
         ])
     }
 
+    @Test("Passphrase fields are rejected")
+    func passphraseSecretField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["passphrase": "not-a-real-passphrase"],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
+        ])
+    }
+
     @Test("Undeclared component types fail at their type location")
     func undeclaredComponent() throws {
         let result = try RoamPiConfigurationParser.parse(
             invalidFixture("unknown-component.roampi"),
-            source: .project(root: "/Users/developer/Projects/Unknown")
+            source: .project(root: "/Users/developer/Projects/Unknown", machineID: "home")
         )
 
         #expect(result.diagnostics == [
@@ -250,7 +272,7 @@ struct RoamPiConfigurationTests {
         ).configuration)
         let project = try #require(try RoamPiConfigurationParser.parse(
             fixture("project.roampi"),
-            source: .project(root: "/Users/developer/Projects/SampleService")
+            source: .project(root: "/Users/developer/Projects/SampleService", machineID: "studio")
         ).configuration)
 
         let merged = try RoamPiConfigurationMerger.merge(
@@ -268,6 +290,7 @@ struct RoamPiConfigurationTests {
         #expect(merged.jobs.first(where: { $0.id.hasPrefix("project%sample-service") })?.actionID ==
             "project%sample-service%deploy-preview")
         #expect(merged.projects.map(\.id) == ["roampi-app", "alpha", "zeta", "sample-service"])
+        #expect(merged.projects.first(where: { $0.id == "sample-service" })?.machineID == "studio")
         #expect(merged.projects.first?.name == "RoamPi")
         #expect(merged.projects.first?.path == "/Users/developer/Projects/RoamPiDemo")
         #expect(merged.fixedInterfaceRoutes == [.settings, .configurationRecovery])
@@ -299,11 +322,11 @@ struct RoamPiConfigurationTests {
             .configuration)
         let first = try #require(RoamPiConfigurationParser.parse(
             projectActionData(projectID: "a", actionID: "b.c"),
-            source: .project(root: "/srv/first")
+            source: .project(root: "/srv/first", machineID: "home")
         ).configuration)
         let second = try #require(RoamPiConfigurationParser.parse(
             projectActionData(projectID: "a.b", actionID: "c"),
-            source: .project(root: "/srv/second")
+            source: .project(root: "/srv/second", machineID: "home")
         ).configuration)
 
         let merged = try RoamPiConfigurationMerger.merge(machine: machine, projects: [first, second])
@@ -322,7 +345,7 @@ struct RoamPiConfigurationTests {
             .configuration)
         let project = try #require(RoamPiConfigurationParser.parse(
             projectActionData(projectID: projectID, actionID: actionID),
-            source: .project(root: "/srv/maximum")
+            source: .project(root: "/srv/maximum", machineID: "home")
         ).configuration)
         let merged = try RoamPiConfigurationMerger.merge(machine: machine, projects: [project])
         let action = try #require(merged.actions.first)
@@ -341,11 +364,11 @@ struct RoamPiConfigurationTests {
             .configuration)
         let first = try #require(RoamPiConfigurationParser.parse(
             projectData(id: "prod.example.com", pageID: "first-page"),
-            source: .project(root: "/srv/first")
+            source: .project(root: "/srv/first", machineID: "home")
         ).configuration)
         let second = try #require(RoamPiConfigurationParser.parse(
             projectData(id: "prod.example.com", pageID: "second-page"),
-            source: .project(root: "/srv/second")
+            source: .project(root: "/srv/second", machineID: "home")
         ).configuration)
 
         #expect(throws: RoamPiConfigurationDiagnostic(
@@ -362,11 +385,11 @@ struct RoamPiConfigurationTests {
             .configuration)
         let alpha = try #require(RoamPiConfigurationParser.parse(
             projectData(id: "alpha", pageID: "alpha-page"),
-            source: .project(root: "/srv/alpha")
+            source: .project(root: "/srv/alpha", machineID: "home")
         ).configuration)
         let zeta = try #require(RoamPiConfigurationParser.parse(
             projectData(id: "zeta", pageID: "zeta-page"),
-            source: .project(root: "/srv/zeta")
+            source: .project(root: "/srv/zeta", machineID: "home")
         ).configuration)
 
         let first = try RoamPiConfigurationMerger.merge(machine: machine, projects: [zeta, alpha])
@@ -395,7 +418,7 @@ struct RoamPiConfigurationTests {
             .configuration)
         let project = try #require(RoamPiConfigurationParser.parse(
             fixture("project.roampi"),
-            source: .project(root: "/Users/developer/Projects/SampleService")
+            source: .project(root: "/Users/developer/Projects/SampleService", machineID: "studio")
         ).configuration)
 
         let merged = try RoamPiConfigurationMerger.merge(machine: validatedMachine, projects: [project])
@@ -417,7 +440,7 @@ struct RoamPiConfigurationTests {
 
         let result = try RoamPiConfigurationParser.parse(
             JSONSerialization.data(withJSONObject: object),
-            source: .project(root: "/Users/developer/Projects/SampleService")
+            source: .project(root: "/Users/developer/Projects/SampleService", machineID: "studio")
         )
 
         #expect(result.diagnostics == [
@@ -449,7 +472,7 @@ struct RoamPiConfigurationTests {
     func jobsBlockSourceValidation() throws {
         let result = try RoamPiConfigurationParser.parse(
             invalidFixture("jobs-without-source.roampi"),
-            source: .project(root: "/Users/developer/Projects/MissingJobSource")
+            source: .project(root: "/Users/developer/Projects/MissingJobSource", machineID: "home")
         )
 
         #expect(result.diagnostics.contains(.init(
@@ -549,7 +572,7 @@ struct RoamPiConfigurationTests {
 
         let result = RoamPiConfigurationParser.parse(
             data,
-            source: .project(root: "/Users/developer/Projects/SchemaRedaction")
+            source: .project(root: "/Users/developer/Projects/SchemaRedaction", machineID: "home")
         )
 
         #expect(result.diagnostics.contains(.init(
@@ -568,7 +591,7 @@ struct RoamPiConfigurationTests {
 
         let result = RoamPiConfigurationParser.parse(
             data,
-            source: .project(root: "/Users/developer/Projects/SchemaRequired")
+            source: .project(root: "/Users/developer/Projects/SchemaRequired", machineID: "home")
         )
 
         #expect(result.diagnostics.contains(.init(
@@ -586,7 +609,7 @@ struct RoamPiConfigurationTests {
 
         let result = RoamPiConfigurationParser.parse(
             data,
-            source: .project(root: "/Users/developer/Projects/TargetCheck")
+            source: .project(root: "/Users/developer/Projects/TargetCheck", machineID: "home")
         )
 
         #expect(result.diagnostics.contains(.init(
@@ -751,6 +774,7 @@ struct RoamPiConfigurationTests {
             machineData: fixture("developer-dashboard.roampi"),
             projects: [
                 .init(
+                    machineID: "studio",
                     root: "/Users/developer/Projects/SampleService",
                     data: fixture("project.roampi")
                 ),
@@ -760,6 +784,7 @@ struct RoamPiConfigurationTests {
             machineData: fixture("developer-dashboard.roampi"),
             projects: [
                 .init(
+                    machineID: "studio",
                     root: "/Users/developer/Projects/SampleService",
                     data: invalidFixture("unknown-component.roampi")
                 ),

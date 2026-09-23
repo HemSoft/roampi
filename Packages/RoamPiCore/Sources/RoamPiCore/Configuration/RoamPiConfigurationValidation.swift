@@ -31,13 +31,13 @@ public struct RoamPiConfigurationDiagnostic: Error, Codable, Equatable, Sendable
 
 public enum RoamPiConfigurationSource: Equatable, Sendable {
     case machine
-    case project(root: String)
+    case project(root: String, machineID: String)
 
     public var filePath: String {
         switch self {
         case .machine:
             RoamPiConfigurationPaths.machine
-        case let .project(root):
+        case let .project(root, _):
             root.hasSuffix("/")
                 ? root + RoamPiConfigurationPaths.projectFileName
                 : root + "/" + RoamPiConfigurationPaths.projectFileName
@@ -45,8 +45,13 @@ public enum RoamPiConfigurationSource: Equatable, Sendable {
     }
 
     public var projectRoot: String? {
-        guard case let .project(root) = self else { return nil }
+        guard case let .project(root, _) = self else { return nil }
         return root
+    }
+
+    public var projectMachineID: String? {
+        guard case let .project(_, machineID) = self else { return nil }
+        return machineID
     }
 }
 
@@ -257,8 +262,8 @@ public enum RoamPiConfigurationParser {
     public static let maximumDocumentBytes = 1_048_576
     private static let maximumDiagnostics = 32
     private static let prohibitedKeys: Set<String> = [
-        "accesstoken", "apikey", "authorization", "credential", "credentials",
-        "password", "privatekey", "providerkey", "secret", "token",
+        "accesstoken", "apikey", "authorization", "credential", "credentials", "mnemonic",
+        "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "seedphrase", "token",
     ]
     private static let prohibitedKeyQualifiers: Set<String> = [
         "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path", "pem",
@@ -491,6 +496,9 @@ public enum RoamPiConfigurationParser {
             }
             if let root = source.projectRoot, !isSafeAbsolutePath(root) {
                 append(.unsafePath, at: "$source.projectRoot", to: &diagnostics)
+            }
+            if let machineID = source.projectMachineID, !isValidIdentifier(machineID) {
+                append(.invalidValue, at: "$source.projectMachineID", to: &diagnostics)
             }
         }
 

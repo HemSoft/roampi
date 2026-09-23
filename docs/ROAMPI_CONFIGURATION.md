@@ -1,6 +1,6 @@
 # `.roampi` configuration version 1
 
-RoamPi reads one machine configuration from `~/.pi/agent/.roampi` on the selected home host and an optional project configuration from `<repository>/.roampi`. Both files are untrusted JSON. RoamPi validates the entire update before replacing the last-known-good configuration.
+RoamPi reads one machine configuration from `~/.pi/agent/.roampi` on the selected home host and an optional project configuration from `<repository>/.roampi`. The loader binds each project file to the machine from which it was read; that source machine remains the effective project's SSH destination. Both files are untrusted JSON. RoamPi validates the entire update before replacing the last-known-good configuration.
 
 The normative schema is [`roampi.schema.json`](roampi.schema.json). The Swift models and behavioral validator live in `RoamPiCore/Configuration`.
 

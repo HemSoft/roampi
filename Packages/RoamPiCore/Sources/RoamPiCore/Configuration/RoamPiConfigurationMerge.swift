@@ -289,11 +289,12 @@ public enum RoamPiConfigurationMerger {
         for configuration in projectConfigurations {
             guard let contribution = configuration.document.project,
                   identifiers.insert(contribution.id).inserted,
-                  let root = configuration.source.projectRoot
+                  let root = configuration.source.projectRoot,
+                  let sourceMachineID = configuration.source.projectMachineID
             else { continue }
             result.append(RoamPiProject(
                 id: contribution.id,
-                machineID: machine.homeHost.id,
+                machineID: sourceMachineID,
                 path: root,
                 name: contribution.name ?? contribution.id,
                 group: contribution.group,
@@ -499,10 +500,12 @@ public enum RoamPiConfigurationMerger {
 }
 
 public struct RoamPiProjectConfigurationInput: Sendable {
+    public let machineID: String
     public let root: String
     public let data: Data
 
-    public init(root: String, data: Data) {
+    public init(machineID: String, root: String, data: Data) {
+        self.machineID = machineID
         self.root = root
         self.data = data
     }
@@ -537,8 +540,13 @@ public actor RoamPiConfigurationStore {
         let machineResult = RoamPiConfigurationParser.parse(machineData, source: .machine)
         var diagnostics = machineResult.diagnostics
         var validatedProjects: [ValidatedRoamPiConfiguration] = []
-        for project in projects.sorted(by: { $0.root < $1.root }) {
-            let result = RoamPiConfigurationParser.parse(project.data, source: .project(root: project.root))
+        for project in projects.sorted(by: {
+            $0.machineID == $1.machineID ? $0.root < $1.root : $0.machineID < $1.machineID
+        }) {
+            let result = RoamPiConfigurationParser.parse(
+                project.data,
+                source: .project(root: project.root, machineID: project.machineID)
+            )
             diagnostics.append(contentsOf: result.diagnostics)
             if let configuration = result.configuration {
                 validatedProjects.append(configuration)
