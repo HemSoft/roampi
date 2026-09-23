@@ -1040,7 +1040,7 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedQualifierSequence(_ value: String) -> Bool {
         guard !value.isEmpty else { return false }
-        if value.allSatisfy(\.isNumber) {
+        if value == "s" || value == "es" || value.allSatisfy(\.isNumber) {
             return true
         }
         if value.hasPrefix("v"), value.dropFirst().allSatisfy(\.isNumber), value.count > 1 {

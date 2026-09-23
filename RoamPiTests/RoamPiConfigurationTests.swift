@@ -230,6 +230,28 @@ struct RoamPiConfigurationTests {
         ])
     }
 
+    @Test("Plural credential fields are rejected")
+    func pluralCredentialField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["apiKeys": ["not-a-real-key"]],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
+        ])
+    }
+
     @Test("Passphrase fields are rejected")
     func passphraseSecretField() throws {
         var object = try #require(JSONSerialization.jsonObject(
@@ -376,6 +398,36 @@ struct RoamPiConfigurationTests {
             location: "$projects[?].id"
         )) {
             try RoamPiConfigurationMerger.merge(machine: machine, projects: [first, second])
+        }
+    }
+
+    @Test("Project files cannot claim an existing ID from another source")
+    func projectSourceMismatch() throws {
+        let machine = try #require(RoamPiConfigurationParser.parse(
+            fixture("developer-dashboard.roampi"),
+            source: .machine
+        ).configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "roampi-app", pageID: "claimed-page"),
+            source: .project(root: "/srv/other", machineID: "build-host")
+        ).configuration)
+
+        #expect(throws: RoamPiConfigurationDiagnostic(
+            code: .scopeViolation,
+            location: "$projects[?].source"
+        )) {
+            try RoamPiConfigurationMerger.merge(machine: machine, projects: [project])
+        }
+
+        let unknownMachine = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "unmapped-project", pageID: "unmapped-page"),
+            source: .project(root: "/srv/unmapped", machineID: "unknown-host")
+        ).configuration)
+        #expect(throws: RoamPiConfigurationDiagnostic(
+            code: .invalidReference,
+            location: "$projects[?].source.machineID"
+        )) {
+            try RoamPiConfigurationMerger.merge(machine: machine, projects: [unknownMachine])
         }
     }
 

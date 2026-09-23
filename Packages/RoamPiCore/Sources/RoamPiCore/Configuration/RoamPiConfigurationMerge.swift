@@ -79,6 +79,12 @@ public enum RoamPiConfigurationMerger {
             }
         }
 
+        try validateProjectSources(
+            machine: machineConfiguration,
+            projectConfigurations: orderedProjectConfigurations,
+            discoveredProjects: discoveredProjects
+        )
+
         let overrides = Dictionary(
             machineConfiguration.projectOverrides.map { ($0.projectID, $0) },
             uniquingKeysWith: { first, _ in first }
@@ -214,6 +220,43 @@ public enum RoamPiConfigurationMerger {
             actions: effectiveActions,
             jobs: jobs
         )
+    }
+
+    private static func validateProjectSources(
+        machine: RoamPiMachineConfiguration,
+        projectConfigurations: [ValidatedRoamPiConfiguration],
+        discoveredProjects: [DiscoveredRoamPiProject]
+    ) throws {
+        let machineIDs = Set([machine.homeHost.id] + machine.machines.map(\.id))
+        let declaredByID = Dictionary(machine.projects.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let discoveredByID = Dictionary(
+            discoveredProjects.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        for configuration in projectConfigurations {
+            guard let contribution = configuration.document.project,
+                  let sourceMachineID = configuration.source.projectMachineID,
+                  let sourceRoot = configuration.source.projectRoot
+            else {
+                throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects[?].source")
+            }
+            guard machineIDs.contains(sourceMachineID) else {
+                throw RoamPiConfigurationDiagnostic(
+                    code: .invalidReference,
+                    location: "$projects[?].source.machineID"
+                )
+            }
+            if let declared = declaredByID[contribution.id] {
+                guard declared.machineID == sourceMachineID, declared.path == sourceRoot else {
+                    throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects[?].source")
+                }
+            } else if let discovered = discoveredByID[contribution.id] {
+                guard discovered.machineID == sourceMachineID, discovered.path == sourceRoot else {
+                    throw RoamPiConfigurationDiagnostic(code: .scopeViolation, location: "$projects[?].source")
+                }
+            }
+        }
     }
 
     private static func validate(discoveredProjects: [DiscoveredRoamPiProject]) throws {

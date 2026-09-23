@@ -46,7 +46,7 @@ RoamPi merges a complete update atomically:
 4. Session-discovered projects must have globally unique bounded identifiers and names plus safe absolute paths. An update with the same discovered identifier on two machines is rejected rather than silently dropping a project. Valid discoveries sort by machine ID, path, then project ID, and explicit machine declarations win when IDs match.
 5. Machine `projectOverrides` apply last. They may rename, regroup, hide, disable all contributions from a project, or disable named local contributions.
 
-Duplicate project documents fail the whole update. If any source is malformed or invalid, RoamPi keeps the previous effective configuration and returns bounded diagnostics. An initial invalid update produces no effective configuration but still leaves fixed Settings and recovery UI available.
+Duplicate project documents fail the whole update. A project file whose ID already exists must match that project's declared or discovered source machine and root; unknown machines and source mismatches fail the update. If any source is malformed or invalid, RoamPi keeps the previous effective configuration and returns bounded diagnostics. An initial invalid update produces no effective configuration but still leaves fixed Settings and recovery UI available.
 
 ## Trust identity
 
