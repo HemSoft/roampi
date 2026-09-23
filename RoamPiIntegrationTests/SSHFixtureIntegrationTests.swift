@@ -102,6 +102,45 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("Cold attach accepts a marked pane while its foreground child runs")
+    func coldAttachAcceptsForegroundChild() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+
+        let sessionName = fixture.sessionName("foreground-child")
+        let validatedName = try #require(TmuxSessionName(sessionName))
+        let directory = try #require(RemoteWorkingDirectory(fixture.workDirectory.path))
+        let original = TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: validatedName,
+            workingDirectory: directory,
+            credentials: fixture.credentials,
+            paneCommand: "exec /bin/zsh -f"
+        )
+        try await original.start()
+        #expect(original.phase == .attached)
+        guard original.phase == .attached else {
+            try await fixture.killSession(name: sessionName)
+            return
+        }
+        try await original.send(Data("sleep 5\n".utf8))
+        try await Task.sleep(for: .milliseconds(100))
+        try await original.detach()
+
+        let replacementClient = TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: validatedName,
+            workingDirectory: directory,
+            credentials: fixture.credentials,
+            paneCommand: "exec /bin/zsh -f"
+        )
+        try await replacementClient.start()
+
+        #expect(replacementClient.phase == .attached)
+        try await replacementClient.close()
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("Reconnect attaches when the original project path is gone")
     func reconnectIgnoresMissingProjectPath() async throws {
         let fixture = try makeFixture()

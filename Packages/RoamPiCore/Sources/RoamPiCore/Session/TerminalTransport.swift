@@ -347,7 +347,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
     static func launcherPaneExecutable(for paneCommand: String) -> String {
         let commandParts = paneCommand.split(separator: " ")
-        if commandParts.count == 2, commandParts[0] == "exec" {
+        if commandParts.count >= 2, commandParts[0] == "exec" {
             return URL(fileURLWithPath: String(commandParts[1])).lastPathComponent
         }
         return "pi"
@@ -390,7 +390,7 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
         {
             throw SessionDiagnostic.processIdentityChanged
         }
-        if !attachExisting {
+        if !attachExisting, adoptedIdentity.processID == nil {
             guard identity.startCommand == Self.reportedStartCommand(for: paneCommand) else {
                 throw SessionDiagnostic.processIdentityChanged
             }
