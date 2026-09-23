@@ -435,8 +435,9 @@ public enum RoamPiConfigurationParser {
         "totp",
     ]
     private static let prohibitedKeyQualifiers = [
-        "contents", "material", "content", "encoded", "header", "base64", "string", "value", "code", "data", "file",
-        "hash", "json", "path", "pem",
+        "bytearray", "ciphertext", "contents", "encrypted", "material", "base64", "binary", "buffer", "content",
+        "encoded", "header", "payload", "string", "bytes", "value", "blob", "code", "data", "file", "hash",
+        "json", "path", "raw", "hex", "pem",
     ]
     private static let prohibitedKeyWordSequences = [
         ["access", "key", "id"], ["access", "key"], ["access", "token"], ["api", "key"], ["auth"], ["authorization"],

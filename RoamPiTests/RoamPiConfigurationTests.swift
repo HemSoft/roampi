@@ -267,7 +267,7 @@ struct RoamPiConfigurationTests {
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["accessKeyValue": "not-a-real-credential"],
+            "value": ["accessKeyBytes": "not-a-real-credential"],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(

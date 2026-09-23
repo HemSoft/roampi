@@ -233,8 +233,9 @@ PROHIBITED_KEYS = {
     "privatekey", "providerkey", "pwd", "secret", "secretaccesskey", "secretkey", "seedphrase", "sessioncookie", "token", "totp",
 }
 PROHIBITED_QUALIFIERS = (
-    "contents", "material", "content", "encoded", "header", "base64", "string", "value", "code", "data", "file",
-    "hash", "json", "path", "pem",
+    "bytearray", "ciphertext", "contents", "encrypted", "material", "base64", "binary", "buffer", "content",
+    "encoded", "header", "payload", "string", "bytes", "value", "blob", "code", "data", "file", "hash",
+    "json", "path", "raw", "hex", "pem",
 )
 PROHIBITED_KEY_WORD_SEQUENCES = (
     ("access", "key", "id"), ("access", "key"), ("access", "token"), ("api", "key"), ("auth",), ("authorization",), ("bearer",),
