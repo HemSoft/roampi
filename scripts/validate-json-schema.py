@@ -138,6 +138,18 @@ def validate_unique_identifiers(value: Any) -> list[str]:
             errors.append(f"{path}: identifier is not unique")
         else:
             seen.add(identifier)
+
+    machine = value.get("machine") if isinstance(value, dict) else None
+    overrides = machine.get("projectOverrides", []) if isinstance(machine, dict) else []
+    override_targets: set[str] = set()
+    for index, override in enumerate(overrides if isinstance(overrides, list) else []):
+        target = override.get("projectID") if isinstance(override, dict) else None
+        if not isinstance(target, str):
+            continue
+        if target in override_targets:
+            errors.append(f"$.machine.projectOverrides[{index}].projectID: identifier is not unique")
+        else:
+            override_targets.add(target)
     return errors
 
 
