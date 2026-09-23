@@ -21,6 +21,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/forward-version.roampi" \
     "$repo_root/docs/examples/invalid/fractional-required.roampi" \
     "$repo_root/docs/examples/invalid/inverted-widths.roampi" \
+    "$repo_root/docs/examples/invalid/invalid-supplied-schema-branch.roampi" \
     "$repo_root/docs/examples/invalid/jobs-without-source.roampi" \
     "$repo_root/docs/examples/invalid/missing-action-reference.roampi" \
     "$repo_root/docs/examples/invalid/missing-required-property.roampi" \
@@ -31,6 +32,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/oversized-integer.roampi" \
     "$repo_root/docs/examples/invalid/rounded-width.roampi" \
     "$repo_root/docs/examples/invalid/rounded-inverted-width.roampi" \
+    "$repo_root/docs/examples/invalid/rounded-number-kind.roampi" \
     "$repo_root/docs/examples/invalid/secret-field.roampi" \
     "$repo_root/docs/examples/invalid/underflow-number.roampi" \
     "$repo_root/docs/examples/invalid/underflow-width.roampi" \
@@ -66,6 +68,7 @@ run_validator --expect 'duplicate_key@$[?]' --machine "$repo_root/docs/examples/
 run_validator --expect 'invalid_value@$.dataSources[0].resultSchema.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items' --machine "$repo_root/docs/examples/invalid/deep-result-schema.roampi"
 run_validator --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
 run_validator --expect 'invalid_value@$.pages[0].blocks[0].layout.preferredWidth' --project validation-host /Users/developer/Projects/InvertedWidths "$repo_root/docs/examples/invalid/inverted-widths.roampi"
+run_validator --expect 'missing_value@$.dataSources[0].resultSchema.properties[?].items' --machine "$repo_root/docs/examples/invalid/invalid-supplied-schema-branch.roampi"
 run_validator --expect 'missing_value@$.pages[0].blocks[0].jobID' --project validation-host /Users/developer/Projects/MissingJobSource "$repo_root/docs/examples/invalid/jobs-without-source.roampi"
 run_validator --expect 'invalid_reference@$.pages[0].blocks[0].actionID' --machine "$repo_root/docs/examples/invalid/missing-action-reference.roampi"
 run_validator --expect 'invalid_reference@$.dataSources[0].resultSchema.required[0]' --machine "$repo_root/docs/examples/invalid/missing-required-property.roampi"
@@ -76,6 +79,7 @@ run_validator --expect 'malformed_json@$' --machine "$repo_root/docs/examples/in
 run_validator --expect 'invalid_value@$.dataSources[0].value' --machine "$repo_root/docs/examples/invalid/oversized-integer.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/rounded-width.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/rounded-inverted-width.roampi"
+run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/rounded-number-kind.roampi"
 run_validator --expect 'secret_field@$.dataSources[0].value[?]' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/underflow-number.roampi"
 run_validator --expect 'invalid_value@$[?]' --project validation-host /Users/developer/Projects/UnderflowWidth "$repo_root/docs/examples/invalid/underflow-width.roampi"

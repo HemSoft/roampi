@@ -309,12 +309,39 @@ private struct RoamPiJSONDuplicateKeyScanner {
         guard let value = Double(token),
               value.isFinite,
               value != 0 || !hasNonzeroDigit,
+              isMathematicallyIntegral(token) || value.rounded(.towardZero) != value,
               hasSupportedMinimumMagnitude(token),
               !widthBounded || isAtMostMaximumWidth(token)
         else {
             containsUnsupportedNumber = true
             return
         }
+    }
+
+    private func isMathematicallyIntegral(_ token: String) -> Bool {
+        let unsigned = token.hasPrefix("-") ? String(token.dropFirst()) : token
+        let parts = unsigned.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "e" || $0 == "E" })
+        guard parts.count <= 2 else { return false }
+        let exponent: Int
+        if parts.count == 2 {
+            guard let parsed = Int(parts[1]) else { return false }
+            exponent = parsed
+        } else {
+            exponent = 0
+        }
+        let coefficient = parts[0]
+        let fractionalDigits = coefficient.firstIndex(of: ".").map {
+            coefficient.distance(from: coefficient.index(after: $0), to: coefficient.endIndex)
+        } ?? 0
+        let (scale, overflow) = exponent.subtractingReportingOverflow(fractionalDigits)
+        guard !overflow else { return false }
+        if scale >= 0 {
+            return true
+        }
+        guard scale != Int.min else { return false }
+        let digits = coefficient.filter(\.isNumber)
+        let requiredZeros = -scale
+        return requiredZeros <= digits.count && digits.suffix(requiredZeros).allSatisfy { $0 == "0" }
     }
 
     private func isAtMostMaximumWidth(_ token: String) -> Bool {
@@ -888,35 +915,29 @@ public enum RoamPiConfigurationParser {
             append(.invalidValue, at: path, to: &diagnostics)
             return
         }
-        switch schema.type {
-        case .object:
-            let properties = schema.properties ?? [:]
-            var requiredNames = Set<String>()
-            for (index, required) in (schema.required ?? []).enumerated() {
-                if !requiredNames.insert(required).inserted {
-                    append(.duplicateIdentifier, at: path + ".required[\(index)]", to: &diagnostics)
-                } else if properties[required] == nil {
-                    append(.invalidReference, at: path + ".required[\(index)]", to: &diagnostics)
-                }
+        let properties = schema.properties ?? [:]
+        var requiredNames = Set<String>()
+        for (index, required) in (schema.required ?? []).enumerated() {
+            if !requiredNames.insert(required).inserted {
+                append(.duplicateIdentifier, at: path + ".required[\(index)]", to: &diagnostics)
+            } else if properties[required] == nil {
+                append(.invalidReference, at: path + ".required[\(index)]", to: &diagnostics)
             }
-            for key in properties.keys.sorted() {
-                if let child = properties[key] {
-                    validateValueSchema(
-                        child,
-                        at: path + ".properties[?]",
-                        depth: depth + 1,
-                        diagnostics: &diagnostics
-                    )
-                }
+        }
+        for key in properties.keys.sorted() {
+            if let child = properties[key] {
+                validateValueSchema(
+                    child,
+                    at: path + ".properties[?]",
+                    depth: depth + 1,
+                    diagnostics: &diagnostics
+                )
             }
-        case .array:
-            if let items = schema.items {
-                validateValueSchema(items, at: path + ".items", depth: depth + 1, diagnostics: &diagnostics)
-            } else {
-                append(.missingValue, at: path + ".items", to: &diagnostics)
-            }
-        case .string, .number, .integer, .boolean, .null:
-            break
+        }
+        if let items = schema.items {
+            validateValueSchema(items, at: path + ".items", depth: depth + 1, diagnostics: &diagnostics)
+        } else if schema.type == .array {
+            append(.missingValue, at: path + ".items", to: &diagnostics)
         }
     }
 

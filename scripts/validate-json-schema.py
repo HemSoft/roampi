@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import unicodedata
@@ -262,6 +263,21 @@ def validate_no_secret_fields(value: Any, path: str = "$") -> list[str]:
     return errors
 
 
+def validate_number_kind_preservation(value: Any, path: str = "$") -> list[str]:
+    errors: list[str] = []
+    if isinstance(value, Decimal) and value != value.to_integral_value():
+        floating = float(value)
+        if math.isfinite(floating) and floating.is_integer():
+            errors.append(f"{path}: nonintegral number rounds to an integer")
+    elif isinstance(value, dict):
+        for child in value.values():
+            errors.extend(validate_number_kind_preservation(child, f"{path}[?]"))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            errors.extend(validate_number_kind_preservation(child, f"{path}[{index}]"))
+    return errors
+
+
 def validate_document_depth(value: Any, path: str, depth: int, maximum: int) -> list[str]:
     if depth > maximum:
         return [f"{path}: document exceeds maximum depth"]
@@ -309,6 +325,8 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         errors.extend(validate_contract_references(value))
     if schema.get("x-roampi-no-secret-fields"):
         errors.extend(validate_no_secret_fields(value))
+    if schema.get("x-roampi-preserve-number-kind"):
+        errors.extend(validate_number_kind_preservation(value))
     expected_type = schema.get("type")
     if expected_type is not None:
         allowed = [expected_type] if isinstance(expected_type, str) else expected_type
