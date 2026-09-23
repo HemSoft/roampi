@@ -32,7 +32,7 @@ Data sources are one of:
 
 - `static`, containing strict JSON; integral values use the exact signed-or-unsigned 64-bit range, while nonintegral values must fit finite binary64;
 - `builtin`, naming typed RoamPi machine, project, session, job, or connection state; or
-- `command`, naming a bounded remote command, target machine, required working directory, and result schema. RoamPi must obtain approval for its trust identity before first execution or execution after an identity change; opening or refreshing a page cannot bypass that gate.
+- `command`, naming a bounded remote command, target machine, required working directory, and result schema. Result schemas allow at most 16 nested `items`/`properties` levels, declared by `x-roampi-max-schema-depth`. RoamPi must obtain approval for its trust identity before first execution or execution after an identity change; opening or refreshing a page cannot bypass that gate.
 
 Actions are either `prompt` or `command`. They declare a target machine and working directory, prompt delivery (`immediate`, `followUp`, or `steering`), presentation, inline or durable execution, cancellation policy, and concurrency policy.
 
@@ -70,7 +70,7 @@ Diagnostics contain only a fixed code and a bounded JSON location. They do not i
 - [`examples/minimal.roampi`](examples/minimal.roampi) is the smallest machine configuration.
 - [`examples/developer-dashboard.roampi`](examples/developer-dashboard.roampi) is a fictional multi-machine dashboard with native blocks, data sources, actions, and a durable job.
 - [`examples/project.roampi`](examples/project.roampi) is a fictional repository contribution. Validate it with the developer dashboard to exercise merging and namespace isolation.
-- [`examples/invalid`](examples/invalid) contains fixtures for control-character names, forward versions, duplicate identifiers, inverted widths, missing jobs sources, duplicate keys, invalid schema metadata, non-finite, underflowing or out-of-range numbers and widths, oversized integers, secret fields, unsafe paths, and undeclared components.
+- [`examples/invalid`](examples/invalid) contains fixtures for control-character names, forward versions, duplicate identifiers, inverted or rounded widths, over-deep result schemas, missing jobs sources, duplicate keys, invalid schema metadata, non-finite, underflowing or out-of-range numbers and widths, oversized integers, secret fields, unsafe paths, and undeclared components.
 
 Validate the schema, every valid example, and every expected invalid fixture with:
 

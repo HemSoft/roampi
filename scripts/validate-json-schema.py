@@ -79,13 +79,30 @@ def type_matches(value: Any, expected: str) -> bool:
     }[expected]
 
 
+def validate_schema_depth(value: Any, path: str, depth: int, maximum: int) -> list[str]:
+    if depth > maximum:
+        return [f"{path}: result schema exceeds maximum depth"]
+    if not isinstance(value, dict):
+        return []
+    errors: list[str] = []
+    if isinstance(value.get("items"), dict):
+        errors.extend(validate_schema_depth(value["items"], f"{path}.items", depth + 1, maximum))
+    if isinstance(value.get("properties"), dict):
+        for child in value["properties"].values():
+            errors.extend(validate_schema_depth(child, f"{path}.properties[?]", depth + 1, maximum))
+    return errors
+
+
 def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> list[str]:
     if schema is True:
         return []
     if schema is False:
         return [f"{path}: schema rejected value"]
     if "$ref" in schema:
-        return validate(root, resolve_ref(root, schema["$ref"]), value, path)
+        errors = validate(root, resolve_ref(root, schema["$ref"]), value, path)
+        if "x-roampi-max-schema-depth" in schema:
+            errors.extend(validate_schema_depth(value, path, 0, schema["x-roampi-max-schema-depth"]))
+        return errors
 
     errors: list[str] = []
     expected_type = schema.get("type")
@@ -137,6 +154,9 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
                 errors.extend(validate(root, schema["additionalProperties"], item, f"{path}[?]"))
             elif schema.get("additionalProperties") is False:
                 errors.append(f"{path}[?]: property is not declared")
+
+    if "x-roampi-max-schema-depth" in schema:
+        errors.extend(validate_schema_depth(value, path, 0, schema["x-roampi-max-schema-depth"]))
 
     if schema.get("x-roampi-width-order") and isinstance(value, dict):
         minimum = value.get("minimumWidth")

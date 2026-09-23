@@ -252,6 +252,28 @@ struct RoamPiConfigurationTests {
         ])
     }
 
+    @Test("Compound secret-key fields are rejected")
+    func compoundSecretKeyField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["secretKey": "not-a-real-key"],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
+        ])
+    }
+
     @Test("Passphrase fields are rejected")
     func passphraseSecretField() throws {
         var object = try #require(JSONSerialization.jsonObject(
@@ -668,6 +690,26 @@ struct RoamPiConfigurationTests {
             code: .invalidValue,
             location: "$.dataSources[0].targetMachineID"
         )))
+    }
+
+    @Test("Static values do not inherit layout width bounds")
+    func staticNumericValueOutsideLayoutBounds() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "large-measurement",
+            "type": "static",
+            "value": ["minimumWidth": 10000],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration != nil)
+        #expect(result.diagnostics.isEmpty)
     }
 
     @Test("Optional data-source fields are validated in every variant")

@@ -207,7 +207,7 @@
         "command": { "type": "string", "minLength": 1, "maxLength": 65536 },
         "targetMachineID": { "$ref": "#/$defs/identifier" },
         "workingDirectory": { "$ref": "#/$defs/absolutePath" },
-        "resultSchema": { "$ref": "#/$defs/valueSchema" }
+        "resultSchema": { "$ref": "#/$defs/valueSchema", "x-roampi-max-schema-depth": 16 }
       },
       "allOf": [
         { "if": { "properties": { "type": { "const": "static" } } }, "then": { "required": ["value"] } },

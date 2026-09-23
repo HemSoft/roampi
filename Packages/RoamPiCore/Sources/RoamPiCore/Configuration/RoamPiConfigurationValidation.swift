@@ -131,7 +131,7 @@ private struct RoamPiJSONDuplicateKeyScanner {
 
     mutating func containsDuplicateKey() throws -> Bool {
         skipWhitespace()
-        let duplicate = try parseValue()
+        let duplicate = try parseValue(path: [])
         if duplicate {
             return true
         }
@@ -140,24 +140,24 @@ private struct RoamPiJSONDuplicateKeyScanner {
         return false
     }
 
-    private mutating func parseValue() throws -> Bool {
+    private mutating func parseValue(path: [String]) throws -> Bool {
         skipWhitespace()
         guard let byte = current else { throw ScanError.malformed }
         switch byte {
         case 123:
-            return try parseObject()
+            return try parseObject(path: path)
         case 91:
-            return try parseArray()
+            return try parseArray(path: path)
         case 34:
             _ = try parseString()
             return false
         default:
-            parsePrimitive()
+            parsePrimitive(widthBounded: isWidthPath(path))
             return false
         }
     }
 
-    private mutating func parseObject() throws -> Bool {
+    private mutating func parseObject(path: [String]) throws -> Bool {
         index += 1
         skipWhitespace()
         if consume(125) {
@@ -172,7 +172,7 @@ private struct RoamPiJSONDuplicateKeyScanner {
             }
             skipWhitespace()
             guard consume(58) else { throw ScanError.malformed }
-            if try parseValue() {
+            if try parseValue(path: path + [key]) {
                 return true
             }
             skipWhitespace()
@@ -183,14 +183,14 @@ private struct RoamPiJSONDuplicateKeyScanner {
         }
     }
 
-    private mutating func parseArray() throws -> Bool {
+    private mutating func parseArray(path: [String]) throws -> Bool {
         index += 1
         skipWhitespace()
         if consume(93) {
             return false
         }
         while true {
-            if try parseValue() {
+            if try parseValue(path: path + ["[]"]) {
                 return true
             }
             skipWhitespace()
@@ -226,7 +226,13 @@ private struct RoamPiJSONDuplicateKeyScanner {
         throw ScanError.malformed
     }
 
-    private mutating func parsePrimitive() {
+    private func isWidthPath(_ path: [String]) -> Bool {
+        guard path.first == "pages", path.count >= 5, let key = path.last else { return false }
+        return Array(path.suffix(4).dropLast()) == ["blocks", "[]", "layout"] &&
+            ["minimumWidth", "preferredWidth", "maximumWidth"].contains(key)
+    }
+
+    private mutating func parsePrimitive(widthBounded: Bool) {
         let start = index
         while let byte = current, ![9, 10, 13, 32, 44, 93, 125].contains(byte) {
             index += 1
@@ -235,10 +241,12 @@ private struct RoamPiJSONDuplicateKeyScanner {
         let token = String(decoding: bytes[start ..< index], as: UTF8.self)
         let significand = token.split(whereSeparator: { $0 == "e" || $0 == "E" }).first ?? ""
         let hasNonzeroDigit = significand.contains(where: { ("1" ... "9").contains($0) })
+        let exactValue = Decimal(string: token, locale: Locale(identifier: "en_US_POSIX"))
         guard let value = Double(token),
               value.isFinite,
               value != 0 || !hasNonzeroDigit,
-              hasSupportedMinimumMagnitude(token)
+              hasSupportedMinimumMagnitude(token),
+              !widthBounded || (exactValue.map { decimal in decimal <= Decimal(4096) } ?? (value <= 4096))
         else {
             containsUnsupportedNumber = true
             return
@@ -293,7 +301,7 @@ public enum RoamPiConfigurationParser {
     private static let maximumDiagnostics = 32
     private static let prohibitedKeys: Set<String> = [
         "accesstoken", "apikey", "authorization", "credential", "credentials", "mnemonic",
-        "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "seedphrase", "token",
+        "passcode", "passphrase", "password", "privatekey", "providerkey", "secret", "secretkey", "seedphrase", "token",
     ]
     private static let prohibitedKeyQualifiers: Set<String> = [
         "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path", "pem",

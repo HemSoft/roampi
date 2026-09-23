@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "kind": "machine",
+  "machine": {
+    "homeHost": { "id": "home", "name": "Home" },
+    "machines": [],
+    "projects": []
+  },
+  "pages": [
+    {
+      "id": "width-test",
+      "title": "Width Test",
+      "systemImage": "ruler",
+      "blocks": [
+        {
+          "id": "wide",
+          "type": "text",
+          "text": "Wide",
+          "layout": { "minimumWidth": 4096.0000000000001 }
+        }
+      ]
+    }
+  ]
+}
