@@ -1269,7 +1269,7 @@ public enum RoamPiConfigurationParser {
                 let next = scalars.indices.contains(index + 1) ? scalars[index + 1] : nil
                 let scalarIsASCII = scalar.isASCII && CharacterSet.letters.contains(scalar)
                 let previousIsASCII = previous.isASCII && CharacterSet.letters.contains(previous)
-                let startsWord = (scalarIsASCII && CharacterSet.letters.contains(previous) && !previousIsASCII) ||
+                let startsWord = (scalarIsASCII && isLetterOrNumber(previous) && !previousIsASCII) ||
                     (CharacterSet.uppercaseLetters.contains(scalar) &&
                         ((CharacterSet.letters.contains(previous) &&
                                 !CharacterSet.uppercaseLetters.contains(previous)) ||
