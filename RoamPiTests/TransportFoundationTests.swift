@@ -1,6 +1,125 @@
 import Foundation
 @testable import RoamPi
+@testable import RoamPiCore
+import SwiftTerm
 import Testing
+
+@Suite("Terminal screen buffering")
+struct TerminalScreenBufferingTests {
+    @MainActor
+    @Test("Display buffering is bounded and detaches on overflow")
+    func detachesOnOutputOverflow() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-buffer-test")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let model = TerminalScreenModel(session: session)
+        try await session.start()
+
+        transport.feed(String(repeating: "x", count: 5 * 1024 * 1024))
+        for _ in 0 ..< 100 where session.phase != .detached {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(session.phase == .detached)
+        #expect(model.phaseDetail == "Terminal output exceeded the local display buffer.")
+    }
+
+    @MainActor
+    @Test("Terminal input preserves callback order")
+    func preservesInputOrder() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-input-order")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let model = TerminalScreenModel(session: session)
+        let coordinator = TerminalCoordinator()
+        let terminalView = TerminalView(frame: .zero)
+        coordinator.bind(model: model, view: terminalView)
+        try await session.start()
+
+        let expected = Array(0 ..< 100).map { Data([UInt8($0)]) }
+        for data in expected {
+            coordinator.send(source: terminalView, data: ArraySlice(data))
+        }
+        for _ in 0 ..< 100 where transport.recordedWrites.count < expected.count {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(transport.recordedWrites == expected)
+        try await session.close()
+    }
+
+    @MainActor
+    @Test("Control modifies the next terminal key without sending Ctrl-C")
+    func controlModifiesNextKey() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-control-key")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport
+        )
+        let model = TerminalScreenModel(session: session)
+        try await session.start()
+
+        model.toggleControlModifier()
+        #expect(model.controlModifierArmed)
+        #expect(transport.recordedWrites.isEmpty)
+        let arrow = Data([0x1B, 0x5B, 0x41])
+        model.sendKey(arrow)
+        for _ in 0 ..< 100 where transport.recordedWrites.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.controlModifierArmed)
+
+        model.sendKey(Data("d".utf8))
+        for _ in 0 ..< 100 where transport.recordedWrites.count < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(transport.recordedWrites == [arrow, Data([0x04])])
+        #expect(!model.controlModifierArmed)
+        #expect(TerminalScreenModel.applyingControlModifier(to: Data("z".utf8)) == Data([0x1A]))
+        #expect(TerminalScreenModel.applyingControlModifier(to: Data("?".utf8)) == Data([0x7F]))
+        try await session.close()
+    }
+
+    @MainActor
+    @Test("Terminal viewport callbacks preserve their latest size")
+    func preservesViewportCallbackOrder() async throws {
+        let transport = ScriptedTerminalTransport()
+        let session = try TerminalSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            sessionName: #require(TmuxSessionName("roampi-viewport-order")),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            deferredResizeInterval: .milliseconds(5)
+        )
+        let model = TerminalScreenModel(session: session)
+        let coordinator = TerminalCoordinator()
+        let terminalView = TerminalView(frame: .zero)
+        coordinator.bind(model: model, view: terminalView)
+        try await session.start()
+
+        for columns in 80 ..< 180 {
+            coordinator.sizeChanged(source: terminalView, newCols: columns, newRows: 40)
+        }
+        for _ in 0 ..< 100 where transport.recordedResizes.last?.columns != 179 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(transport.recordedResizes.last?.columns == 179)
+        #expect(transport.recordedResizes.last?.rows == 40)
+        try await session.close()
+    }
+}
 
 @Suite("SSH transport foundation")
 struct TransportFoundationTests {

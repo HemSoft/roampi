@@ -17,7 +17,7 @@ jobs:
   build-test-lint-audit:
     name: Xcode build, test, lint, and dependency audit
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Check out source
@@ -28,10 +28,11 @@ jobs:
         with:
           xcode-version: 26.6
 
-      - name: Install SwiftFormat
+      - name: Install test tools
         run: |
-          brew install swiftformat
+          brew install swiftformat tmux
           swiftformat --version
+          tmux -V
 
       - name: Record toolchain and simulator versions
         run: |
@@ -44,12 +45,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           ./scripts/audit-dependencies.sh
-          xcodebuild -resolvePackageDependencies -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
+          xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi
 
       - name: Build and test iPhone 17
+        # `test` builds the app before executing the suites. Coverage is off
+        # because Xcode 26.6 hangs while instrumenting TerminalSession's async
+        # protocol-existential path; the same path remains fully tested.
+        run: xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' -enableCodeCoverage NO test
+
+      - name: Run disposable SSH integration tests
         run: |
-          xcodebuild -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' build
-          xcodebuild -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPi -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' test
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution -project RoamPi.xcodeproj -scheme RoamPiIntegrationTests -destination 'platform=macOS' -enableCodeCoverage NO test
 
       - name: Check Swift formatting
         run: swiftformat --lint .

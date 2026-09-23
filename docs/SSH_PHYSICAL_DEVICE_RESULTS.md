@@ -6,14 +6,14 @@ This record separates automated checks from observations made on a physical devi
 
 | Component | Recorded version |
 | --- | --- |
-| Validation date | 2026-09-21 |
+| Validation date | 2026-09-22 |
 | Xcode | 27.0, build 27A266a, selected per command with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` |
 | Device | iPhone 17 Pro Max |
 | iOS | 27.0, build 24A5418b |
 | Tailscale iOS | 8.15.0, build 96 |
 | SSH implementation | SwiftNIO SSH 0.15.0 |
 
-The machine's global `xcode-select` still points to Command Line Tools. Validation commands selected full Xcode explicitly and did not mutate that machine-wide setting. Device builds used an isolated signing keychain and automatic development provisioning; signing values were not added to the repository or logs.
+The machine's global `xcode-select` still points to Command Line Tools. Validation commands selected full Xcode explicitly and did not mutate that machine-wide setting. Device builds used an isolated signing keychain and API-created development provisioning; every temporary signing resource was deleted after validation, and signing values were not added to the repository or logs.
 
 ## Results
 
@@ -33,20 +33,25 @@ The machine's global `xcode-select` still points to Command Line Tools. Validati
 | Pending-connection cancellation | Pass | A physical probe to an unused Tailscale-routed address was cancelled from the UI and retained `pending-connection-cancelled`. |
 | Wi-Fi-to-cellular transition and reconnect | Pass | A first wireless-Xcode attempt correctly severed the test harness when Wi-Fi was disabled and produced no network claim. After attaching Xcode over the wired transport, the cellular probe passed. Wi-Fi was restored; the immediate return probe's command channel stopped during the handoff, and a stable-route retry passed without another fingerprint prompt. |
 | Duplicate-command prevention | Pass | The coordinator rejects concurrent probes. The disposable fixture counted exactly one command for its successful probe and one for the deliberately disconnected probe; changed-key validation added none. |
+| SwiftTerm PTY rendering and input controls | Pass | The physical app rendered a live SSH PTY and exposed text input plus Escape, Control, Tab, arrows, Page Up, and Page Down. The terminal-content region was excluded from retained evidence. |
+| tmux-hosted Pi suspension and reconnect | Pass | A disposable tmux pane was started with Pi as its direct process. Its redacted PID remained unchanged across app suspension, forced SSH loss, and a fresh physical-app attachment. No duplicate Pi process was created. |
+| Wi-Fi-to-cellular tmux reconnect | Pass | Wired XCTest automation disabled Wi-Fi, waited on cellular routing, reattached the same tmux pane, and displayed the same-process confirmation. Wi-Fi was restored in teardown. |
+| Live PTY resize | Pass | Physical orientation changed the tmux pane dimensions while the recorded Pi PID remained unchanged. |
+| Strict Pi RPC exchange | Pass | A separate one-use profile opened the real no-session RPC adapter. The physical UI recorded one response frame and zero event frames without invoking a provider or retaining response content. |
 
 ## Physical test controls
 
-The physical automation uses a debug-only handoff:
+The physical automation uses debug-only handoffs:
 
-- It activates only with `--install-development-transport-profile`.
-- It reads a size-limited JSON profile from the app's private cache container.
-- It validates the endpoint and expected fingerprints, then deletes the profile immediately.
-- It displays a masked endpoint so UI-test output cannot reveal private network data.
-- It permits automated fingerprint approval only when the presented value matches an independently staged fingerprint.
-- It can export only the generated public key to the private cache container for the approved fixture setup.
-- Release builds cannot consume the profile or export the key.
+- The transport profile activates only with `--install-development-transport-profile`; the session profile uses a separate launch argument.
+- Each profile is size-limited, read from the app's private cache container, validated, and deleted immediately.
+- The session profile accepts exactly one independently staged host fingerprint and selects either terminal or RPC mode.
+- The transport proof displays a masked endpoint so UI-test output cannot reveal private network data.
+- Automated fingerprint approval is permitted only when the presented value matches the independently staged fingerprint.
+- A dedicated debug launch argument can export only the generated public key to the private cache container for approved fixture setup.
+- Release builds cannot consume either profile or export the key.
 
-The public-key handoff file, temporary `authorized_keys` entry, disposable SSH daemon, temporary host keys, temporary configuration, and private local profiles were removed after validation.
+The public-key handoff, tagged authorization entry, disposable tmux/Pi session, test directory, private profiles, debug app, signing keychain, provisioning profiles, certificate, bundle records, raw terminal capture, and build products were removed after validation. User tmux sessions and Pi history were not modified.
 
 ## Remaining limitation
 
