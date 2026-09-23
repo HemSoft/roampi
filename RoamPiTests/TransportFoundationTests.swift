@@ -132,6 +132,7 @@ struct TransportFoundationTests {
             ("person@machine.example.ts.net:2222", nil, "machine.example.ts.net", 2222),
             ("person@100.64.0.1", "2200", "100.64.0.1", 2200),
             ("person@[fd7a:115c:a1e0::1]:2022", nil, "fd7a:115c:a1e0::1", 2022),
+            ("person@[fe80::1%en0]:2022", nil, "fe80::1%en0", 2022),
         ]
     )
     func parsesConnectionStrings(input: String, advancedPort: String?, host: String, port: Int) throws {
@@ -154,6 +155,10 @@ struct TransportFoundationTests {
             "person@host:65536",
             "person@bad host",
             "person@[not-ipv6]",
+            "person@[fe80::1%]",
+            "person@[fe80::1%bad scope]",
+            "person@[fe80::1%en0%extra]",
+            "person@[fe80::1%🚫]",
         ]
     )
     func rejectsConnectionStrings(input: String) {

@@ -129,8 +129,23 @@ public struct RemoteEndpoint: Equatable, Sendable {
     }
 
     private static func isValidIPv6Literal(_ value: String) -> Bool {
+        let parts = value.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let addressPart = parts.first, !addressPart.isEmpty else { return false }
+        if parts.count == 2 {
+            let scope = parts[1]
+            guard !scope.isEmpty, scope.utf8.count <= 63, scope.utf8.allSatisfy({ byte in
+                switch byte {
+                case 45, 46, 48 ... 57, 65 ... 90, 95, 97 ... 122:
+                    true
+                default:
+                    false
+                }
+            }) else {
+                return false
+            }
+        }
         var address = in6_addr()
-        return value.withCString { inet_pton(AF_INET6, $0, &address) == 1 }
+        return addressPart.withCString { inet_pton(AF_INET6, $0, &address) == 1 }
     }
 }
 
