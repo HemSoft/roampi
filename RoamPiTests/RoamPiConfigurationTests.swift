@@ -201,6 +201,7 @@ struct RoamPiConfigurationTests {
                 "format": "json",
                 "passwordlessEnabled": true,
                 "secretary": "available",
+                "spin": 2,
                 "tokenCount": 3,
             ],
         ]]
@@ -289,6 +290,28 @@ struct RoamPiConfigurationTests {
             "id": "unsafe-static",
             "type": "static",
             "value": ["passwordContents" + String(repeating: "data", count: 10000): true],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value[?]"),
+        ])
+    }
+
+    @Test("PIN-code credential fields are rejected")
+    func pinCodeCredentialField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["pinCode": "1234"],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(

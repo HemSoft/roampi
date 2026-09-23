@@ -429,13 +429,13 @@ public enum RoamPiConfigurationParser {
     private static let prohibitedKeys: Set<String> = [
         "accesskeyid", "accesstoken", "apikey", "authorization", "bearer", "clientsecret", "cookie", "credential",
         "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password",
-        "personalaccesstoken", "pin",
+        "personalaccesstoken",
         "privatekey", "providerkey", "pwd", "secret", "secretaccesskey", "secretkey", "seedphrase", "sessioncookie",
         "token",
         "totp",
     ]
     private static let prohibitedKeyQualifiers = [
-        "contents", "material", "content", "encoded", "header", "base64", "string", "value", "data", "file",
+        "contents", "material", "content", "encoded", "header", "base64", "string", "value", "code", "data", "file",
         "hash", "json", "path", "pem",
     ]
     private static let prohibitedKeyWordSequences = [
@@ -1266,11 +1266,15 @@ public enum RoamPiConfigurationParser {
             }
             if !current.isEmpty, let previous = scalars.indices.contains(index - 1) ? scalars[index - 1] : nil {
                 let next = scalars.indices.contains(index + 1) ? scalars[index + 1] : nil
-                let startsWord = CharacterSet.uppercaseLetters.contains(scalar) &&
-                    ((CharacterSet.letters.contains(previous) && !CharacterSet.uppercaseLetters.contains(previous)) ||
-                        CharacterSet.decimalDigits.contains(previous) ||
-                        (CharacterSet.uppercaseLetters.contains(previous) &&
-                            next.map(CharacterSet.lowercaseLetters.contains) == true))
+                let scalarIsASCII = scalar.isASCII && CharacterSet.letters.contains(scalar)
+                let previousIsASCII = previous.isASCII && CharacterSet.letters.contains(previous)
+                let startsWord = (scalarIsASCII && CharacterSet.letters.contains(previous) && !previousIsASCII) ||
+                    (CharacterSet.uppercaseLetters.contains(scalar) &&
+                        ((CharacterSet.letters.contains(previous) &&
+                                !CharacterSet.uppercaseLetters.contains(previous)) ||
+                            CharacterSet.decimalDigits.contains(previous) ||
+                            (CharacterSet.uppercaseLetters.contains(previous) &&
+                                next.map(CharacterSet.lowercaseLetters.contains) == true)))
                 if startsWord {
                     flush()
                 }
