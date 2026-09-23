@@ -23,6 +23,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/oversized-integer.roampi" \
     "$repo_root/docs/examples/invalid/secret-field.roampi" \
     "$repo_root/docs/examples/invalid/underflow-number.roampi" \
+    "$repo_root/docs/examples/invalid/underflow-width.roampi" \
     "$repo_root/docs/examples/invalid/unsafe-path.roampi" \
     "$repo_root/docs/examples/invalid/unknown-component.roampi"
 
@@ -57,6 +58,7 @@ run_validator --expect 'malformed_json@$' --machine "$repo_root/docs/examples/in
 run_validator --expect 'invalid_value@$.dataSources[0].value' --machine "$repo_root/docs/examples/invalid/oversized-integer.roampi"
 run_validator --expect 'secret_field@$[?]' --machine "$repo_root/docs/examples/invalid/secret-field.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/underflow-number.roampi"
+run_validator --expect 'invalid_value@$[?]' --project-root /Users/developer/Projects/UnderflowWidth "$repo_root/docs/examples/invalid/underflow-width.roampi"
 run_validator --expect 'unsafe_path@$.machine.projects[0].path' --machine "$repo_root/docs/examples/invalid/unsafe-path.roampi"
 run_validator --expect 'undeclared_type@$.pages[0].blocks[0].type' --project-root /Users/developer/Projects/Unknown "$repo_root/docs/examples/invalid/unknown-component.roampi"
 

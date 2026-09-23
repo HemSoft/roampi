@@ -261,7 +261,8 @@ public enum RoamPiConfigurationParser {
         "password", "privatekey", "providerkey", "secret", "token",
     ]
     private static let prohibitedKeyQualifiers: Set<String> = [
-        "content", "contents", "data", "file", "hash", "header", "json", "material", "path", "pem", "string", "value",
+        "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path", "pem",
+        "string", "value",
     ]
 
     public static func parse(
@@ -1025,7 +1026,16 @@ public enum RoamPiConfigurationParser {
         }
         return prohibitedKeys.contains { key in
             guard normalized.hasPrefix(key) else { return false }
-            return prohibitedKeyQualifiers.contains(String(normalized.dropFirst(key.count)))
+            return isProhibitedQualifierSequence(String(normalized.dropFirst(key.count)))
+        }
+    }
+
+    private static func isProhibitedQualifierSequence(_ value: String) -> Bool {
+        guard !value.isEmpty else { return false }
+        return prohibitedKeyQualifiers.contains { qualifier in
+            guard value.hasPrefix(qualifier) else { return false }
+            let remainder = String(value.dropFirst(qualifier.count))
+            return remainder.isEmpty || isProhibitedQualifierSequence(remainder)
         }
     }
 
