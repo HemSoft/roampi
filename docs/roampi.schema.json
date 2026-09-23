@@ -124,6 +124,7 @@
     "layout": {
       "type": "object",
       "additionalProperties": false,
+      "x-roampi-width-order": true,
       "required": ["compactSpan", "regularSpan"],
       "properties": {
         "minimumWidth": { "type": "number", "exclusiveMinimum": 0, "maximum": 4096 },

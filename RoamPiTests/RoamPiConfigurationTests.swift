@@ -513,6 +513,24 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics.allSatisfy { !$0.location.contains("prod.example.com") })
     }
 
+    @Test("Result-schema required names must be unique")
+    func resultSchemaRequiredUniqueness() {
+        let data = Data(
+            #"{"version":1,"kind":"project","project":{"id":"schema-required"},"pages":[],"dataSources":[{"id":"command-data","type":"command","command":"true","targetMachineID":"home","workingDirectory":"/srv/project","resultSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name","name"]}}],"actions":[],"jobs":[]}"#
+                .utf8
+        )
+
+        let result = RoamPiConfigurationParser.parse(
+            data,
+            source: .project(root: "/Users/developer/Projects/SchemaRequired")
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .duplicateIdentifier,
+            location: "$.dataSources[0].resultSchema.required[1]"
+        )))
+    }
+
     @Test("Project command data sources reject invalid target identifiers")
     func projectDataSourceTargetIdentifier() {
         let data = Data(

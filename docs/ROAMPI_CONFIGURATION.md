@@ -26,7 +26,7 @@ Pages form a navigation tree through `children`. A page contains native blocks w
 - `sessions` and `jobs` display RoamPi session or job state; and
 - `action` invokes a declared action after the applicable confirmation.
 
-Every block declares `compactSpan` and `regularSpan` from 1 through 12. Optional `minimumWidth` and `preferredWidth` values are semantic layout hints, not fixed coordinates. A preferred width cannot be smaller than its minimum width.
+Every block declares `compactSpan` and `regularSpan` from 1 through 12. Optional `minimumWidth` and `preferredWidth` values are semantic layout hints, not fixed coordinates. A preferred width cannot be smaller than its minimum width. The schema marks this cross-field rule with `x-roampi-width-order`; the repository schema validator and Swift runtime both enforce it.
 
 Data sources are one of:
 
@@ -70,7 +70,7 @@ Diagnostics contain only a fixed code and a bounded JSON location. They do not i
 - [`examples/minimal.roampi`](examples/minimal.roampi) is the smallest machine configuration.
 - [`examples/developer-dashboard.roampi`](examples/developer-dashboard.roampi) is a fictional multi-machine dashboard with native blocks, data sources, actions, and a durable job.
 - [`examples/project.roampi`](examples/project.roampi) is a fictional repository contribution. Validate it with the developer dashboard to exercise merging and namespace isolation.
-- [`examples/invalid`](examples/invalid) contains fixtures for control-character names, forward versions, duplicate identifiers, missing jobs sources, oversized integers, secret fields, unsafe paths, and undeclared components.
+- [`examples/invalid`](examples/invalid) contains fixtures for control-character names, forward versions, duplicate identifiers, inverted widths, missing jobs sources, oversized integers, secret fields, unsafe paths, and undeclared components.
 
 Validate the schema, every valid example, and every expected invalid fixture with:
 

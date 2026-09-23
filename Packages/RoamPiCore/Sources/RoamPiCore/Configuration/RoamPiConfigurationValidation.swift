@@ -714,8 +714,13 @@ public enum RoamPiConfigurationParser {
         switch schema.type {
         case .object:
             let properties = schema.properties ?? [:]
-            for required in schema.required ?? [] where properties[required] == nil {
-                append(.invalidReference, at: path + ".required", to: &diagnostics)
+            var requiredNames = Set<String>()
+            for (index, required) in (schema.required ?? []).enumerated() {
+                if !requiredNames.insert(required).inserted {
+                    append(.duplicateIdentifier, at: path + ".required[\(index)]", to: &diagnostics)
+                } else if properties[required] == nil {
+                    append(.invalidReference, at: path + ".required[\(index)]", to: &diagnostics)
+                }
             }
             for key in properties.keys.sorted() {
                 if let child = properties[key] {

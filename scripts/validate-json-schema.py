@@ -91,6 +91,13 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
             elif schema.get("additionalProperties") is False:
                 errors.append(f"{path}[?]: property is not declared")
 
+    if schema.get("x-roampi-width-order") and isinstance(value, dict):
+        minimum = value.get("minimumWidth")
+        preferred = value.get("preferredWidth")
+        if isinstance(minimum, (int, float)) and isinstance(preferred, (int, float)):
+            if preferred < minimum:
+                errors.append(f"{path}.preferredWidth: preferred width is below minimum width")
+
     for subschema in schema.get("allOf", []):
         errors.extend(validate(root, subschema, value, path))
     if "anyOf" in schema:
