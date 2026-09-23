@@ -16,16 +16,26 @@
     "projectOverrides": [],
     "fallbackBehavior": "includeDiscovered"
   },
-  "pages": [],
-  "dataSources": [
+  "pages": [
     {
-      "id": "unsafe-static",
-      "type": "static",
-      "value": {
-        "githubPAT": "not-a-real-token"
-      }
+      "id": "content-page",
+      "title": "Content",
+      "blocks": [
+        {
+          "id": "sessions",
+          "type": "sessions",
+          "layout": {
+            "compactSpan": 12,
+            "regularSpan": 12
+          },
+          "blocks": [],
+          "content": ""
+        }
+      ],
+      "children": []
     }
   ],
+  "dataSources": [],
   "actions": [],
   "jobs": []
 }

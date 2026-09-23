@@ -18,6 +18,7 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/duplicate-json-key.roampi" \
     "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi" \
     "$repo_root/docs/examples/invalid/deep-result-schema.roampi" \
+    "$repo_root/docs/examples/invalid/empty-optional-content.roampi" \
     "$repo_root/docs/examples/invalid/forward-version.roampi" \
     "$repo_root/docs/examples/invalid/fractional-required.roampi" \
     "$repo_root/docs/examples/invalid/hostile-exponent.roampi" \
@@ -70,6 +71,7 @@ run_validator --expect 'invalid_value@$.dataSources[0].resultSchema.required[0]'
 run_validator --expect 'malformed_json@$' --machine "$repo_root/docs/examples/invalid/hostile-exponent.roampi"
 run_validator --expect 'duplicate_key@$[?]' --machine "$repo_root/docs/examples/invalid/duplicate-json-key.roampi"
 run_validator --expect 'invalid_value@$.dataSources[0].resultSchema.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items.items' --machine "$repo_root/docs/examples/invalid/deep-result-schema.roampi"
+run_validator --expect 'invalid_value@$.pages[0].blocks[0].content' --machine "$repo_root/docs/examples/invalid/empty-optional-content.roampi"
 run_validator --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
 run_validator --expect 'invalid_value@$.pages[0].blocks[0].layout.preferredWidth' --project validation-host /Users/developer/Projects/InvertedWidths "$repo_root/docs/examples/invalid/inverted-widths.roampi"
 run_validator --expect 'missing_value@$.dataSources[0].resultSchema.properties[?].items' --machine "$repo_root/docs/examples/invalid/invalid-supplied-schema-branch.roampi"

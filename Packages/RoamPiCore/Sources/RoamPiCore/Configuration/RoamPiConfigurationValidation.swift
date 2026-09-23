@@ -428,7 +428,8 @@ public enum RoamPiConfigurationParser {
     private static let maximumDiagnostics = 32
     private static let prohibitedKeys: Set<String> = [
         "accesskeyid", "accesstoken", "apikey", "authorization", "bearer", "clientsecret", "cookie", "credential",
-        "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password", "pin",
+        "credentials", "hotp", "jwe", "jwt", "mnemonic", "otp", "passcode", "passphrase", "passwd", "password", "pat",
+        "pin",
         "privatekey", "providerkey", "pwd", "secret", "secretaccesskey", "secretkey", "seedphrase", "sessioncookie",
         "token",
         "totp",
@@ -791,6 +792,9 @@ public enum RoamPiConfigurationParser {
             append(.invalidValue, at: path + ".title", to: &diagnostics)
         }
         validateLayout(block.layout, at: path + ".layout", diagnostics: &diagnostics)
+        if let content = block.content, content.isEmpty || content.unicodeScalars.count > 65536 {
+            append(.invalidValue, at: path + ".content", to: &diagnostics)
+        }
         switch block.type {
         case .section, .grid:
             if block.blocks.isEmpty {
@@ -801,10 +805,8 @@ public enum RoamPiConfigurationParser {
                 append(.missingValue, at: path + ".dataSourceID", to: &diagnostics)
             }
         case .markdown:
-            if block.content?.isEmpty != false {
+            if block.content == nil {
                 append(.missingValue, at: path + ".content", to: &diagnostics)
-            } else if let content = block.content, content.unicodeScalars.count > 65536 {
-                append(.invalidValue, at: path + ".content", to: &diagnostics)
             }
         case .input:
             if block.inputKind == nil {
