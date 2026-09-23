@@ -357,6 +357,7 @@ public enum RoamPiConfigurationMerger {
                     discovery: .session
                 )
             } else {
+                guard !disabledProjects.contains(contribution.id) else { continue }
                 _ = identifiers.insert(contribution.id)
                 result.append(RoamPiProject(
                     id: contribution.id,

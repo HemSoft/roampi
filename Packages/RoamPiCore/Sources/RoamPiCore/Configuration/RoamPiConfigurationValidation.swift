@@ -439,7 +439,7 @@ public enum RoamPiConfigurationParser {
         "hash", "json", "path", "pem",
     ]
     private static let prohibitedKeyWordSequences = [
-        ["access", "key", "id"], ["access", "token"], ["api", "key"], ["authorization"], ["bearer"],
+        ["access", "key", "id"], ["access", "token"], ["api", "key"], ["auth"], ["authorization"], ["bearer"],
         ["client", "secret"], ["cookie"], ["credential"], ["credentials"], ["hotp"], ["jwe"], ["jwt"],
         ["mnemonic"], ["otp"], ["passcode"], ["passphrase"], ["passwd"], ["password"], ["pat"],
         ["personal", "access", "token"], ["pin"], ["private", "key"], ["provider", "key"], ["pwd"],

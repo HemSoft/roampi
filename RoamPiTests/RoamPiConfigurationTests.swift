@@ -258,15 +258,15 @@ struct RoamPiConfigurationTests {
         ])
     }
 
-    @Test("Compound secret-key fields are rejected")
-    func compoundSecretKeyField() throws {
+    @Test("Auth credential fields are rejected")
+    func authCredentialField() throws {
         var object = try #require(JSONSerialization.jsonObject(
             with: fixture("minimal.roampi")
         ) as? [String: Any])
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["secretAccessKey": "not-a-real-key"],
+            "value": ["auth": "not-a-real-credential"],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(
@@ -619,6 +619,33 @@ struct RoamPiConfigurationTests {
 
         #expect(effective.name == "Discovered Service")
         #expect(effective.group == nil)
+        #expect(!merged.pages.contains(where: { $0.id.hasPrefix("project%sample-service%") }))
+    }
+
+    @Test("Disabled project files cannot create base projects")
+    func disabledProjectFileBase() throws {
+        var machineObject = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        var machineFields = try #require(machineObject["machine"] as? [String: Any])
+        machineFields["projectOverrides"] = [[
+            "projectID": "sample-service",
+            "enabled": false,
+            "disabledContributions": [],
+        ]]
+        machineObject["machine"] = machineFields
+        let machine = try #require(try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: machineObject),
+            source: .machine
+        ).configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .project(root: "/srv/sample-service", machineID: "home")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(machine: machine, projects: [project])
+
+        #expect(!merged.projects.contains(where: { $0.id == "sample-service" }))
         #expect(!merged.pages.contains(where: { $0.id.hasPrefix("project%sample-service%") }))
     }
 
