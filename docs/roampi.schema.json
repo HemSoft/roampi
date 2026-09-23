@@ -48,7 +48,14 @@
         { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } },
         { "type": "string" },
         { "type": "integer", "minimum": -9223372036854775808, "maximum": 18446744073709551615 },
-        { "type": "number", "minimum": -1.7976931348623157e308, "maximum": 1.7976931348623157e308, "not": { "type": "integer" } },
+        {
+          "type": "number",
+          "not": { "type": "integer" },
+          "anyOf": [
+            { "minimum": 5e-324, "maximum": 1.7976931348623157e308 },
+            { "minimum": -1.7976931348623157e308, "maximum": -5e-324 }
+          ]
+        },
         { "type": "boolean" },
         { "type": "null" }
       ]

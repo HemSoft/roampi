@@ -184,6 +184,30 @@ struct RoamPiConfigurationTests {
         ])
     }
 
+    @Test("Benign secret-like field names remain valid")
+    func benignSecretLikeFields() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "benign-static",
+            "type": "static",
+            "value": [
+                "passwordlessEnabled": true,
+                "secretary": "available",
+                "tokenCount": 3,
+            ],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration != nil)
+        #expect(result.diagnostics.isEmpty)
+    }
+
     @Test("Undeclared component types fail at their type location")
     func undeclaredComponent() throws {
         let result = try RoamPiConfigurationParser.parse(

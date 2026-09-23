@@ -118,6 +118,7 @@ private struct RoamPiJSONDuplicateKeyScanner {
 
     private let bytes: [UInt8]
     private var index = 0
+    private(set) var containsUnsupportedNumber = false
 
     init(data: Data) {
         bytes = Array(data)
@@ -221,8 +222,17 @@ private struct RoamPiJSONDuplicateKeyScanner {
     }
 
     private mutating func parsePrimitive() {
+        let start = index
         while let byte = current, ![9, 10, 13, 32, 44, 93, 125].contains(byte) {
             index += 1
+        }
+        guard start < index, bytes[start] == 45 || (48 ... 57).contains(bytes[start]) else { return }
+        let token = String(decoding: bytes[start ..< index], as: UTF8.self)
+        let significand = token.split(whereSeparator: { $0 == "e" || $0 == "E" }).first ?? ""
+        let hasNonzeroDigit = significand.contains(where: { ("1" ... "9").contains($0) })
+        guard let value = Double(token), value.isFinite, value != 0 || !hasNonzeroDigit else {
+            containsUnsupportedNumber = true
+            return
         }
     }
 
@@ -249,6 +259,9 @@ public enum RoamPiConfigurationParser {
     private static let prohibitedKeys: Set<String> = [
         "accesstoken", "apikey", "authorization", "credential", "credentials",
         "password", "privatekey", "providerkey", "secret", "token",
+    ]
+    private static let prohibitedKeyQualifiers: Set<String> = [
+        "content", "contents", "data", "file", "hash", "header", "json", "material", "path", "pem", "string", "value",
     ]
 
     public static func parse(
@@ -291,6 +304,12 @@ public enum RoamPiConfigurationParser {
                     diagnostics: [.init(code: .duplicateKey, location: "$[?]")]
                 )
             }
+            if scanner.containsUnsupportedNumber {
+                return .init(
+                    configuration: nil,
+                    diagnostics: [.init(code: .invalidValue, location: "$[?]")]
+                )
+            }
         } catch {
             return .init(
                 configuration: nil,
@@ -300,6 +319,9 @@ public enum RoamPiConfigurationParser {
         scanForSecretFields(object, path: "$", diagnostics: &diagnostics)
         if let version = object["version"] as? NSNumber, version.intValue != 1 {
             append(.unsupportedVersion, at: "$.version", to: &diagnostics)
+        }
+        if let schemaURI = object["$schema"], !(schemaURI is String) {
+            append(.invalidValue, at: "$.$schema", to: &diagnostics)
         }
         validateDeclaredTypes(object, diagnostics: &diagnostics)
         guard diagnostics.isEmpty else {
@@ -998,7 +1020,13 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
-        return prohibitedKeys.contains(where: normalized.contains)
+        if prohibitedKeys.contains(normalized) || prohibitedKeys.contains(where: normalized.hasSuffix) {
+            return true
+        }
+        return prohibitedKeys.contains { key in
+            guard normalized.hasPrefix(key) else { return false }
+            return prohibitedKeyQualifiers.contains(String(normalized.dropFirst(key.count)))
+        }
     }
 
     private static func isValidDisplayName(_ value: String) -> Bool {

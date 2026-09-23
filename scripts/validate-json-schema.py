@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -15,8 +16,22 @@ def reject_nonstandard_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant: {value}")
 
 
+def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object key")
+        result[key] = value
+    return result
+
+
 def strict_json_loads(value: str) -> Any:
-    return json.loads(value, parse_constant=reject_nonstandard_constant)
+    return json.loads(
+        value,
+        parse_constant=reject_nonstandard_constant,
+        parse_float=Decimal,
+        object_pairs_hook=reject_duplicate_keys,
+    )
 
 
 def resolve_ref(root: dict[str, Any], reference: str) -> Any:
@@ -28,13 +43,37 @@ def resolve_ref(root: dict[str, Any], reference: str) -> Any:
     return value
 
 
+def is_json_integer(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, Decimal) and value == value.to_integral_value()
+
+
+def is_json_number(value: Any) -> bool:
+    return not isinstance(value, bool) and isinstance(value, (int, Decimal))
+
+
+def json_equal(left: Any, right: Any) -> bool:
+    if is_json_number(left) and is_json_number(right):
+        return left == right
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, list):
+        return len(left) == len(right) and all(json_equal(a, b) for a, b in zip(left, right))
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(json_equal(left[key], right[key]) for key in left)
+    return left == right
+
+
 def type_matches(value: Any, expected: str) -> bool:
     return {
         "object": isinstance(value, dict),
         "array": isinstance(value, list),
         "string": isinstance(value, str),
-        "integer": isinstance(value, int) and not isinstance(value, bool),
-        "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+        "integer": is_json_integer(value),
+        "number": is_json_number(value),
         "boolean": isinstance(value, bool),
         "null": value is None,
     }[expected]
@@ -54,9 +93,9 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         allowed = [expected_type] if isinstance(expected_type, str) else expected_type
         if not any(type_matches(value, item) for item in allowed):
             return [f"{path}: expected {expected_type}"]
-    if "const" in schema and value != schema["const"]:
+    if "const" in schema and not json_equal(value, schema["const"]):
         errors.append(f"{path}: expected constant {schema['const']!r}")
-    if "enum" in schema and value not in schema["enum"]:
+    if "enum" in schema and not any(json_equal(value, item) for item in schema["enum"]):
         errors.append(f"{path}: value is not declared")
 
     if isinstance(value, str):
@@ -67,7 +106,7 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         if "pattern" in schema and re.search(schema["pattern"], value) is None:
             errors.append(f"{path}: string does not match pattern")
 
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if is_json_number(value):
         if "minimum" in schema and value < schema["minimum"]:
             errors.append(f"{path}: number is below minimum")
         if "maximum" in schema and value > schema["maximum"]:
@@ -102,7 +141,7 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
     if schema.get("x-roampi-width-order") and isinstance(value, dict):
         minimum = value.get("minimumWidth")
         preferred = value.get("preferredWidth")
-        if isinstance(minimum, (int, float)) and isinstance(preferred, (int, float)):
+        if is_json_number(minimum) and is_json_number(preferred):
             if preferred < minimum:
                 errors.append(f"{path}.preferredWidth: preferred width is below minimum width")
 
