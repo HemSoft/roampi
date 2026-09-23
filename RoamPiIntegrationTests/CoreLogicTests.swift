@@ -716,6 +716,46 @@ struct RPCSessionReliabilityTests {
         try await session.close()
     }
 
+    @Test("Startup failure drains an observer request without a close callback")
+    func startupFailureDrainsObserverRequest() async throws {
+        let transport = FailedFollowUpRPCTransport(
+            failStartup: true,
+            ignoreFollowUps: true
+        )
+        let gate = RequestRegistrationGate()
+        let session = try RPCSession(
+            endpoint: RemoteEndpoint(connectionString: "demo@fixture"),
+            workingDirectory: #require(RemoteWorkingDirectory("/tmp")),
+            transport: transport,
+            requestTimeout: .seconds(5)
+        )
+        session.setStartupSendHook { await gate.pause() }
+        let startup = Task { try await session.start() }
+        while await !gate.hasEntered {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let followUp = Task {
+            try await session.exchange(
+                PiRPCRequest(identifier: "observer-request", kind: .prompt("wait"))
+            )
+        }
+        for _ in 0 ..< 100 where transport.requestCount < 1 {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        await gate.release()
+        try await startup.value
+        do {
+            _ = try await followUp.value
+            Issue.record("Expected startup cleanup to drain the observer request")
+        } catch let failure as SessionFailure {
+            #expect(failure.diagnostic == .commandFailed)
+            #expect(failure.phase == .failed(.commandFailed))
+        }
+        #expect(session.phase == .failed(.commandFailed))
+        try await session.close()
+    }
+
     @Test("The startup request ID is reserved before attachment is published")
     func startupIdentifierIsReservedBeforeAttachedPhase() async throws {
         let session = try RPCSession(
@@ -1599,7 +1639,20 @@ struct RPCSessionReliabilityTests {
 
 private final class FailedFollowUpRPCTransport: @unchecked Sendable, RPCTransport {
     private let lock = NSLock()
+    private let failStartup: Bool
+    private let ignoreFollowUps: Bool
     private var outputHandler: (@Sendable (Data) -> Void)?
+    private var requests = 0
+
+    init(failStartup: Bool = false, ignoreFollowUps: Bool = false) {
+        self.failStartup = failStartup
+        self.ignoreFollowUps = ignoreFollowUps
+    }
+
+    var requestCount: Int {
+        lock.withLock { requests }
+    }
+
     var onOutput: (@Sendable (Data) -> Void)? {
         get { lock.withLock { outputHandler } }
         set { lock.withLock { outputHandler = newValue } }
@@ -1618,7 +1671,11 @@ private final class FailedFollowUpRPCTransport: @unchecked Sendable, RPCTranspor
               let identifier = request["id"]?.stringValue,
               let command = request["type"]?.stringValue
         else { return }
-        let success = command == "get_state"
+        lock.withLock { requests += 1 }
+        if ignoreFollowUps, command != "get_state" {
+            return
+        }
+        let success = command == "get_state" && !failStartup
         let response = "{\"id\":\"\(identifier)\",\"type\":\"response\","
             + "\"command\":\"\(command)\",\"success\":\(success)}\n"
         lock.withLock { outputHandler }?(Data(response.utf8))

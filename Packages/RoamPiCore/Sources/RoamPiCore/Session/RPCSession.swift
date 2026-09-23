@@ -974,20 +974,41 @@ public final class RPCSession: @unchecked Sendable, PiSession {
         generation: UInt64,
         candidateTransport: (any RPCTransport)?
     ) {
-        let didFail = lock.withLock {
-            guard generation == streamGeneration else { return false }
+        let result: (
+            didFail: Bool,
+            pending: [String: PendingRequest],
+            diagnostic: SessionDiagnostic
+        )? = lock.withLock {
+            guard generation == streamGeneration else { return nil }
             if let candidateTransport, let transport, transport !== candidateTransport {
-                return false
+                return nil
             }
+            let finalDiagnostic: SessionDiagnostic
+            let didFail: Bool
+            if case let .failed(existingDiagnostic) = stateMachine.phase {
+                finalDiagnostic = existingDiagnostic
+                didFail = false
+            } else {
+                try? stateMachine.fail(diagnostic)
+                finalDiagnostic = diagnostic
+                didFail = true
+            }
+            streamGeneration &+= 1
+            let pending = pendingRequests
+            pendingRequests = [:]
+            reservedRequestIdentifiers = []
+            startupRequestIdentifier = nil
             channel = nil
             transport = nil
-            if case .failed = stateMachine.phase {
-                return false
-            }
-            try? stateMachine.fail(diagnostic)
-            return true
+            return (didFail, pending, finalDiagnostic)
         }
-        if didFail {
+        guard let result else { return }
+        resume(
+            result.pending,
+            diagnostic: result.diagnostic,
+            phase: .failed(result.diagnostic)
+        )
+        if result.didFail {
             publishPhase()
         }
     }

@@ -157,6 +157,7 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
     }
 
     public func open() async throws -> any RPCChannel {
+        lock.withLock { stopped = false }
         let channel = ScriptedRPCChannel(transport: self)
         // An initial event frame, matching how Pi streams alongside responses.
         feed(#"{"type":"banner","version":"0.86.1"}"#)
@@ -174,9 +175,12 @@ public final class ScriptedRPCTransport: @unchecked Sendable, RPCTransport {
     }
 
     func handleRequest(_ frame: Data) {
-        lock.withLock {
+        let shouldHandle = lock.withLock {
+            guard !stopped else { return false }
             requestFrames.append(frame)
+            return true
         }
+        guard shouldHandle else { return }
 
         guard let text = String(data: frame, encoding: .utf8),
               let request = try? JSONLFrameDecoder.decode(Data(text.dropLast().utf8)),
