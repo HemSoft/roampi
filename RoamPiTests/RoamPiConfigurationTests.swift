@@ -92,6 +92,22 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics.isEmpty)
     }
 
+    @Test("Exponential integers outside the exact range are rejected")
+    func exponentialIntegerRange() {
+        let source = String(decoding: minimalMachineData(), as: UTF8.self)
+        let data = Data(source.replacingOccurrences(
+            of: #""dataSources":[]"#,
+            with: #""dataSources":[{"id":"exponential-integer","type":"static","value":1e128}]"#
+        ).utf8)
+
+        let result = RoamPiConfigurationParser.parse(data, source: .machine)
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [
+            .init(code: .invalidValue, location: "$.dataSources[0].value"),
+        ])
+    }
+
     @Test("Duplicate JSON object keys are rejected before decoding")
     func duplicateJSONKeyCanonicalization() {
         let source = String(decoding: minimalMachineData(), as: UTF8.self)
@@ -271,6 +287,27 @@ struct RoamPiConfigurationTests {
             resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/srv/maximum"
         ).value.count == 64)
+    }
+
+    @Test("Duplicate project diagnostics never expose identifiers")
+    func duplicateProjectDiagnosticRedaction() throws {
+        let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)
+            .configuration)
+        let first = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "prod.example.com", pageID: "first-page"),
+            source: .project(root: "/srv/first")
+        ).configuration)
+        let second = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "prod.example.com", pageID: "second-page"),
+            source: .project(root: "/srv/second")
+        ).configuration)
+
+        #expect(throws: RoamPiConfigurationDiagnostic(
+            code: .duplicateIdentifier,
+            location: "$projects[?].id"
+        )) {
+            try RoamPiConfigurationMerger.merge(machine: machine, projects: [first, second])
+        }
     }
 
     @Test("Project merge order does not depend on input order")
@@ -613,8 +650,21 @@ struct RoamPiConfigurationTests {
             changedDirectory.value,
             changedHash.value,
         ]).count == 8)
+        let unicodeDestination = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedDestination: .init(
+                host: "studio.example.test",
+                username: String(repeating: "é", count: 64),
+                port: 22
+            ),
+            resolvedWorkingDirectory: "/" + String(repeating: "é", count: 255),
+            canonicalConfiguration: configuration.canonicalData
+        )
+
         #expect(original.value.count == 64)
         #expect(original.configurationHash.count == 64)
+        #expect(unicodeDestination.value.count == 64)
     }
 
     @Test("Invalid updates preserve the last-known-good configuration and fixed routes")

@@ -5,7 +5,7 @@
   "machine": {
     "homeHost": {
       "id": "home",
-      "name": "Home\nInjected",
+      "name": "Home\u0085Injected",
       "host": "home.example.test",
       "port": 22,
       "username": "operator",

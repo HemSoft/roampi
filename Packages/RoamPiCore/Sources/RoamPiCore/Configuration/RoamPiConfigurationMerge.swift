@@ -74,7 +74,7 @@ public enum RoamPiConfigurationMerger {
             guard seenProjectConfigurations.insert(identifier).inserted else {
                 throw RoamPiConfigurationDiagnostic(
                     code: .duplicateIdentifier,
-                    location: "$projects.\(identifier)"
+                    location: "$projects[?].id"
                 )
             }
         }
@@ -159,24 +159,24 @@ public enum RoamPiConfigurationMerger {
         }
 
         let machineIDs = Set(machines.map(\.id))
-        if let project = effectiveProjects.first(where: { !machineIDs.contains($0.machineID) }) {
+        if effectiveProjects.contains(where: { !machineIDs.contains($0.machineID) }) {
             throw RoamPiConfigurationDiagnostic(
                 code: .invalidReference,
-                location: "$merge.projects.\(project.id).machineID"
+                location: "$merge.projects[?].machineID"
             )
         }
-        if let dataSource = dataSources.first(where: {
+        if dataSources.contains(where: {
             $0.targetMachineID.map { !machineIDs.contains($0) } == true
         }) {
             throw RoamPiConfigurationDiagnostic(
                 code: .invalidReference,
-                location: "$merge.dataSources.\(dataSource.id).targetMachineID"
+                location: "$merge.dataSources[?].targetMachineID"
             )
         }
-        if let action = actions.first(where: { !machineIDs.contains($0.target.machineID) }) {
+        if actions.contains(where: { !machineIDs.contains($0.target.machineID) }) {
             throw RoamPiConfigurationDiagnostic(
                 code: .invalidReference,
-                location: "$merge.actions.\(action.id).target.machineID"
+                location: "$merge.actions[?].target.machineID"
             )
         }
 
@@ -184,7 +184,7 @@ public enum RoamPiConfigurationMerger {
             guard let provenance = dataSourceProvenance[dataSource.id] else {
                 throw RoamPiConfigurationDiagnostic(
                     code: .invalidReference,
-                    location: "$merge.dataSources.\(dataSource.id).provenance"
+                    location: "$merge.dataSources[?].provenance"
                 )
             }
             return EffectiveRoamPiDataSource(
@@ -197,7 +197,7 @@ public enum RoamPiConfigurationMerger {
             guard let provenance = actionProvenance[action.id] else {
                 throw RoamPiConfigurationDiagnostic(
                     code: .invalidReference,
-                    location: "$merge.actions.\(action.id).provenance"
+                    location: "$merge.actions[?].provenance"
                 )
             }
             return EffectiveRoamPiAction(

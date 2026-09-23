@@ -142,10 +142,10 @@ public enum RoamPiActionTrustIdentityBuilder {
         resolvedWorkingDirectory: String,
         configurationHash: String
     ) throws -> RoamPiActionTrustIdentity {
-        guard isBoundedValue(sourceFile, maximumBytes: 512),
+        guard isBoundedScalarValue(sourceFile, maximumScalars: 512),
               isBoundedValue(identifier, maximumBytes: 512),
-              isBoundedValue(resolvedDestination.host, maximumBytes: 253),
-              isBoundedValue(resolvedDestination.username, maximumBytes: 64),
+              isBoundedScalarValue(resolvedDestination.host, maximumScalars: 253),
+              isBoundedScalarValue(resolvedDestination.username, maximumScalars: 64),
               (1 ... 65535).contains(resolvedDestination.port),
               isSafeAbsolutePath(resolvedWorkingDirectory)
         else {
@@ -191,6 +191,11 @@ public enum RoamPiActionTrustIdentityBuilder {
 
     private static func isBoundedValue(_ value: String, maximumBytes: Int) -> Bool {
         !value.isEmpty && value.utf8.count <= maximumBytes &&
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+    }
+
+    private static func isBoundedScalarValue(_ value: String, maximumScalars: Int) -> Bool {
+        !value.isEmpty && value.unicodeScalars.count <= maximumScalars &&
             !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
     }
 

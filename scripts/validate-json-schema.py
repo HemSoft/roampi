@@ -84,13 +84,12 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
                 errors.append(f"{path}.{required}: required value is missing")
         properties = schema.get("properties", {})
         for key, item in value.items():
-            child_path = f"{path}.{key}"
             if key in properties:
-                errors.extend(validate(root, properties[key], item, child_path))
+                errors.extend(validate(root, properties[key], item, f"{path}.{key}"))
             elif isinstance(schema.get("additionalProperties"), dict):
-                errors.extend(validate(root, schema["additionalProperties"], item, child_path))
+                errors.extend(validate(root, schema["additionalProperties"], item, f"{path}[?]"))
             elif schema.get("additionalProperties") is False:
-                errors.append(f"{child_path}: property is not declared")
+                errors.append(f"{path}[?]: property is not declared")
 
     for subschema in schema.get("allOf", []):
         errors.extend(validate(root, subschema, value, path))

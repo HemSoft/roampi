@@ -289,12 +289,27 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
             self = .integer(value)
         } else if let value = try? container.decode(UInt64.self) {
             self = .unsignedInteger(value)
-        } else if let value = try? container.decode(Decimal.self), Self.isIntegral(value) {
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "JSON integer is outside the supported 64-bit range"
-            )
+        } else if let value = try? container.decode(Decimal.self) {
+            if Self.isIntegral(value) {
+                if value >= Decimal(Int64.min), value <= Decimal(Int64.max) {
+                    self = .integer(NSDecimalNumber(decimal: value).int64Value)
+                } else if value >= 0, value <= Decimal(UInt64.max) {
+                    self = .unsignedInteger(NSDecimalNumber(decimal: value).uint64Value)
+                } else {
+                    throw Self.unsupportedInteger(in: container)
+                }
+            } else if let floatingPoint = try? container.decode(Double.self) {
+                self = .number(floatingPoint)
+            } else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "JSON number is outside the supported binary64 range"
+                )
+            }
         } else if let value = try? container.decode(Double.self) {
+            guard value.isFinite, value.rounded(.towardZero) != value else {
+                throw Self.unsupportedInteger(in: container)
+            }
             self = .number(value)
         } else if let value = try? container.decode(String.self) {
             self = .string(value)
@@ -312,6 +327,15 @@ public enum RoamPiJSONValue: Codable, Equatable, Sendable {
         var rounded = Decimal()
         NSDecimalRound(&rounded, &value, 0, .plain)
         return rounded == value
+    }
+
+    private static func unsupportedInteger(
+        in container: SingleValueDecodingContainer
+    ) -> DecodingError {
+        DecodingError.dataCorruptedError(
+            in: container,
+            debugDescription: "JSON integer is outside the supported 64-bit range"
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
