@@ -145,7 +145,11 @@ def validate_contract_references(value: Any) -> list[str]:
 
     def identifier_set(key: str) -> set[Any]:
         items = value.get(key, [])
-        return {item.get("id") for item in items if isinstance(item, dict)} if isinstance(items, list) else set()
+        return {
+            item["id"]
+            for item in items
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        } if isinstance(items, list) else set()
 
     data_source_ids = identifier_set("dataSources")
     action_ids = identifier_set("actions")
@@ -189,9 +193,9 @@ def validate_contract_references(value: Any) -> list[str]:
     if isinstance(machine, dict):
         machines = machine.get("machines", [])
         machine_ids = {
-            item.get("id")
+            item["id"]
             for item in [machine.get("homeHost"), *(machines if isinstance(machines, list) else [])]
-            if isinstance(item, dict)
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
         }
         projects = machine.get("projects", [])
         for index, project in enumerate(projects if isinstance(projects, list) else []):
