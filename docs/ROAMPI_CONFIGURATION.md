@@ -2,7 +2,7 @@
 
 RoamPi reads one machine configuration from `~/.pi/agent/.roampi` on the selected home host and an optional project configuration from `<repository>/.roampi`. The loader binds each project file to the machine from which it was read; that source machine remains the effective project's SSH destination. Both files are untrusted JSON. RoamPi validates the entire update before replacing the last-known-good configuration.
 
-The normative schema is [`roampi.schema.json`](roampi.schema.json). The Swift models and behavioral validator live in `RoamPiCore/Configuration`. Documents allow at most 64 nested JSON container levels, declared by `x-roampi-max-document-depth` and enforced before adoption. Contract entity identifiers are document-wide unique under `x-roampi-unique-identifiers`. Bounded names, hosts, usernames, and paths declare `x-roampi-no-control-characters`, covering Unicode control and format characters.
+The normative schema is [`roampi.schema.json`](roampi.schema.json). The Swift models and behavioral validator live in `RoamPiCore/Configuration`. Documents allow at most 64 nested JSON container levels, declared by `x-roampi-max-document-depth` and enforced before adoption. Contract entity identifiers are document-wide unique under `x-roampi-unique-identifiers`. The `x-roampi-valid-references` rule checks local data-source, action, job, and machine references before adoption. Bounded names, hosts, usernames, and paths declare `x-roampi-no-control-characters`, covering Unicode control and format characters.
 
 ## Scope
 

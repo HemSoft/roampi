@@ -21,9 +21,11 @@ python3 "$repo_root/scripts/validate-json-schema.py" --expect-invalid \
     "$repo_root/docs/examples/invalid/forward-version.roampi" \
     "$repo_root/docs/examples/invalid/inverted-widths.roampi" \
     "$repo_root/docs/examples/invalid/jobs-without-source.roampi" \
+    "$repo_root/docs/examples/invalid/missing-action-reference.roampi" \
     "$repo_root/docs/examples/invalid/missing-required-property.roampi" \
     "$repo_root/docs/examples/invalid/non-finite-number.roampi" \
     "$repo_root/docs/examples/invalid/non-string-schema.roampi" \
+    "$repo_root/docs/examples/invalid/nested-duplicate-identifiers.roampi" \
     "$repo_root/docs/examples/invalid/out-of-range-number.roampi" \
     "$repo_root/docs/examples/invalid/oversized-integer.roampi" \
     "$repo_root/docs/examples/invalid/rounded-width.roampi" \
@@ -63,9 +65,11 @@ run_validator --expect 'invalid_value@$.dataSources[0].resultSchema.items.items.
 run_validator --expect 'duplicate_identifier@$.machine.machines[0].id' --machine "$repo_root/docs/examples/invalid/duplicate-identifiers.roampi"
 run_validator --expect 'invalid_value@$.pages[0].blocks[0].layout.preferredWidth' --project validation-host /Users/developer/Projects/InvertedWidths "$repo_root/docs/examples/invalid/inverted-widths.roampi"
 run_validator --expect 'missing_value@$.pages[0].blocks[0].jobID' --project validation-host /Users/developer/Projects/MissingJobSource "$repo_root/docs/examples/invalid/jobs-without-source.roampi"
+run_validator --expect 'invalid_reference@$.pages[0].blocks[0].actionID' --machine "$repo_root/docs/examples/invalid/missing-action-reference.roampi"
 run_validator --expect 'invalid_reference@$.dataSources[0].resultSchema.required[0]' --machine "$repo_root/docs/examples/invalid/missing-required-property.roampi"
 run_validator --expect 'malformed_json@$' --machine "$repo_root/docs/examples/invalid/non-finite-number.roampi"
 run_validator --expect 'invalid_value@$.$schema' --machine "$repo_root/docs/examples/invalid/non-string-schema.roampi"
+run_validator --expect 'duplicate_identifier@$.pages[0].blocks[0].blocks[1].id' --machine "$repo_root/docs/examples/invalid/nested-duplicate-identifiers.roampi"
 run_validator --expect 'malformed_json@$' --machine "$repo_root/docs/examples/invalid/out-of-range-number.roampi"
 run_validator --expect 'invalid_value@$.dataSources[0].value' --machine "$repo_root/docs/examples/invalid/oversized-integer.roampi"
 run_validator --expect 'invalid_value@$[?]' --machine "$repo_root/docs/examples/invalid/rounded-width.roampi"

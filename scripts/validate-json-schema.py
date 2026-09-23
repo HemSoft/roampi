@@ -89,6 +89,15 @@ def contract_identifiers(value: Any) -> list[tuple[str, str]]:
         if isinstance(item, dict) and isinstance(item.get("id"), str):
             identifiers.append((item["id"], f"{path}.id"))
 
+    def add_blocks(blocks: Any, path: str) -> None:
+        if not isinstance(blocks, list):
+            return
+        for index, block in enumerate(blocks):
+            block_path = f"{path}[{index}]"
+            add(block, block_path)
+            if isinstance(block, dict):
+                add_blocks(block.get("blocks"), f"{block_path}.blocks")
+
     def add_pages(pages: Any, path: str) -> None:
         if not isinstance(pages, list):
             return
@@ -96,10 +105,7 @@ def contract_identifiers(value: Any) -> list[tuple[str, str]]:
             page_path = f"{path}[{index}]"
             add(page, page_path)
             if isinstance(page, dict):
-                blocks = page.get("blocks", [])
-                if isinstance(blocks, list):
-                    for block_index, block in enumerate(blocks):
-                        add(block, f"{page_path}.blocks[{block_index}]")
+                add_blocks(page.get("blocks"), f"{page_path}.blocks")
                 add_pages(page.get("children"), f"{page_path}.children")
 
     machine = value.get("machine")
@@ -128,6 +134,76 @@ def validate_unique_identifiers(value: Any) -> list[str]:
             errors.append(f"{path}: identifier is not unique")
         else:
             seen.add(identifier)
+    return errors
+
+
+def validate_contract_references(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    errors: list[str] = []
+
+    def identifier_set(key: str) -> set[Any]:
+        items = value.get(key, [])
+        return {item.get("id") for item in items if isinstance(item, dict)} if isinstance(items, list) else set()
+
+    data_source_ids = identifier_set("dataSources")
+    action_ids = identifier_set("actions")
+    job_ids = identifier_set("jobs")
+
+    def check(reference: Any, identifiers: set[Any], path: str) -> None:
+        if isinstance(reference, str) and reference not in identifiers:
+            errors.append(f"{path}: reference is not declared")
+
+    def check_blocks(blocks: Any, path: str) -> None:
+        if not isinstance(blocks, list):
+            return
+        for index, block in enumerate(blocks):
+            block_path = f"{path}[{index}]"
+            if not isinstance(block, dict):
+                continue
+            if "dataSourceID" in block:
+                check(block["dataSourceID"], data_source_ids, f"{block_path}.dataSourceID")
+            if "actionID" in block:
+                check(block["actionID"], action_ids, f"{block_path}.actionID")
+            if "jobID" in block:
+                check(block["jobID"], job_ids, f"{block_path}.jobID")
+            check_blocks(block.get("blocks"), f"{block_path}.blocks")
+
+    def check_pages(pages: Any, path: str) -> None:
+        if not isinstance(pages, list):
+            return
+        for index, page in enumerate(pages):
+            page_path = f"{path}[{index}]"
+            if isinstance(page, dict):
+                check_blocks(page.get("blocks"), f"{page_path}.blocks")
+                check_pages(page.get("children"), f"{page_path}.children")
+
+    check_pages(value.get("pages"), "$.pages")
+    jobs = value.get("jobs", [])
+    for index, job in enumerate(jobs if isinstance(jobs, list) else []):
+        if isinstance(job, dict) and "actionID" in job:
+            check(job["actionID"], action_ids, f"$.jobs[{index}].actionID")
+
+    machine = value.get("machine")
+    if isinstance(machine, dict):
+        machines = machine.get("machines", [])
+        machine_ids = {
+            item.get("id")
+            for item in [machine.get("homeHost"), *(machines if isinstance(machines, list) else [])]
+            if isinstance(item, dict)
+        }
+        projects = machine.get("projects", [])
+        for index, project in enumerate(projects if isinstance(projects, list) else []):
+            if isinstance(project, dict):
+                check(project.get("machineID"), machine_ids, f"$.machine.projects[{index}].machineID")
+        sources = value.get("dataSources", [])
+        for index, source in enumerate(sources if isinstance(sources, list) else []):
+            if isinstance(source, dict) and "targetMachineID" in source:
+                check(source["targetMachineID"], machine_ids, f"$.dataSources[{index}].targetMachineID")
+        actions = value.get("actions", [])
+        for index, action in enumerate(actions if isinstance(actions, list) else []):
+            if isinstance(action, dict) and isinstance(action.get("target"), dict):
+                check(action["target"].get("machineID"), machine_ids, f"$.actions[{index}].target.machineID")
     return errors
 
 
@@ -174,6 +250,8 @@ def validate(root: dict[str, Any], schema: Any, value: Any, path: str = "$") -> 
         errors.extend(validate_document_depth(value, path, 0, schema["x-roampi-max-document-depth"]))
     if schema.get("x-roampi-unique-identifiers"):
         errors.extend(validate_unique_identifiers(value))
+    if schema.get("x-roampi-valid-references"):
+        errors.extend(validate_contract_references(value))
     expected_type = schema.get("type")
     if expected_type is not None:
         allowed = [expected_type] if isinstance(expected_type, str) else expected_type
