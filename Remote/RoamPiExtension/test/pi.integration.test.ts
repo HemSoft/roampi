@@ -27,12 +27,12 @@ test("disposable Pi RPC process survives socket disconnect and accepts new contr
   async function exchange(socket: import("node:net").Socket, type: string, fields: Record<string, unknown> = {}) {
     const parser = new Framer();
     return new Promise<any>((resolve, reject) => {
-      const timer = setTimeout(() => reject(Error("socket response timeout")), 3000);
-      socket.once("data", (bytes) => {
-        clearTimeout(timer);
-        const response = parser.push(bytes).find((item: any) => item.type === "response");
-        if (response) resolve(response); else reject(Error("no response"));
-      });
+      const timer = setTimeout(() => { socket.off("data", receive); reject(Error("socket response timeout")); }, 3000);
+      const receive = (bytes: Buffer) => {
+        const response = parser.push(bytes).find((item: any) => item.type === "response" && item.id === type);
+        if (response) { clearTimeout(timer); socket.off("data", receive); resolve(response); }
+      };
+      socket.on("data", receive);
       socket.write(frame({ version: 1, type, id: type, ...fields }));
     });
   }
@@ -56,6 +56,23 @@ test("disposable Pi RPC process survives socket disconnect and accepts new contr
     assert.equal((await exchange(second, "snapshot")).metadata.sessionId, entry.sessionId);
     const next = await exchange(second, "acquire");
     assert.equal(next.ok, true);
+    const stream = new Framer(); const messages: any[] = [];
+    second.on("data", (bytes) => messages.push(...stream.push(bytes)));
+    assert.equal((await exchange(second, "subscribe")).ok, true);
+    assert.equal((await exchange(second, "prompt", { token: next.token, delivery: "immediate", text: "approval" })).ok, true);
+    let dialog: any;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      dialog = messages.find((message) => message.type === "dialog");
+      if (dialog) break;
+      await wait(100);
+    }
+    assert.equal(dialog?.kind, "confirm", "the real Pi fixture must request bridge approval");
+    assert.equal((await exchange(second, "answer", { token: next.token, dialogId: dialog.id, value: true })).ok, true);
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if ((await readFile(entry.sessionFile!, "utf8")).includes("tool: confirmed")) break;
+      await wait(100);
+    }
+    assert.ok((await readFile(entry.sessionFile!, "utf8")).includes("tool: confirmed"), "Pi completed the controller-approved tool");
     second.destroy();
     assert.equal(child.exitCode, null);
     assert.ok(output.includes('"id":"state"'), "Pi RPC state request must still work");

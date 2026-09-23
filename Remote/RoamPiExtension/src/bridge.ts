@@ -199,7 +199,7 @@ export class Bridge {
       }
       const dialog = this.dialog;
       if (dialog.kind === "confirm" && typeof value.value !== "boolean" ||
-          dialog.kind !== "confirm" && value.value !== null && (typeof value.value !== "string" || value.value.length > MAX_PROMPT ||
+          dialog.kind !== "confirm" && value.value !== null && (typeof value.value !== "string" || Buffer.byteLength(value.value) > MAX_PROMPT ||
           dialog.kind === "select" && !dialog.options?.includes(value.value))) {
         this.reply(client, id, { ok: false, code: "invalid_answer" }); return;
       }
@@ -216,18 +216,20 @@ export class Bridge {
   async relayDialog(kind: "confirm" | "select" | "input", title: string, detail: string | string[]): Promise<string | boolean | undefined> {
     const holder = [...this.clients].find((client) => client.id === this.controller?.clientId && client.subscribed);
     if (!holder || !this.controller || this.controller.until <= Date.now() || this.dialog) return kind === "confirm" ? false : undefined;
-    if (title.length > 256 || JSON.stringify(detail).length > MAX_PROMPT ||
+    if (Buffer.byteLength(title) > 256 || Buffer.byteLength(JSON.stringify(detail)) > MAX_PROMPT ||
         (kind === "select" && (!Array.isArray(detail) || detail.some((option) => typeof option !== "string")))) {
       return kind === "confirm" ? false : undefined;
     }
+    const id = randomUUID();
+    const request = { version: VERSION, type: "dialog", id, kind, title, detail, timeoutMs: DIALOG_MS };
+    try { frame(request); } catch { return kind === "confirm" ? false : undefined; }
     this.setState("waitingForApproval");
     const generation = this.generation;
-    const id = randomUUID();
     try {
       return await new Promise<string | boolean | undefined>((resolve) => {
         const timer = setTimeout(() => { this.dialog = undefined; resolve(kind === "confirm" ? false : undefined); }, DIALOG_MS);
         this.dialog = { id, clientId: holder.id, kind, options: kind === "select" ? detail as string[] : undefined, resolve, timer };
-        this.send(holder, { version: VERSION, type: "dialog", id, kind, title, detail, timeoutMs: DIALOG_MS });
+        this.send(holder, request);
       });
     } finally {
       if (generation === this.generation) this.setState(this.ctx?.isIdle() ? "idle" : "working");

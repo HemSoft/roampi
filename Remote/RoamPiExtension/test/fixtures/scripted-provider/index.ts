@@ -131,8 +131,12 @@ export default function (pi: any) {
     label: "Fixture confirm",
     description: "Ask the user to confirm a fixture action.",
     parameters: Type.Object({}),
-    async execute(_id: string, _params: unknown, _signal: unknown, _onUpdate: unknown, ctx: any) {
-      const confirmed = await ctx.ui.confirm("Fixture approval", "Allow the fixture action?");
+    async execute(_id: string, _params: unknown, _signal: unknown, _onUpdate: unknown, _ctx: any) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        pi.events.emit("roampi:dialog:v1", {
+          kind: "confirm", title: "Fixture approval", detail: "Allow the fixture action?", respond: resolve,
+        });
+      });
       return { content: [{ type: "text", text: confirmed ? "confirmed" : "declined" }], details: undefined };
     },
   });

@@ -136,6 +136,15 @@ test("malformed and unsupported requests cannot mutate state; shutdown removes o
   await rm(f.root, { recursive: true, force: true });
 });
 
+test("discovery without an installed bridge never changes the remote filesystem", async () => {
+  const root = await mkdtemp(join("/tmp", "roampi-readonly-"));
+  const missing = join(root, "agent", "roampi");
+  try {
+    assert.deepEqual(await discover(missing), []);
+    await assert.rejects(lstat(join(root, "agent")), { code: "ENOENT" });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("insecure runtime directory and oversized registry fail closed", async () => {
   const root = await mkdtemp(join(tmpdir(), "roampi-perm-"));
   try {

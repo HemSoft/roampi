@@ -6,8 +6,8 @@ import { spawn } from "node:child_process";
 import { createConnection } from "node:net";
 import { discover, frame, Framer } from "../src/protocol.ts";
 
-// BSD script supplies a disposable PTY without opening the developer's Pi UI.
-test("interactive Pi publishes the same owner-only bridge on macOS", { skip: process.platform !== "darwin", timeout: 20_000 }, async () => {
+// A disposable PTY works on macOS and Linux without opening the developer's Pi UI.
+test("interactive Pi publishes the same owner-only bridge on a disposable PTY", { timeout: 20_000 }, async () => {
   const agentDir = await mkdtemp("/tmp/roampi-tui-");
   const installer = spawn(process.execPath, [join(import.meta.dirname, "../install.mjs"), "--apply", "--agent-dir", agentDir], { stdio: "ignore" });
   assert.equal(await new Promise((resolve) => installer.once("exit", resolve)), 0);

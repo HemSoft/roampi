@@ -48,6 +48,10 @@ export function live(entry: Registry, currentStart = processStart(entry.pid)): b
 
 export async function privateDirectory(path: string): Promise<void> {
   await mkdir(path, { mode: 0o700, recursive: true });
+  await validatePrivateDirectory(path);
+}
+
+async function validatePrivateDirectory(path: string): Promise<void> {
   const stat = await lstat(path);
   if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid?.() || (stat.mode & 0o077) !== 0) {
     throw new Error("RoamPi runtime directory must be an owner-only real directory");
@@ -98,9 +102,19 @@ async function respondsAs(entry: Registry): Promise<boolean> {
 }
 
 export async function discover(dir: string): Promise<Registry[]> {
-  await privateDirectory(dir);
+  try { await validatePrivateDirectory(dir); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
   const entries: Registry[] = [];
-  for (const file of await readdir(dir)) {
+  let names: string[];
+  try { names = await readdir(dir); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+  for (const file of names.slice(0, 256)) {
     if (!/^[a-f0-9-]{36}\.json$/.test(file)) continue;
     try {
       const path = join(dir, file);

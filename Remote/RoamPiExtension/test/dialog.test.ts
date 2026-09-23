@@ -33,6 +33,8 @@ test("cooperative select and input validate answers and never broadcast dialog p
     const { token } = await waitFor(seen, (x) => x.id === "a");
     send(control, "r", "renew", { token });
     assert.equal((await waitFor(seen, (x) => x.id === "r")).ok, true);
+    assert.equal(await bridge.relayDialog("input", "Unicode", "界".repeat(12_000)), undefined);
+    assert.equal(control.destroyed, false, "oversized dialog must not disconnect the controller");
     const selection = bridge.relayDialog("select", "Choose", ["A", "B"]);
     const request = await waitFor(seen, (x) => x.type === "dialog" && x.kind === "select");
     send(control, "invalid", "answer", { token, dialogId: request.id, value: "C" });
