@@ -6,6 +6,7 @@ RoamPi records notable changes here. Releases follow semantic versioning once pu
 
 ### Customer-visible changes
 
+- Made Tailscale optional: RoamPi's standard SSH path now explicitly accepts any reachable DNS hostname or IP address, with route-neutral setup and failure guidance.
 - Added a SwiftTerm terminal screen with SSH PTY input, bounded resize handling, mobile terminal keys, explicit session actions, and tmux-backed reconnect.
 - Added a native Pi RPC proof that completes a strict LF-delimited `get_state` exchange without invoking a provider.
 - Added an SSH transport proof with `user@host` parsing, optional ports, first-use host fingerprint confirmation, changed-key blocking, Ed25519 authentication, and Tailscale SSH fallback.

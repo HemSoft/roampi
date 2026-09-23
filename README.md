@@ -1,6 +1,6 @@
 # RoamPi
 
-RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. This repository contains the application foundation, a network-free demo dashboard, an SSH transport proof, and bounded terminal, tmux reconnect, and Pi RPC vertical slices. Tailscale routing comes from the installed iOS app.
+RoamPi is an iPhone and iPad client for Pi sessions running on user-authorized macOS and Linux machines. It connects through standard SSH to any hostname or IP address reachable from the device. Tailscale is an optional private network route supplied by the installed iOS app; RoamPi does not require or embed it. This repository contains the application foundation, a network-free demo dashboard, an SSH transport proof, and bounded terminal, tmux reconnect, and Pi RPC vertical slices.
 
 ## Requirements
 
@@ -71,7 +71,7 @@ For command-line launches:
 xcrun simctl launch booted com.hemsoft.RoamPi --demo
 ```
 
-The default launch opens the SSH transport proof. It accepts `user@host`, an optional advanced port, and either standard Ed25519 authentication or Tailscale SSH `none` with key fallback. It shows a first-use host fingerprint before authentication and blocks changed keys.
+The default launch opens the SSH transport proof. It accepts `user@host` for any reachable DNS hostname or IPv4 address, bracketed IPv6 addresses, an optional advanced port, and standard Ed25519 authentication. Tailscale SSH `none` with key fallback is optional. The proof shows a first-use host fingerprint before authentication and blocks changed keys.
 
 Launch deterministic transport states for simulator and UI-test validation without network access:
 

@@ -127,6 +127,8 @@ struct TransportFoundationTests {
         "Connection strings parse supported host forms",
         arguments: [
             ("person@machine", nil, "machine", 22),
+            ("person@host.example.com", nil, "host.example.com", 22),
+            ("person@192.0.2.10", nil, "192.0.2.10", 22),
             ("person@machine.example.ts.net:2222", nil, "machine.example.ts.net", 2222),
             ("person@100.64.0.1", "2200", "100.64.0.1", 2200),
             ("person@[fd7a:115c:a1e0::1]:2022", nil, "fd7a:115c:a1e0::1", 2022),

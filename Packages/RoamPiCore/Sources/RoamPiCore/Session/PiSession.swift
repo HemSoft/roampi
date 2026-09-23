@@ -115,7 +115,7 @@ public enum SessionDiagnostic: Error, Equatable, Sendable {
         case .commandFailed:
             "The remote command failed."
         case .connectionFailed:
-            "The SSH connection failed. Check Tailscale and remote SSH availability."
+            "The SSH connection failed. Check the network route and remote SSH availability."
         case .duplicateRequest:
             "A request with this identifier is already pending."
         case .duplicateSession:

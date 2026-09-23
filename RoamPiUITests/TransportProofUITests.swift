@@ -15,8 +15,8 @@ final class TransportProofUITests: XCTestCase {
         XCTAssertEqual(app.textFields["connection-string"].value as? String, "operator@studio-mini")
         XCTAssertTrue(
             app.staticTexts[
-                "Use a MagicDNS name, full .ts.net name, or Tailscale IP. " +
-                    "RoamPi never asks for Tailscale account credentials."
+                "Use any DNS hostname or IP address reachable from this device. " +
+                    "Tailscale MagicDNS names and Tailscale IPs are optional."
             ].exists
         )
         captureScreenshot(named: "ssh-transport-initial")
@@ -118,7 +118,7 @@ final class TransportProofUITests: XCTestCase {
         }
 
         let messages = [
-            "The SSH connection failed. Check Tailscale and remote SSH availability.",
+            "The SSH connection failed. Check the network route and remote SSH availability.",
             "The harmless probe did not return the expected result.",
             "The SSH probe timed out. Check the host and try again.",
         ]
@@ -224,7 +224,7 @@ final class TransportProofUITests: XCTestCase {
 
         let passed = app.staticTexts["Verified SSH command completed once"]
         let stoppedMessages = [
-            "The SSH connection failed. Check Tailscale and remote SSH availability.",
+            "The SSH connection failed. Check the network route and remote SSH availability.",
             "The harmless probe did not return the expected result.",
             "The SSH probe timed out. Check the host and try again.",
         ]

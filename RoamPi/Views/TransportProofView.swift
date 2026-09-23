@@ -46,10 +46,10 @@ struct TransportProofView: View {
                     .disabled(model.isEndpointLocked)
                     .accessibilityIdentifier("authentication-mode")
                 } header: {
-                    Text("Test host")
+                    Text("SSH host")
                 } footer: {
                     Text(
-                        "Use a MagicDNS name, full .ts.net name, or Tailscale IP. RoamPi never asks for Tailscale account credentials."
+                        "Use any DNS hostname or IP address reachable from this device. Tailscale MagicDNS names and Tailscale IPs are optional."
                     )
                 }
 
