@@ -35,12 +35,12 @@
       "maxLength": 64,
       "pattern": "^[A-Za-z0-9._-]+$"
     },
-    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
     "absolutePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 256,
-      "pattern": "^/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$)).*$"
+      "pattern": "^/(?!\\.\\.(?:/|$))(?!.*(?:/)\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F]*$"
     },
     "machine": {
       "type": "object",
@@ -49,10 +49,10 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/name" },
-        "host": { "type": "string", "minLength": 1, "maxLength": 253 },
+        "host": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "username": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "group": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "username": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000-\\u001F\\u007F]+$" },
+        "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" }
       }
     },
@@ -65,7 +65,7 @@
         "machineID": { "$ref": "#/$defs/identifier" },
         "path": { "$ref": "#/$defs/absolutePath" },
         "name": { "$ref": "#/$defs/name" },
-        "group": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" },
         "discovery": { "enum": ["explicit", "session"] }
       }
@@ -77,7 +77,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/name" },
-        "group": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" }
       }
     },
@@ -88,7 +88,7 @@
       "properties": {
         "projectID": { "$ref": "#/$defs/identifier" },
         "name": { "$ref": "#/$defs/name" },
-        "group": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "group": { "$ref": "#/$defs/name" },
         "visible": { "type": "boolean" },
         "enabled": { "type": "boolean" },
         "disabledContributions": {
@@ -154,7 +154,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/identifier" },
         "title": { "$ref": "#/$defs/name" },
-        "systemImage": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "systemImage": { "$ref": "#/$defs/name" },
         "blocks": { "type": "array", "items": { "$ref": "#/$defs/block" } },
         "children": { "type": "array", "items": { "$ref": "#/$defs/page" } }
       }

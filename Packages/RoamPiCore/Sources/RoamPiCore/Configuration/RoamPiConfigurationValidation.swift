@@ -533,6 +533,8 @@ public enum RoamPiConfigurationParser {
             }
             if dataSource.targetMachineID?.isEmpty != false {
                 append(.missingValue, at: path + ".targetMachineID", to: &diagnostics)
+            } else if let target = dataSource.targetMachineID, !isValidIdentifier(target) {
+                append(.invalidValue, at: path + ".targetMachineID", to: &diagnostics)
             }
             if let directory = dataSource.workingDirectory {
                 if !isSafeAbsolutePath(directory) {
@@ -841,7 +843,7 @@ public enum RoamPiConfigurationParser {
 
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
-        return prohibitedKeys.contains(where: { normalized == $0 || normalized.hasSuffix($0) })
+        return prohibitedKeys.contains(where: normalized.contains)
     }
 
     private static func isValidDisplayName(_ value: String) -> Bool {

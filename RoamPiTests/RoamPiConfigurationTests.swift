@@ -28,6 +28,11 @@ struct RoamPiConfigurationTests {
     @Test(
         "Invalid fixtures return the expected bounded diagnostic and JSON location",
         arguments: [
+            (
+                "control-character-name.roampi",
+                RoamPiConfigurationDiagnosticCode.invalidValue,
+                "$.machine.homeHost.name"
+            ),
             ("forward-version.roampi", RoamPiConfigurationDiagnosticCode.unsupportedVersion, "$.version"),
             (
                 "duplicate-identifiers.roampi",
@@ -107,7 +112,7 @@ struct RoamPiConfigurationTests {
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["githubToken": "not-a-real-token"],
+            "value": ["privateKeyPem": "not-a-real-private-key"],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(
@@ -386,6 +391,24 @@ struct RoamPiConfigurationTests {
         #expect(result.diagnostics.contains(.init(
             code: .missingValue,
             location: "$.dataSources[2].workingDirectory"
+        )))
+    }
+
+    @Test("Project command data sources reject invalid target identifiers")
+    func projectDataSourceTargetIdentifier() {
+        let data = Data(
+            #"{"version":1,"kind":"project","project":{"id":"target-check"},"pages":[],"dataSources":[{"id":"command-data","type":"command","command":"true","targetMachineID":"bad id","workingDirectory":"/srv/project","resultSchema":{"type":"object"}}],"actions":[],"jobs":[]}"#
+                .utf8
+        )
+
+        let result = RoamPiConfigurationParser.parse(
+            data,
+            source: .project(root: "/Users/developer/Projects/TargetCheck")
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .invalidValue,
+            location: "$.dataSources[0].targetMachineID"
         )))
     }
 
