@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "project",
+  "project": { "id": "unknown-component" },
+  "pages": [
+    {
+      "id": "unknown-page",
+      "title": "Unknown",
+      "blocks": [
+        {
+          "id": "unknown-block",
+          "type": "downloadedHTML",
+          "layout": { "compactSpan": 12, "regularSpan": 12 },
+          "blocks": []
+        }
+      ],
+      "children": []
+    }
+  ],
+  "dataSources": [],
+  "actions": [],
+  "jobs": []
+}

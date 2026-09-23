@@ -1,0 +1,63 @@
+{
+  "$schema": "../roampi.schema.json",
+  "version": 1,
+  "kind": "project",
+  "project": {
+    "id": "sample-service",
+    "name": "Sample Service",
+    "group": "Examples",
+    "visible": true
+  },
+  "pages": [
+    {
+      "id": "service-page",
+      "title": "Service",
+      "blocks": [
+        {
+          "id": "service-status",
+          "type": "status",
+          "layout": { "compactSpan": 12, "regularSpan": 6 },
+          "blocks": [],
+          "dataSourceID": "service-data"
+        },
+        {
+          "id": "deploy-control",
+          "type": "action",
+          "layout": { "compactSpan": 12, "regularSpan": 6 },
+          "blocks": [],
+          "actionID": "deploy-preview"
+        }
+      ],
+      "children": []
+    }
+  ],
+  "dataSources": [
+    {
+      "id": "service-data",
+      "type": "static",
+      "value": { "environment": "preview", "state": "ready" }
+    }
+  ],
+  "actions": [
+    {
+      "id": "deploy-preview",
+      "title": "Deploy Preview",
+      "type": "command",
+      "command": "./scripts/deploy-preview.sh",
+      "target": { "machineID": "studio", "workingDirectory": "/Users/developer/Projects/SampleService" },
+      "delivery": "immediate",
+      "presentation": "terminal",
+      "execution": "durable",
+      "cancellation": "allowed",
+      "concurrency": "rejectNew"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "preview-job",
+      "title": "Preview Deployment",
+      "actionID": "deploy-preview",
+      "retainResult": true
+    }
+  ]
+}

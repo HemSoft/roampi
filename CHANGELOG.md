@@ -6,6 +6,7 @@ RoamPi records notable changes here. Releases follow semantic versioning once pu
 
 ### Customer-visible changes
 
+- Added version 1 of the declarative `.roampi` machine and project configuration contract, including native pages, data sources, approved actions, durable jobs, deterministic merge rules, and last-known-good recovery.
 - Made Tailscale optional: RoamPi's standard SSH path now explicitly accepts any reachable DNS hostname or IP address, with route-neutral setup and failure guidance.
 - Added a SwiftTerm terminal screen with SSH PTY input, bounded resize handling, mobile terminal keys, explicit session actions, and tmux-backed reconnect.
 - Added a native Pi RPC proof that completes a strict LF-delimited `get_state` exchange without invoking a provider.
@@ -16,6 +17,7 @@ RoamPi records notable changes here. Releases follow semantic versioning once pu
 
 ### Developer experience
 
+- Added matching Codable configuration models, bounded diagnostics, project namespace isolation, action trust identities, fictional examples, a schema validator, and CI coverage.
 - Selected and pinned SwiftTerm 1.19.0 after evaluating rendering, selection, clipboard behavior, Unicode, input, maintenance, platform support, and licensing.
 - Added a shared `PiSession` core, redacted reconnect state model, strict bounded JSONL framing, and disposable SSH integration coverage for PTY resize, tmux process continuity, and RPC failures.
 - Added deterministic terminal and RPC UI routes plus debug-only, one-time physical-session profiles.

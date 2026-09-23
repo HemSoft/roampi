@@ -59,6 +59,9 @@ targets:
     platform: iOS
     sources:
       - path: RoamPiTests
+      - path: docs/examples
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: RoamPi
     settings:

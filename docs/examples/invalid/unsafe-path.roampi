@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "kind": "machine",
+  "machine": {
+    "homeHost": { "id": "home", "name": "Home", "host": "home.example.test", "port": 22, "username": "operator", "visible": true },
+    "machines": [],
+    "projects": [
+      { "id": "unsafe-project", "machineID": "home", "path": "/srv/../private", "name": "Unsafe", "visible": true, "discovery": "explicit" }
+    ],
+    "projectOverrides": [],
+    "fallbackBehavior": "declaredOnly"
+  },
+  "pages": [],
+  "dataSources": [],
+  "actions": [],
+  "jobs": []
+}

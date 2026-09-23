@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-resolved_file="RoamPi.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+resolved_files=("RoamPi.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+while IFS= read -r package_lock; do
+  resolved_files+=("$package_lock")
+done < <(find Packages -mindepth 2 -maxdepth 2 -name Package.resolved -type f | sort)
 
-if [[ ! -f "$resolved_file" ]]; then
+if [[ ! -f "${resolved_files[0]}" ]]; then
   if grep -q "XCRemoteSwiftPackageReference" RoamPi.xcodeproj/project.pbxproj; then
     echo "Dependency audit failed: Package.resolved is missing for declared dependencies."
     exit 1
@@ -12,6 +15,7 @@ if [[ ! -f "$resolved_file" ]]; then
   exit 0
 fi
 
+for resolved_file in "${resolved_files[@]}"; do
 python3 - "$resolved_file" <<'PY'
 import json
 import os
@@ -89,5 +93,6 @@ if failures:
         print(f"- {failure}")
     raise SystemExit(1)
 
-print(f"Dependency audit passed: {len(pins)} package(s) resolve from public GitHub repositories.")
+print(f"Dependency audit passed for {path}: {len(pins)} package(s) resolve from public GitHub repositories.")
 PY
+done

@@ -1,0 +1,430 @@
+import Foundation
+import RoamPiCore
+import Testing
+
+private final class ConfigurationFixtureBundleMarker {}
+
+@Suite("RoamPi configuration contract")
+struct RoamPiConfigurationTests {
+    @Test("Machine, project, multi-page, multi-machine, and command examples validate")
+    func validExamples() throws {
+        let minimal = try RoamPiConfigurationParser.parse(fixture("minimal.roampi"), source: .machine)
+        let dashboard = try RoamPiConfigurationParser.parse(fixture("developer-dashboard.roampi"), source: .machine)
+        let project = try RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .project(root: "/Users/developer/Projects/SampleService")
+        )
+
+        #expect(minimal.configuration != nil)
+        #expect(dashboard.configuration?.document.machine?.machines.count == 1)
+        #expect(dashboard.configuration?.document.pages.first?.children.count == 1)
+        #expect(dashboard.configuration?.document.dataSources.contains(where: { $0.type == .command }) == true)
+        #expect(project.configuration?.document.project?.id == "sample-service")
+        #expect(minimal.diagnostics.isEmpty)
+        #expect(dashboard.diagnostics.isEmpty)
+        #expect(project.diagnostics.isEmpty)
+    }
+
+    @Test(
+        "Invalid fixtures return the expected bounded diagnostic and JSON location",
+        arguments: [
+            ("forward-version.roampi", RoamPiConfigurationDiagnosticCode.unsupportedVersion, "$.version"),
+            (
+                "duplicate-identifiers.roampi",
+                RoamPiConfigurationDiagnosticCode.duplicateIdentifier,
+                "$.machine.machines[0].id"
+            ),
+            ("secret-field.roampi", RoamPiConfigurationDiagnosticCode.secretField, "$.token"),
+            ("unsafe-path.roampi", RoamPiConfigurationDiagnosticCode.unsafePath, "$.machine.projects[0].path"),
+        ]
+    )
+    func invalidFixtures(name: String, code: RoamPiConfigurationDiagnosticCode, location: String) throws {
+        let result = try RoamPiConfigurationParser.parse(invalidFixture(name), source: .machine)
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics.contains(.init(code: code, location: location)))
+        #expect(result.diagnostics.allSatisfy {
+            $0.location.count <= RoamPiConfigurationDiagnostic.maximumLocationLength
+        })
+    }
+
+    @Test("Static data preserves an explicit JSON null")
+    func staticNull() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "null-static",
+            "type": "static",
+            "value": NSNull(),
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.configuration?.document.dataSources.first?.value == .null)
+        #expect(result.diagnostics.isEmpty)
+    }
+
+    @Test("Undeclared fields are rejected instead of ignored by Codable")
+    func undeclaredField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["downloadedView"] = "not allowed"
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics == [
+            .init(code: .undeclaredField, location: "$.downloadedView"),
+        ])
+    }
+
+    @Test("Nested secret-bearing fields are rejected")
+    func nestedSecretField() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("minimal.roampi")
+        ) as? [String: Any])
+        object["dataSources"] = [[
+            "id": "unsafe-static",
+            "type": "static",
+            "value": ["githubToken": "not-a-real-token"],
+        ]]
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics == [
+            .init(code: .secretField, location: "$.dataSources[0].value.githubToken"),
+        ])
+    }
+
+    @Test("Undeclared component types fail at their type location")
+    func undeclaredComponent() throws {
+        let result = try RoamPiConfigurationParser.parse(
+            invalidFixture("unknown-component.roampi"),
+            source: .project(root: "/Users/developer/Projects/Unknown")
+        )
+
+        #expect(result.diagnostics == [
+            .init(code: .undeclaredType, location: "$.pages[0].blocks[0].type"),
+        ])
+    }
+
+    @Test("Machine configuration merges project contributions in deterministic namespaces")
+    func deterministicMergeAndNamespaceIsolation() throws {
+        let machine = try #require(try RoamPiConfigurationParser.parse(
+            fixture("developer-dashboard.roampi"),
+            source: .machine
+        ).configuration)
+        let project = try #require(try RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .project(root: "/Users/developer/Projects/SampleService")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(
+            machine: machine,
+            projects: [project],
+            discoveredProjects: [
+                .init(id: "zeta", machineID: "build-host", path: "/srv/zeta", name: "Zeta"),
+                .init(id: "alpha", machineID: "build-host", path: "/srv/alpha", name: "Alpha"),
+                .init(id: "roampi-app", machineID: "studio", path: "/wrong", name: "Wrong"),
+            ]
+        )
+
+        #expect(merged.pages.map(\.id) == ["dashboard", "project.sample-service.service-page"])
+        #expect(merged.actions.map(\.id).contains("project.sample-service.deploy-preview"))
+        #expect(merged.jobs.first(where: { $0.id.hasPrefix("project.sample-service") })?.actionID ==
+            "project.sample-service.deploy-preview")
+        #expect(merged.projects.map(\.id) == ["roampi-app", "alpha", "zeta", "sample-service"])
+        #expect(merged.projects.first?.name == "RoamPi")
+        #expect(merged.projects.first?.path == "/Users/developer/Projects/RoamPiDemo")
+        #expect(merged.fixedInterfaceRoutes == [.settings, .configurationRecovery])
+    }
+
+    @Test("Project merge order does not depend on input order")
+    func deterministicProjectOrder() throws {
+        let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)
+            .configuration)
+        let alpha = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "alpha", pageID: "alpha-page"),
+            source: .project(root: "/srv/alpha")
+        ).configuration)
+        let zeta = try #require(RoamPiConfigurationParser.parse(
+            projectData(id: "zeta", pageID: "zeta-page"),
+            source: .project(root: "/srv/zeta")
+        ).configuration)
+
+        let first = try RoamPiConfigurationMerger.merge(machine: machine, projects: [zeta, alpha])
+        let second = try RoamPiConfigurationMerger.merge(machine: machine, projects: [alpha, zeta])
+
+        #expect(first == second)
+        #expect(first.pages.map(\.id) == ["project.alpha.alpha-page", "project.zeta.zeta-page"])
+    }
+
+    @Test("Machine overrides can disable project actions without dangling controls")
+    func projectOverrideDisablesContribution() throws {
+        var machineObject = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var machine = try #require(machineObject["machine"] as? [String: Any])
+        var overrides = try #require(machine["projectOverrides"] as? [[String: Any]])
+        overrides.append([
+            "projectID": "sample-service",
+            "enabled": true,
+            "disabledContributions": ["deploy-preview"],
+        ])
+        machine["projectOverrides"] = overrides
+        machineObject["machine"] = machine
+        let machineData = try JSONSerialization.data(withJSONObject: machineObject)
+        let validatedMachine = try #require(RoamPiConfigurationParser.parse(machineData, source: .machine)
+            .configuration)
+        let project = try #require(RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .project(root: "/Users/developer/Projects/SampleService")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(machine: validatedMachine, projects: [project])
+
+        #expect(!merged.actions.contains(where: { $0.id.contains("deploy-preview") }))
+        #expect(!merged.jobs.contains(where: { $0.id.contains("preview-job") }))
+        #expect(!allBlocks(in: merged.pages).contains(where: { $0.id.contains("deploy-control") }))
+        #expect(allBlocks(in: merged.pages).contains(where: { $0.id.contains("service-status") }))
+    }
+
+    @Test("Adaptive layout rejects preferred widths below minimum widths")
+    func adaptiveLayoutValidation() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var pages = try #require(object["pages"] as? [[String: Any]])
+        var page = pages[0]
+        var blocks = try #require(page["blocks"] as? [[String: Any]])
+        var block = blocks[0]
+        block["layout"] = [
+            "minimumWidth": 400,
+            "preferredWidth": 200,
+            "compactSpan": 12,
+            "regularSpan": 8,
+        ]
+        blocks[0] = block
+        page["blocks"] = blocks
+        pages[0] = page
+        object["pages"] = pages
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .invalidValue,
+            location: "$.pages[0].blocks[0].layout.preferredWidth"
+        )))
+    }
+
+    @Test("Action trust identity changes with every trust-bound value")
+    func actionTrustIdentity() throws {
+        let configuration = try #require(RoamPiConfigurationParser.parse(
+            fixture("developer-dashboard.roampi"),
+            source: .machine
+        ).configuration)
+        let action = try #require(configuration.document.actions.first(where: { $0.id == "run-tests" }))
+        let original = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        let changedAction = RoamPiAction(
+            id: action.id,
+            title: action.title,
+            type: .command,
+            command: "./scripts/test-different-demo.sh",
+            target: action.target,
+            delivery: action.delivery,
+            presentation: action.presentation,
+            execution: action.execution,
+            cancellation: action.cancellation,
+            concurrency: action.concurrency
+        )
+        let changedSource = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: "/Users/developer/Projects/RoamPiDemo/.roampi",
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        let changedCommand = try RoamPiActionTrustIdentityBuilder.build(
+            action: changedAction,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        let changedHost = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedHost: "other.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        let changedDirectory = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/Other",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        var changedConfiguration = configuration.canonicalData
+        changedConfiguration.append(0x20)
+        let changedHash = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: changedConfiguration
+        )
+
+        #expect(Set([
+            original.value,
+            changedSource.value,
+            changedCommand.value,
+            changedHost.value,
+            changedDirectory.value,
+            changedHash.value,
+        ]).count == 6)
+        #expect(original.value.count == 64)
+        #expect(original.configurationHash.count == 64)
+    }
+
+    @Test("Invalid updates preserve the last-known-good configuration and fixed routes")
+    func lastKnownGoodReplacement() async throws {
+        let store = RoamPiConfigurationStore()
+        let accepted = try await store.update(machineData: fixture("developer-dashboard.roampi"))
+        let rejected = try await store.update(machineData: invalidFixture("forward-version.roampi"))
+
+        #expect(accepted.adopted)
+        #expect(!rejected.adopted)
+        #expect(rejected.configuration == accepted.configuration)
+        #expect(rejected.diagnostics == [.init(code: .unsupportedVersion, location: "$.version")])
+        #expect(rejected.configuration?.fixedInterfaceRoutes == [.settings, .configurationRecovery])
+    }
+
+    @Test("An invalid project update also preserves the complete last-known-good merge")
+    func invalidProjectPreservesMerge() async throws {
+        let store = RoamPiConfigurationStore()
+        let accepted = try await store.update(
+            machineData: fixture("developer-dashboard.roampi"),
+            projects: [
+                .init(
+                    root: "/Users/developer/Projects/SampleService",
+                    data: fixture("project.roampi")
+                ),
+            ]
+        )
+        let rejected = try await store.update(
+            machineData: fixture("developer-dashboard.roampi"),
+            projects: [
+                .init(
+                    root: "/Users/developer/Projects/SampleService",
+                    data: invalidFixture("unknown-component.roampi")
+                ),
+            ]
+        )
+
+        #expect(accepted.adopted)
+        #expect(!rejected.adopted)
+        #expect(rejected.configuration == accepted.configuration)
+        #expect(rejected.diagnostics == [
+            .init(code: .undeclaredType, location: "$.pages[0].blocks[0].type"),
+        ])
+    }
+
+    @Test("Source scope mismatches are rejected")
+    func sourceScope() throws {
+        let result = try RoamPiConfigurationParser.parse(
+            fixture("project.roampi"),
+            source: .machine
+        )
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics == [.init(code: .scopeViolation, location: "$.kind")])
+    }
+
+    @Test("Excessive nesting stops before decoding")
+    func excessiveNesting() throws {
+        var nested: Any = "leaf"
+        for _ in 0 ..< 34 {
+            nested = ["child": nested]
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["nested": nested])
+
+        let result = RoamPiConfigurationParser.parse(data, source: .machine)
+
+        #expect(result.configuration == nil)
+        #expect(result.diagnostics.first?.code == .nestingTooDeep)
+        #expect(result.diagnostics.first?.location.count ?? 0 <=
+            RoamPiConfigurationDiagnostic.maximumLocationLength)
+    }
+
+    @Test("Malformed input reports no source content")
+    func malformedInput() {
+        let result = RoamPiConfigurationParser.parse(
+            Data(#"{"version":1,"prompt":"private text""#.utf8),
+            source: .machine
+        )
+
+        #expect(result.diagnostics == [.init(code: .malformedJSON, location: "$")])
+    }
+
+    private func fixture(_ name: String) throws -> Data {
+        let url = try #require(Bundle(for: ConfigurationFixtureBundleMarker.self).url(
+            forResource: name,
+            withExtension: nil,
+            subdirectory: "examples"
+        ))
+        return try Data(contentsOf: url)
+    }
+
+    private func invalidFixture(_ name: String) throws -> Data {
+        let url = try #require(Bundle(for: ConfigurationFixtureBundleMarker.self).url(
+            forResource: name,
+            withExtension: nil,
+            subdirectory: "examples/invalid"
+        ))
+        return try Data(contentsOf: url)
+    }
+
+    private func minimalMachineData() -> Data {
+        Data(
+            #"{"version":1,"kind":"machine","machine":{"homeHost":{"id":"home","name":"Home","host":"home.example.test","port":22,"username":"operator","visible":true},"machines":[],"projects":[],"projectOverrides":[],"fallbackBehavior":"includeDiscovered"},"pages":[],"dataSources":[],"actions":[],"jobs":[]}"#
+                .utf8
+        )
+    }
+
+    private func projectData(id: String, pageID: String) -> Data {
+        Data(
+            #"{"version":1,"kind":"project","project":{"id":"\#(id)"},"pages":[{"id":"\#(pageID)","title":"Page","blocks":[],"children":[]}],"dataSources":[],"actions":[],"jobs":[]}"#
+                .utf8
+        )
+    }
+
+    private func allBlocks(in pages: [RoamPiPage]) -> [RoamPiBlock] {
+        pages.flatMap { page in
+            page.blocks.flatMap(flatten) + allBlocks(in: page.children)
+        }
+    }
+
+    private func flatten(_ block: RoamPiBlock) -> [RoamPiBlock] {
+        [block] + block.blocks.flatMap(flatten)
+    }
+}
