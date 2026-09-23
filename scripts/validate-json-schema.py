@@ -217,10 +217,10 @@ PROHIBITED_KEYS = {
     "mnemonic", "passcode", "passphrase", "passwd", "password", "privatekey", "providerkey", "pwd", "secret", "secretaccesskey",
     "secretkey", "seedphrase", "token",
 }
-PROHIBITED_QUALIFIERS = {
-    "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path",
-    "pem", "string", "value",
-}
+PROHIBITED_QUALIFIERS = (
+    "contents", "material", "content", "encoded", "header", "base64", "string", "value", "data", "file",
+    "hash", "json", "path", "pem",
+)
 
 
 def prohibited_qualifier_sequence(value: str) -> bool:

@@ -432,9 +432,9 @@ public enum RoamPiConfigurationParser {
         "secretaccesskey",
         "secretkey", "seedphrase", "token",
     ]
-    private static let prohibitedKeyQualifiers: Set<String> = [
-        "base64", "content", "contents", "data", "encoded", "file", "hash", "header", "json", "material", "path", "pem",
-        "string", "value",
+    private static let prohibitedKeyQualifiers = [
+        "contents", "material", "content", "encoded", "header", "base64", "string", "value", "data", "file",
+        "hash", "json", "path", "pem",
     ]
 
     public static func parse(

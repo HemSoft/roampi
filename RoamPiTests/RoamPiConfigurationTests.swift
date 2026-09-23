@@ -286,7 +286,7 @@ struct RoamPiConfigurationTests {
         object["dataSources"] = [[
             "id": "unsafe-static",
             "type": "static",
-            "value": ["password" + String(repeating: "data", count: 10000): true],
+            "value": ["passwordContents" + String(repeating: "data", count: 10000): true],
         ]]
 
         let result = try RoamPiConfigurationParser.parse(
