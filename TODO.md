@@ -46,7 +46,7 @@ This keeps the app small and gives each module a narrow interface:
 - [x] Start `pi --mode rpc` over an SSH exec channel and prove LF-delimited JSONL request and response handling.
 - [x] Review the relevant [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) before committing to the terminal and remote-command design. Keep standard SSH functional without another app, execute remote code only on user-authorized hosts, and describe Tailscale as optional.
 
-Exit criterion: one physical iOS device can connect over an active network route, authenticate with SSH, render a tmux-hosted Pi session, and exchange one Pi RPC prompt.
+Exit criterion: one physical iOS device can connect over an active network route, authenticate with SSH, render a tmux-hosted Pi session, and complete one bounded Pi RPC request and response. Provider-backed prompts belong to the native interface work in Phase 5.
 
 ## Phase 1: project foundation
 
