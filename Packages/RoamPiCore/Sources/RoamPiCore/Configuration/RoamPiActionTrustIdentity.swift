@@ -11,6 +11,18 @@ public struct RoamPiActionTrustIdentity: Equatable, Sendable {
     }
 }
 
+public struct RoamPiResolvedSSHDestination: Equatable, Sendable {
+    public let host: String
+    public let username: String
+    public let port: Int
+
+    public init(host: String, username: String, port: Int) {
+        self.host = host
+        self.username = username
+        self.port = port
+    }
+}
+
 public struct EffectiveRoamPiAction: Equatable, Sendable {
     public let action: RoamPiAction
     public let sourceFile: String
@@ -23,6 +35,22 @@ public struct EffectiveRoamPiAction: Equatable, Sendable {
     }
 }
 
+public struct EffectiveRoamPiDataSource: Equatable, Sendable {
+    public let dataSource: RoamPiDataSource
+    public let sourceFile: String
+    public let configurationHash: String
+
+    public var requiresApproval: Bool {
+        dataSource.type == .command
+    }
+
+    public init(dataSource: RoamPiDataSource, sourceFile: String, configurationHash: String) {
+        self.dataSource = dataSource
+        self.sourceFile = sourceFile
+        self.configurationHash = configurationHash
+    }
+}
+
 public enum RoamPiActionTrustIdentityBuilder {
     public static func configurationHash(for canonicalConfiguration: Data) -> String {
         digest(canonicalConfiguration)
@@ -30,13 +58,13 @@ public enum RoamPiActionTrustIdentityBuilder {
 
     public static func build(
         action: EffectiveRoamPiAction,
-        resolvedHost: String,
+        resolvedDestination: RoamPiResolvedSSHDestination,
         resolvedWorkingDirectory: String
     ) throws -> RoamPiActionTrustIdentity {
         try build(
             action: action.action,
             sourceFile: action.sourceFile,
-            resolvedHost: resolvedHost,
+            resolvedDestination: resolvedDestination,
             resolvedWorkingDirectory: resolvedWorkingDirectory,
             configurationHash: action.configurationHash
         )
@@ -45,14 +73,14 @@ public enum RoamPiActionTrustIdentityBuilder {
     public static func build(
         action: RoamPiAction,
         sourceFile: String,
-        resolvedHost: String,
+        resolvedDestination: RoamPiResolvedSSHDestination,
         resolvedWorkingDirectory: String,
         canonicalConfiguration: Data
     ) throws -> RoamPiActionTrustIdentity {
         try build(
             action: action,
             sourceFile: sourceFile,
-            resolvedHost: resolvedHost,
+            resolvedDestination: resolvedDestination,
             resolvedWorkingDirectory: resolvedWorkingDirectory,
             configurationHash: configurationHash(for: canonicalConfiguration)
         )
@@ -61,23 +89,10 @@ public enum RoamPiActionTrustIdentityBuilder {
     public static func build(
         action: RoamPiAction,
         sourceFile: String,
-        resolvedHost: String,
+        resolvedDestination: RoamPiResolvedSSHDestination,
         resolvedWorkingDirectory: String,
         configurationHash: String
     ) throws -> RoamPiActionTrustIdentity {
-        guard isBoundedValue(sourceFile, maximumBytes: 512),
-              isBoundedValue(resolvedHost, maximumBytes: 253),
-              isSafeAbsolutePath(resolvedWorkingDirectory)
-        else {
-            throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: "$trust")
-        }
-        guard configurationHash.utf8.count == 64,
-              configurationHash.utf8.allSatisfy({ byte in
-                  (48 ... 57).contains(byte) || (97 ... 102).contains(byte)
-              })
-        else {
-            throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: "$trust.configurationHash")
-        }
         let payload: String
         switch action.type {
         case .prompt:
@@ -91,13 +106,67 @@ public enum RoamPiActionTrustIdentityBuilder {
             }
             payload = "command\u{0}" + command
         }
+        return try buildCommandIdentity(
+            identifier: action.id,
+            payload: payload,
+            sourceFile: sourceFile,
+            resolvedDestination: resolvedDestination,
+            resolvedWorkingDirectory: resolvedWorkingDirectory,
+            configurationHash: configurationHash
+        )
+    }
+
+    public static func build(
+        dataSource: EffectiveRoamPiDataSource,
+        resolvedDestination: RoamPiResolvedSSHDestination,
+        resolvedWorkingDirectory: String
+    ) throws -> RoamPiActionTrustIdentity {
+        guard dataSource.requiresApproval, let command = dataSource.dataSource.command else {
+            throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: "$dataSource.command")
+        }
+        return try buildCommandIdentity(
+            identifier: dataSource.dataSource.id,
+            payload: "data-source-command\u{0}" + command,
+            sourceFile: dataSource.sourceFile,
+            resolvedDestination: resolvedDestination,
+            resolvedWorkingDirectory: resolvedWorkingDirectory,
+            configurationHash: dataSource.configurationHash
+        )
+    }
+
+    private static func buildCommandIdentity(
+        identifier: String,
+        payload: String,
+        sourceFile: String,
+        resolvedDestination: RoamPiResolvedSSHDestination,
+        resolvedWorkingDirectory: String,
+        configurationHash: String
+    ) throws -> RoamPiActionTrustIdentity {
+        guard isBoundedValue(sourceFile, maximumBytes: 512),
+              isBoundedValue(identifier, maximumBytes: 128),
+              isBoundedValue(resolvedDestination.host, maximumBytes: 253),
+              isBoundedValue(resolvedDestination.username, maximumBytes: 64),
+              (1 ... 65535).contains(resolvedDestination.port),
+              isSafeAbsolutePath(resolvedWorkingDirectory)
+        else {
+            throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: "$trust")
+        }
+        guard configurationHash.utf8.count == 64,
+              configurationHash.utf8.allSatisfy({ byte in
+                  (48 ... 57).contains(byte) || (97 ... 102).contains(byte)
+              })
+        else {
+            throw RoamPiConfigurationDiagnostic(code: .invalidValue, location: "$trust.configurationHash")
+        }
 
         var identityData = Data()
         for value in [
             sourceFile,
-            action.id,
+            identifier,
             payload,
-            resolvedHost,
+            resolvedDestination.host,
+            resolvedDestination.username,
+            String(resolvedDestination.port),
             resolvedWorkingDirectory,
             configurationHash,
         ] {

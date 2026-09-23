@@ -11,7 +11,7 @@ A document has `version: 1` and one scope:
 - `kind: "machine"` defines the home host, participating machines, explicit projects, project overrides, global pages, data sources, actions, and durable jobs.
 - `kind: "project"` contributes pages, data sources, actions, and jobs only within the project named by `project.id`.
 
-Configuration is declarative. Version 1 has no JavaScript, Swift, HTML, downloaded view code, fixed pixel positioning, credentials, tokens, passwords, private keys, or stored approvals. Command and prompt strings are inert until the user approves the resolved action through the app's action trust flow.
+Configuration is declarative. Version 1 has no JavaScript, Swift, HTML, downloaded view code, fixed pixel positioning, credentials, tokens, passwords, private keys, or stored approvals. Command and prompt strings are inert until the user approves the resolved action or command-backed data source through the app's trust flow.
 
 Settings and configuration recovery are fixed native routes. Configuration cannot rename, replace, or hide them.
 
@@ -32,7 +32,7 @@ Data sources are one of:
 
 - `static`, containing JSON;
 - `builtin`, naming typed RoamPi machine, project, session, job, or connection state; or
-- `command`, naming a remote command, target machine, working directory, and result schema.
+- `command`, naming a bounded remote command, target machine, required working directory, and result schema. RoamPi must obtain approval for its trust identity before first execution or execution after an identity change; opening or refreshing a page cannot bypass that gate.
 
 Actions are either `prompt` or `command`. They declare a target machine and working directory, prompt delivery (`immediate`, `followUp`, or `steering`), presentation, inline or durable execution, cancellation policy, and concurrency policy.
 
@@ -50,16 +50,16 @@ Duplicate project documents fail the whole update. If any source is malformed or
 
 ## Trust identity
 
-Approval never lives in a remote `.roampi` file. RoamPi computes an action trust identity from length-prefixed values:
+Approval never lives in a remote `.roampi` file. RoamPi computes a trust identity for every action and command-backed data source from length-prefixed values:
 
 - source file path;
-- action ID;
-- action type and prompt or command content;
-- resolved host;
+- action or data-source ID;
+- action type plus prompt or command content;
+- resolved SSH host, username, and port;
 - resolved working directory; and
 - SHA-256 hash of the canonical validated configuration.
 
-Changing any bound value changes the identity and invalidates a prior approval. Each effective action retains its validated source path and canonical configuration hash, including when the store returns a last-known-good configuration after a rejected update.
+Changing any bound value changes the identity and invalidates a prior approval. Each effective action and data source retains its validated source path and canonical configuration hash, including when the store returns a last-known-good configuration after a rejected update.
 
 ## Diagnostics
 

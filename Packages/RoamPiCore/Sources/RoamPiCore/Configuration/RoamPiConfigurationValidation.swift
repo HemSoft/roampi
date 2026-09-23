@@ -525,8 +525,12 @@ public enum RoamPiConfigurationParser {
             if dataSource.targetMachineID?.isEmpty != false {
                 append(.missingValue, at: path + ".targetMachineID", to: &diagnostics)
             }
-            if let directory = dataSource.workingDirectory, !isSafeAbsolutePath(directory) {
-                append(.unsafePath, at: path + ".workingDirectory", to: &diagnostics)
+            if let directory = dataSource.workingDirectory {
+                if !isSafeAbsolutePath(directory) {
+                    append(.unsafePath, at: path + ".workingDirectory", to: &diagnostics)
+                }
+            } else {
+                append(.missingValue, at: path + ".workingDirectory", to: &diagnostics)
             }
             if dataSource.resultSchema == nil {
                 append(.missingValue, at: path + ".resultSchema", to: &diagnostics)

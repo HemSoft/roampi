@@ -23,7 +23,7 @@ public struct EffectiveRoamPiConfiguration: Equatable, Sendable {
     public let machines: [RoamPiMachine]
     public let projects: [RoamPiProject]
     public let pages: [RoamPiPage]
-    public let dataSources: [RoamPiDataSource]
+    public let dataSources: [EffectiveRoamPiDataSource]
     public let actions: [EffectiveRoamPiAction]
     public let jobs: [RoamPiJob]
     public let fixedInterfaceRoutes: [RoamPiFixedInterfaceRoute]
@@ -32,7 +32,7 @@ public struct EffectiveRoamPiConfiguration: Equatable, Sendable {
         machines: [RoamPiMachine],
         projects: [RoamPiProject],
         pages: [RoamPiPage],
-        dataSources: [RoamPiDataSource],
+        dataSources: [EffectiveRoamPiDataSource],
         actions: [EffectiveRoamPiAction],
         jobs: [RoamPiJob]
     ) {
@@ -103,6 +103,17 @@ public enum RoamPiConfigurationMerger {
 
         var pages = machine.document.pages
         var dataSources = machine.document.dataSources
+        var dataSourceProvenance = Dictionary(uniqueKeysWithValues: machine.document.dataSources.map {
+            (
+                $0.id,
+                (
+                    sourceFile: machine.source.filePath,
+                    configurationHash: RoamPiActionTrustIdentityBuilder.configurationHash(
+                        for: machine.canonicalData
+                    )
+                )
+            )
+        })
         var actions = machine.document.actions
         var actionProvenance = Dictionary(uniqueKeysWithValues: machine.document.actions.map {
             (
@@ -124,17 +135,24 @@ public enum RoamPiConfigurationMerger {
             let disabled = Set(override?.disabledContributions ?? [])
             let filtered = filter(configuration.document, disabled: disabled)
             pages.append(contentsOf: filtered.pages.map { namespace($0, projectID: contribution.id) })
-            dataSources.append(contentsOf: filtered.dataSources.map { namespace($0, projectID: contribution.id) })
+            let projectDataSources = filtered.dataSources.map { namespace($0, projectID: contribution.id) }
             let projectActions = filtered.actions.map { namespace($0, projectID: contribution.id) }
             let projectHash = RoamPiActionTrustIdentityBuilder.configurationHash(
                 for: configuration.canonicalData
             )
+            for dataSource in projectDataSources {
+                dataSourceProvenance[dataSource.id] = (
+                    sourceFile: configuration.source.filePath,
+                    configurationHash: projectHash
+                )
+            }
             for action in projectActions {
                 actionProvenance[action.id] = (
                     sourceFile: configuration.source.filePath,
                     configurationHash: projectHash
                 )
             }
+            dataSources.append(contentsOf: projectDataSources)
             actions.append(contentsOf: projectActions)
             jobs.append(contentsOf: filtered.jobs.map { namespace($0, projectID: contribution.id) })
         }
@@ -161,6 +179,19 @@ public enum RoamPiConfigurationMerger {
             )
         }
 
+        let effectiveDataSources = try dataSources.map { dataSource in
+            guard let provenance = dataSourceProvenance[dataSource.id] else {
+                throw RoamPiConfigurationDiagnostic(
+                    code: .invalidReference,
+                    location: "$merge.dataSources.\(dataSource.id).provenance"
+                )
+            }
+            return EffectiveRoamPiDataSource(
+                dataSource: dataSource,
+                sourceFile: provenance.sourceFile,
+                configurationHash: provenance.configurationHash
+            )
+        }
         let effectiveActions = try actions.map { action in
             guard let provenance = actionProvenance[action.id] else {
                 throw RoamPiConfigurationDiagnostic(
@@ -178,7 +209,7 @@ public enum RoamPiConfigurationMerger {
             machines: machines,
             projects: effectiveProjects,
             pages: pages,
-            dataSources: dataSources,
+            dataSources: effectiveDataSources,
             actions: effectiveActions,
             jobs: jobs
         )

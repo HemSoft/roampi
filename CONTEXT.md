@@ -17,7 +17,7 @@ The validated result of deterministic machine and project configuration merging.
 _Avoid_: Combined config, runtime config
 
 **Action trust identity**:
-A digest binding approval to one source file, action, resolved destination, working directory, and configuration version.
+A digest binding approval to one source file, action or command-backed data source, resolved SSH host, username and port, working directory, and canonical configuration hash.
 _Avoid_: Approval ID, action hash
 
 **Last-known-good configuration**:

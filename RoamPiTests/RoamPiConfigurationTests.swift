@@ -155,8 +155,17 @@ struct RoamPiConfigurationTests {
             RoamPiActionTrustIdentityBuilder.configurationHash(for: project.canonicalData))
         #expect(try RoamPiActionTrustIdentityBuilder.build(
             action: effectiveAction,
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/SampleService"
+        ).value.count == 64)
+        let commandDataSource = try #require(merged.dataSources.first(where: {
+            $0.dataSource.id == "test-summary"
+        }))
+        #expect(commandDataSource.requiresApproval)
+        #expect(try RoamPiActionTrustIdentityBuilder.build(
+            dataSource: commandDataSource,
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo"
         ).value.count == 64)
     }
 
@@ -250,6 +259,26 @@ struct RoamPiConfigurationTests {
         ])
     }
 
+    @Test("Command data sources require an explicit working directory")
+    func commandDataSourceWorkingDirectory() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("developer-dashboard.roampi")
+        ) as? [String: Any])
+        var dataSources = try #require(object["dataSources"] as? [[String: Any]])
+        dataSources[2].removeValue(forKey: "workingDirectory")
+        object["dataSources"] = dataSources
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .machine
+        )
+
+        #expect(result.diagnostics.contains(.init(
+            code: .missingValue,
+            location: "$.dataSources[2].workingDirectory"
+        )))
+    }
+
     @Test("Adaptive layout rejects preferred widths below minimum widths")
     func adaptiveLayoutValidation() throws {
         var object = try #require(JSONSerialization.jsonObject(
@@ -291,7 +320,7 @@ struct RoamPiConfigurationTests {
         let original = try RoamPiActionTrustIdentityBuilder.build(
             action: action,
             sourceFile: RoamPiConfigurationPaths.machine,
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
             canonicalConfiguration: configuration.canonicalData
         )
@@ -310,28 +339,42 @@ struct RoamPiConfigurationTests {
         let changedSource = try RoamPiActionTrustIdentityBuilder.build(
             action: action,
             sourceFile: "/Users/developer/Projects/RoamPiDemo/.roampi",
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
             canonicalConfiguration: configuration.canonicalData
         )
         let changedCommand = try RoamPiActionTrustIdentityBuilder.build(
             action: changedAction,
             sourceFile: RoamPiConfigurationPaths.machine,
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
             canonicalConfiguration: configuration.canonicalData
         )
         let changedHost = try RoamPiActionTrustIdentityBuilder.build(
             action: action,
             sourceFile: RoamPiConfigurationPaths.machine,
-            resolvedHost: "other.example.test",
+            resolvedDestination: .init(host: "other.example.test", username: "developer", port: 22),
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        let changedUsername = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedDestination: .init(host: "studio.example.test", username: "operator", port: 22),
+            resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
+            canonicalConfiguration: configuration.canonicalData
+        )
+        let changedPort = try RoamPiActionTrustIdentityBuilder.build(
+            action: action,
+            sourceFile: RoamPiConfigurationPaths.machine,
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 2222),
             resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
             canonicalConfiguration: configuration.canonicalData
         )
         let changedDirectory = try RoamPiActionTrustIdentityBuilder.build(
             action: action,
             sourceFile: RoamPiConfigurationPaths.machine,
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/Other",
             canonicalConfiguration: configuration.canonicalData
         )
@@ -340,7 +383,7 @@ struct RoamPiConfigurationTests {
         let changedHash = try RoamPiActionTrustIdentityBuilder.build(
             action: action,
             sourceFile: RoamPiConfigurationPaths.machine,
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/RoamPiDemo",
             canonicalConfiguration: changedConfiguration
         )
@@ -350,9 +393,11 @@ struct RoamPiConfigurationTests {
             changedSource.value,
             changedCommand.value,
             changedHost.value,
+            changedUsername.value,
+            changedPort.value,
             changedDirectory.value,
             changedHash.value,
-        ]).count == 6)
+        ]).count == 8)
         #expect(original.value.count == 64)
         #expect(original.configurationHash.count == 64)
     }
@@ -403,7 +448,7 @@ struct RoamPiConfigurationTests {
         }))
         #expect(try RoamPiActionTrustIdentityBuilder.build(
             action: retainedAction,
-            resolvedHost: "studio.example.test",
+            resolvedDestination: .init(host: "studio.example.test", username: "developer", port: 22),
             resolvedWorkingDirectory: "/Users/developer/Projects/SampleService"
         ).configurationHash == retainedAction.configurationHash)
     }
