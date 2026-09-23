@@ -1210,8 +1210,13 @@ public enum RoamPiConfigurationParser {
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
         let segments = value.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
-        if normalized == "pat" || ["githubpat", "gitlabpat", "bitbucketpat"].contains(normalized) ||
-            value.hasSuffix("PAT") || value.hasSuffix("Pat") || segments.contains(where: { $0.lowercased() == "pat" })
+        let patBases = ["bitbucketpat", "githubpat", "gitlabpat", "pat"]
+        if patBases.contains(where: { base in
+            guard normalized.hasPrefix(base) else { return false }
+            let remainder = String(normalized.dropFirst(base.count))
+            return remainder.isEmpty || isProhibitedQualifierSequence(remainder)
+        }) || value.hasSuffix("PAT") || value.hasSuffix("Pat") ||
+            segments.contains(where: { $0.lowercased() == "pat" })
         {
             return true
         }

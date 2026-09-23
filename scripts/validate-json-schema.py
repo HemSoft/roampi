@@ -257,8 +257,16 @@ def prohibited_qualifier_sequence(value: str) -> bool:
 def prohibited_key(value: str) -> bool:
     normalized = "".join(character for character in value.lower() if character.isalnum())
     segments = [segment for segment in re.split(r"[^A-Za-z0-9]+", value) if segment]
+    pat_bases = ("bitbucketpat", "githubpat", "gitlabpat", "pat")
     if (
-        normalized in {"pat", "githubpat", "gitlabpat", "bitbucketpat"}
+        any(
+            normalized.startswith(base)
+            and (
+                len(normalized) == len(base)
+                or prohibited_qualifier_sequence(normalized[len(base):])
+            )
+            for base in pat_bases
+        )
         or value.endswith(("PAT", "Pat"))
         or any(segment.lower() == "pat" for segment in segments)
     ):
