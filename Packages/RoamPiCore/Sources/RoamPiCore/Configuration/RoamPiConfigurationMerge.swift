@@ -24,7 +24,7 @@ public struct EffectiveRoamPiConfiguration: Equatable, Sendable {
     public let projects: [RoamPiProject]
     public let pages: [RoamPiPage]
     public let dataSources: [RoamPiDataSource]
-    public let actions: [RoamPiAction]
+    public let actions: [EffectiveRoamPiAction]
     public let jobs: [RoamPiJob]
     public let fixedInterfaceRoutes: [RoamPiFixedInterfaceRoute]
 
@@ -33,7 +33,7 @@ public struct EffectiveRoamPiConfiguration: Equatable, Sendable {
         projects: [RoamPiProject],
         pages: [RoamPiPage],
         dataSources: [RoamPiDataSource],
-        actions: [RoamPiAction],
+        actions: [EffectiveRoamPiAction],
         jobs: [RoamPiJob]
     ) {
         self.machines = machines
@@ -104,6 +104,17 @@ public enum RoamPiConfigurationMerger {
         var pages = machine.document.pages
         var dataSources = machine.document.dataSources
         var actions = machine.document.actions
+        var actionProvenance = Dictionary(uniqueKeysWithValues: machine.document.actions.map {
+            (
+                $0.id,
+                (
+                    sourceFile: machine.source.filePath,
+                    configurationHash: RoamPiActionTrustIdentityBuilder.configurationHash(
+                        for: machine.canonicalData
+                    )
+                )
+            )
+        })
         var jobs = machine.document.jobs
 
         for configuration in orderedProjectConfigurations {
@@ -114,7 +125,17 @@ public enum RoamPiConfigurationMerger {
             let filtered = filter(configuration.document, disabled: disabled)
             pages.append(contentsOf: filtered.pages.map { namespace($0, projectID: contribution.id) })
             dataSources.append(contentsOf: filtered.dataSources.map { namespace($0, projectID: contribution.id) })
-            actions.append(contentsOf: filtered.actions.map { namespace($0, projectID: contribution.id) })
+            let projectActions = filtered.actions.map { namespace($0, projectID: contribution.id) }
+            let projectHash = RoamPiActionTrustIdentityBuilder.configurationHash(
+                for: configuration.canonicalData
+            )
+            for action in projectActions {
+                actionProvenance[action.id] = (
+                    sourceFile: configuration.source.filePath,
+                    configurationHash: projectHash
+                )
+            }
+            actions.append(contentsOf: projectActions)
             jobs.append(contentsOf: filtered.jobs.map { namespace($0, projectID: contribution.id) })
         }
 
@@ -140,12 +161,25 @@ public enum RoamPiConfigurationMerger {
             )
         }
 
+        let effectiveActions = try actions.map { action in
+            guard let provenance = actionProvenance[action.id] else {
+                throw RoamPiConfigurationDiagnostic(
+                    code: .invalidReference,
+                    location: "$merge.actions.\(action.id).provenance"
+                )
+            }
+            return EffectiveRoamPiAction(
+                action: action,
+                sourceFile: provenance.sourceFile,
+                configurationHash: provenance.configurationHash
+            )
+        }
         return EffectiveRoamPiConfiguration(
             machines: machines,
             projects: effectiveProjects,
             pages: pages,
             dataSources: dataSources,
-            actions: actions,
+            actions: effectiveActions,
             jobs: jobs
         )
     }
@@ -318,7 +352,11 @@ public enum RoamPiConfigurationMerger {
     }
 
     private static func namespace(_ identifier: String, projectID: String) -> String {
-        "project.\(projectID).\(identifier)"
+        "project%\(escapedNamespaceComponent(projectID))%\(escapedNamespaceComponent(identifier))"
+    }
+
+    private static func escapedNamespaceComponent(_ value: String) -> String {
+        value.replacingOccurrences(of: ".", with: "%2E")
     }
 
     private static func namespace(_ page: RoamPiPage, projectID: String) -> RoamPiPage {

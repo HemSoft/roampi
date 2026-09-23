@@ -139,14 +139,46 @@ struct RoamPiConfigurationTests {
             ]
         )
 
-        #expect(merged.pages.map(\.id) == ["dashboard", "project.sample-service.service-page"])
-        #expect(merged.actions.map(\.id).contains("project.sample-service.deploy-preview"))
-        #expect(merged.jobs.first(where: { $0.id.hasPrefix("project.sample-service") })?.actionID ==
-            "project.sample-service.deploy-preview")
+        #expect(merged.pages.map(\.id) == ["dashboard", "project%sample-service%service-page"])
+        #expect(merged.actions.map(\.action.id).contains("project%sample-service%deploy-preview"))
+        #expect(merged.jobs.first(where: { $0.id.hasPrefix("project%sample-service") })?.actionID ==
+            "project%sample-service%deploy-preview")
         #expect(merged.projects.map(\.id) == ["roampi-app", "alpha", "zeta", "sample-service"])
         #expect(merged.projects.first?.name == "RoamPi")
         #expect(merged.projects.first?.path == "/Users/developer/Projects/RoamPiDemo")
         #expect(merged.fixedInterfaceRoutes == [.settings, .configurationRecovery])
+        let effectiveAction = try #require(merged.actions.first(where: {
+            $0.action.id == "project%sample-service%deploy-preview"
+        }))
+        #expect(effectiveAction.sourceFile == "/Users/developer/Projects/SampleService/.roampi")
+        #expect(effectiveAction.configurationHash ==
+            RoamPiActionTrustIdentityBuilder.configurationHash(for: project.canonicalData))
+        #expect(try RoamPiActionTrustIdentityBuilder.build(
+            action: effectiveAction,
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/SampleService"
+        ).value.count == 64)
+    }
+
+    @Test("Escaped project namespaces cannot collide")
+    func collisionFreeNamespaces() throws {
+        let machine = try #require(RoamPiConfigurationParser.parse(minimalMachineData(), source: .machine)
+            .configuration)
+        let first = try #require(RoamPiConfigurationParser.parse(
+            projectActionData(projectID: "a", actionID: "b.c"),
+            source: .project(root: "/srv/first")
+        ).configuration)
+        let second = try #require(RoamPiConfigurationParser.parse(
+            projectActionData(projectID: "a.b", actionID: "c"),
+            source: .project(root: "/srv/second")
+        ).configuration)
+
+        let merged = try RoamPiConfigurationMerger.merge(machine: machine, projects: [first, second])
+
+        #expect(Set(merged.actions.map(\.action.id)) == Set([
+            "project%a%b%2Ec",
+            "project%a%2Eb%c",
+        ]))
     }
 
     @Test("Project merge order does not depend on input order")
@@ -166,7 +198,7 @@ struct RoamPiConfigurationTests {
         let second = try RoamPiConfigurationMerger.merge(machine: machine, projects: [alpha, zeta])
 
         #expect(first == second)
-        #expect(first.pages.map(\.id) == ["project.alpha.alpha-page", "project.zeta.zeta-page"])
+        #expect(first.pages.map(\.id) == ["project%alpha%alpha-page", "project%zeta%zeta-page"])
     }
 
     @Test("Machine overrides can disable project actions without dangling controls")
@@ -193,10 +225,29 @@ struct RoamPiConfigurationTests {
 
         let merged = try RoamPiConfigurationMerger.merge(machine: validatedMachine, projects: [project])
 
-        #expect(!merged.actions.contains(where: { $0.id.contains("deploy-preview") }))
+        #expect(!merged.actions.contains(where: { $0.action.id.contains("deploy-preview") }))
         #expect(!merged.jobs.contains(where: { $0.id.contains("preview-job") }))
         #expect(!allBlocks(in: merged.pages).contains(where: { $0.id.contains("deploy-control") }))
         #expect(allBlocks(in: merged.pages).contains(where: { $0.id.contains("service-status") }))
+    }
+
+    @Test("Project contribution names follow the schema bounds")
+    func projectContributionNameValidation() throws {
+        var object = try #require(JSONSerialization.jsonObject(
+            with: fixture("project.roampi")
+        ) as? [String: Any])
+        var project = try #require(object["project"] as? [String: Any])
+        project["name"] = ""
+        object["project"] = project
+
+        let result = try RoamPiConfigurationParser.parse(
+            JSONSerialization.data(withJSONObject: object),
+            source: .project(root: "/Users/developer/Projects/SampleService")
+        )
+
+        #expect(result.diagnostics == [
+            .init(code: .invalidValue, location: "$.project.name"),
+        ])
     }
 
     @Test("Adaptive layout rejects preferred widths below minimum widths")
@@ -347,6 +398,14 @@ struct RoamPiConfigurationTests {
         #expect(rejected.diagnostics == [
             .init(code: .undeclaredType, location: "$.pages[0].blocks[0].type"),
         ])
+        let retainedAction = try #require(rejected.configuration?.actions.first(where: {
+            $0.action.id == "project%sample-service%deploy-preview"
+        }))
+        #expect(try RoamPiActionTrustIdentityBuilder.build(
+            action: retainedAction,
+            resolvedHost: "studio.example.test",
+            resolvedWorkingDirectory: "/Users/developer/Projects/SampleService"
+        ).configurationHash == retainedAction.configurationHash)
     }
 
     @Test("Source scope mismatches are rejected")
@@ -414,6 +473,13 @@ struct RoamPiConfigurationTests {
     private func projectData(id: String, pageID: String) -> Data {
         Data(
             #"{"version":1,"kind":"project","project":{"id":"\#(id)"},"pages":[{"id":"\#(pageID)","title":"Page","blocks":[],"children":[]}],"dataSources":[],"actions":[],"jobs":[]}"#
+                .utf8
+        )
+    }
+
+    private func projectActionData(projectID: String, actionID: String) -> Data {
+        Data(
+            #"{"version":1,"kind":"project","project":{"id":"\#(projectID)"},"pages":[],"dataSources":[],"actions":[{"id":"\#(actionID)","title":"Action","type":"command","command":"true","target":{"machineID":"home","workingDirectory":"/srv/project"},"delivery":"immediate","presentation":"inline","execution":"inline","cancellation":"allowed","concurrency":"serial"}],"jobs":[]}"#
                 .utf8
         )
     }

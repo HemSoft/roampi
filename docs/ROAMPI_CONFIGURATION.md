@@ -42,7 +42,7 @@ RoamPi merges a complete update atomically:
 
 1. The machine document contributes first in file order.
 2. Project documents sort by `project.id`, then source path.
-3. Every project identifier is rewritten into `project.<project-id>.<local-id>`. References are rewritten with it, so one project cannot address another project's contributions.
+3. Every project identifier is rewritten into `project%<escaped-project-id>%<escaped-local-id>`. Dots become `%2E`; source identifiers cannot contain `%`, so the separators and mapping are collision-free, including against machine identifiers. References are rewritten with the same rule, and one project cannot address another project's contributions.
 4. Session-discovered projects sort by machine ID, path, then project ID. Explicit machine declarations win when IDs match.
 5. Machine `projectOverrides` apply last. They may rename, regroup, hide, disable all contributions from a project, or disable named local contributions.
 
@@ -59,7 +59,7 @@ Approval never lives in a remote `.roampi` file. RoamPi computes an action trust
 - resolved working directory; and
 - SHA-256 hash of the canonical validated configuration.
 
-Changing any bound value changes the identity and invalidates a prior approval.
+Changing any bound value changes the identity and invalidates a prior approval. Each effective action retains its validated source path and canonical configuration hash, including when the store returns a last-known-good configuration after a rejected update.
 
 ## Diagnostics
 

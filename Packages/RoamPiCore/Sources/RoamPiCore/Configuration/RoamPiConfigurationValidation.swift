@@ -260,6 +260,12 @@ public enum RoamPiConfigurationParser {
                 if !isSafeAbsolutePath(project.path) {
                     append(.unsafePath, at: path + ".path", to: &diagnostics)
                 }
+                if !isValidDisplayName(project.name) {
+                    append(.invalidValue, at: path + ".name", to: &diagnostics)
+                }
+                if let group = project.group, !isValidDisplayName(group) {
+                    append(.invalidValue, at: path + ".group", to: &diagnostics)
+                }
             }
             for (index, dataSource) in document.dataSources.enumerated() {
                 if let target = dataSource.targetMachineID, !machineIDs.contains(target) {
@@ -278,6 +284,12 @@ public enum RoamPiConfigurationParser {
                     append(.invalidValue, at: path + ".projectID", to: &diagnostics)
                 } else if !overrideIDs.insert(override.projectID).inserted {
                     append(.duplicateIdentifier, at: path + ".projectID", to: &diagnostics)
+                }
+                if let name = override.name, !isValidDisplayName(name) {
+                    append(.invalidValue, at: path + ".name", to: &diagnostics)
+                }
+                if let group = override.group, !isValidDisplayName(group) {
+                    append(.invalidValue, at: path + ".group", to: &diagnostics)
                 }
                 var disabledIDs = Set<String>()
                 for (disabledIndex, identifier) in override.disabledContributions.enumerated() {
@@ -300,6 +312,12 @@ public enum RoamPiConfigurationParser {
 
         if let project = document.project {
             identifierRegistry.register(project.id, at: "$.project.id", diagnostics: &diagnostics)
+            if let name = project.name, !isValidDisplayName(name) {
+                append(.invalidValue, at: "$.project.name", to: &diagnostics)
+            }
+            if let group = project.group, !isValidDisplayName(group) {
+                append(.invalidValue, at: "$.project.group", to: &diagnostics)
+            }
             if let root = source.projectRoot, !isSafeAbsolutePath(root) {
                 append(.unsafePath, at: "$source.projectRoot", to: &diagnostics)
             }
@@ -359,8 +377,11 @@ public enum RoamPiConfigurationParser {
         diagnostics: inout [RoamPiConfigurationDiagnostic]
     ) {
         registry.register(machine.id, at: path + ".id", diagnostics: &diagnostics)
-        if machine.name.isEmpty || machine.name.count > 128 {
+        if !isValidDisplayName(machine.name) {
             append(.invalidValue, at: path + ".name", to: &diagnostics)
+        }
+        if let group = machine.group, !isValidDisplayName(group) {
+            append(.invalidValue, at: path + ".group", to: &diagnostics)
         }
         if machine.host.isEmpty || machine.host.count > 253 || containsControlCharacter(machine.host) {
             append(.invalidValue, at: path + ".host", to: &diagnostics)
@@ -380,7 +401,7 @@ public enum RoamPiConfigurationParser {
         diagnostics: inout [RoamPiConfigurationDiagnostic]
     ) {
         registry.register(page.id, at: path + ".id", diagnostics: &diagnostics)
-        if page.title.isEmpty || page.title.count > 128 {
+        if !isValidDisplayName(page.title) {
             append(.invalidValue, at: path + ".title", to: &diagnostics)
         }
         for (index, block) in page.blocks.enumerated() {
@@ -559,7 +580,7 @@ public enum RoamPiConfigurationParser {
         diagnostics: inout [RoamPiConfigurationDiagnostic]
     ) {
         registry.register(action.id, at: path + ".id", diagnostics: &diagnostics)
-        if action.title.isEmpty || action.title.utf8.count > 128 {
+        if !isValidDisplayName(action.title) {
             append(.invalidValue, at: path + ".title", to: &diagnostics)
         }
         switch action.type {
@@ -798,6 +819,10 @@ public enum RoamPiConfigurationParser {
     private static func isProhibitedKey(_ value: String) -> Bool {
         let normalized = value.lowercased().filter { $0.isLetter || $0.isNumber }
         return prohibitedKeys.contains(where: { normalized == $0 || normalized.hasSuffix($0) })
+    }
+
+    private static func isValidDisplayName(_ value: String) -> Bool {
+        !value.isEmpty && value.count <= 128 && !containsControlCharacter(value)
     }
 
     private static func isValidIdentifier(_ value: String) -> Bool {
