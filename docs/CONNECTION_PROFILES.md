@@ -6,7 +6,7 @@ A v1 document contains `version: 1` and a `profiles` array. Each profile holds a
 
 The reference names the existing device Ed25519 identity managed by `SecureTransportStore` in Keychain. It is not the key itself. Host-key fingerprints remain in that separate Keychain store and are bound to host and port by `RemoteEndpoint.hostIdentity`; importing or editing a profile does not approve a host key. A changed key must still block before authentication. Pi provider credentials remain on the remote host. Private keys, passwords, tokens, session text, remote commands, and host-key trust decisions are not serialized with profiles.
 
-The store never opens SSH, installs software, or reads a remote `.roampi` file. Use a disposable directory with `ConnectionStore(directoryURL:)` in tests rather than a live tailnet or the device's saved profiles.
+The store never opens SSH, installs software, or reads a remote `.roampi` file. `RemoteHost` owns the fixed read-only SSH probe, endpoint-bound host-key approval and terminal-session creation; the view requests these only after a user selects a saved profile. Use a disposable directory with `ConnectionStore(directoryURL:)` in tests rather than a live tailnet or the device's saved profiles.
 
 ## Open Pi from a saved host
 

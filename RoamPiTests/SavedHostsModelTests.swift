@@ -68,7 +68,7 @@ struct SavedHostsModelTests {
         let (store, directory) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
         let probe = FixtureHostProbe(.firstUse)
-        let model = SavedHostsModel(store: store, probe: probe)
+        let model = SavedHostsModel(store: store, host: RemoteHost(probe: probe))
         #expect(await model.save(
             existing: nil,
             name: "Home",
@@ -111,7 +111,7 @@ struct SavedHostsModelTests {
             let (store, directory) = try fixture()
             defer { try? FileManager.default.removeItem(at: directory) }
             let probe = FixtureHostProbe(behavior)
-            let model = SavedHostsModel(store: store, probe: probe)
+            let model = SavedHostsModel(store: store, host: RemoteHost(probe: probe))
             #expect(await model.save(
                 existing: nil,
                 name: "Host",
@@ -157,7 +157,7 @@ struct SavedHostsModelTests {
         )
         try await store.add(profile)
         let probe = FixtureHostProbe(.firstUse)
-        let model = SavedHostsModel(store: store, probe: probe)
+        let model = SavedHostsModel(store: store, host: RemoteHost(probe: probe))
         await model.refresh()
         model.check(profile)
         #expect(model.state == .failed("Edit this native RPC profile to choose a tmux terminal."))
@@ -170,7 +170,7 @@ struct SavedHostsModelTests {
     func editInvalidatesCheck() async throws {
         let (store, directory) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let model = SavedHostsModel(store: store, probe: FixtureHostProbe(.firstUse))
+        let model = SavedHostsModel(store: store, host: RemoteHost(probe: FixtureHostProbe(.firstUse)))
         #expect(await model.save(
             existing: nil,
             name: "Home",

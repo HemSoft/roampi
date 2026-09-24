@@ -20,7 +20,7 @@ final class SavedHostsModel: ObservableObject {
 
     let isDemo: Bool
     private let store: ConnectionStore
-    private let probe: any SSHProbeTransporting
+    private let host: RemoteHost
     private var request: Task<Void, Never>?
     private var generation = 0
     private var candidate: ConnectionProfile?
@@ -35,13 +35,13 @@ final class SavedHostsModel: ObservableObject {
                 directoryURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                     .appendingPathComponent("RoamPi")
             )
-        probe = demo ? DemoProbeTransport() : NIOSSHProbeTransport()
+        host = demo ? RemoteHost(probe: DemoProbeTransport()) : RemoteHost()
     }
 
-    init(store: ConnectionStore, probe: any SSHProbeTransporting) {
+    init(store: ConnectionStore, host: RemoteHost) {
         isDemo = false
         self.store = store
-        self.probe = probe
+        self.host = host
     }
 
     deinit { request?.cancel() }
@@ -52,7 +52,7 @@ final class SavedHostsModel: ObservableObject {
         Task {
             await refresh()
             do {
-                publicKey = try await probe.publicKey()
+                publicKey = try await host.devicePublicKey()
             } catch {
                 message = TransportDiagnostic.keyUnavailable.userMessage
             }
@@ -108,7 +108,7 @@ final class SavedHostsModel: ObservableObject {
         let attempt = generation
         request = Task {
             do {
-                _ = try await probe.runProbe(endpoint: profile.endpoint, mode: .standardKey)
+                _ = try await host.verify(profile)
                 guard !Task.isCancelled, generation == attempt else { return }
                 state = .ready
             } catch let TransportError.hostKeyConfirmationRequired(fingerprint) {
@@ -132,9 +132,9 @@ final class SavedHostsModel: ObservableObject {
         let attempt = generation
         request = Task {
             do {
-                try await probe.trust(fingerprint: fingerprint, endpoint: profile.endpoint)
+                try await host.trust(fingerprint, for: profile)
                 guard !Task.isCancelled, generation == attempt else { return }
-                _ = try await probe.runProbe(endpoint: profile.endpoint, mode: .standardKey)
+                _ = try await host.verify(profile)
                 guard !Task.isCancelled, generation == attempt else { return }
                 state = .ready
             } catch let TransportError.diagnostic(diagnostic) {
@@ -151,6 +151,10 @@ final class SavedHostsModel: ObservableObject {
         guard state == .ready, let candidate,
               profiles.contains(candidate), candidate.tmuxSessionName != nil else { return }
         activeProfile = candidate
+    }
+
+    func makeTerminalSession(for profile: ConnectionProfile) -> TerminalSession? {
+        host.terminalSession(for: profile, transport: isDemo ? ScriptedTerminalTransport() : nil)
     }
 
     func closeTerminal() {
@@ -257,12 +261,8 @@ struct SavedHostsView: View {
                 }
             }
             .onChange(of: model.activeProfile) { _, profile in
-                guard let profile, let session = profile.tmuxSessionName else { return }
-                terminalModel = TerminalScreenModel(session: TerminalSession(
-                    endpoint: profile.endpoint, sessionName: session,
-                    workingDirectory: profile.projectDirectory,
-                    transport: model.isDemo ? ScriptedTerminalTransport() : nil
-                ))
+                guard let profile, let session = model.makeTerminalSession(for: profile) else { return }
+                terminalModel = TerminalScreenModel(session: session)
             }
             .task { model.load() }
         }
