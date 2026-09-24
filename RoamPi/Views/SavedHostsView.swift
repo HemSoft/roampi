@@ -99,6 +99,10 @@ final class SavedHostsModel: ObservableObject {
 
     func check(_ profile: ConnectionProfile) {
         cancelCheck()
+        guard profile.sessionChoice == .terminal else {
+            state = .failed("Edit this native RPC profile to choose a tmux terminal.")
+            return
+        }
         candidate = profile
         state = .checking
         let attempt = generation
@@ -190,11 +194,17 @@ struct SavedHostsView: View {
                             Text("Project and tmux session are saved on this device.")
                                 .font(.caption).foregroundStyle(.secondary)
                             HStack {
-                                Button("Open \(profile.displayName)") {
-                                    fingerprintInput = ""
-                                    model.check(profile)
+                                if profile.sessionChoice == .terminal {
+                                    Button("Open \(profile.displayName)") {
+                                        fingerprintInput = ""
+                                        model.check(profile)
+                                    }
+                                    .accessibilityIdentifier("open-saved-host-\(profile.id)")
+                                } else {
+                                    Text("Native RPC profile. Edit to choose a tmux terminal.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                                .accessibilityIdentifier("open-saved-host-\(profile.id)")
                                 Button("Edit") {
                                     model.cancelCheck()
                                     editor = HostEditorDraft(profile: profile)

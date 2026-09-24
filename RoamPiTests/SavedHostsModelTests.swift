@@ -136,6 +136,25 @@ struct SavedHostsModelTests {
         }
     }
 
+    @Test("Native RPC profiles cannot start a terminal from the saved-host flow")
+    func nativeProfileDoesNotOfferTerminal() async throws {
+        let (store, directory) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let profile = try ConnectionProfile(
+            displayName: "RPC", connectionString: "me@host.example", projectDirectory: "/work",
+            sessionChoice: .nativeRPC
+        )
+        try await store.add(profile)
+        let probe = FixtureHostProbe(.firstUse)
+        let model = SavedHostsModel(store: store, probe: probe)
+        await model.refresh()
+        model.check(profile)
+        #expect(model.state == .failed("Edit this native RPC profile to choose a tmux terminal."))
+        #expect(await probe.probeCount == 0)
+        model.openTerminal()
+        #expect(model.activeProfile == nil)
+    }
+
     @Test("Editing retains the ID but requires a new check before opening")
     func editInvalidatesCheck() async throws {
         let (store, directory) = try fixture()
