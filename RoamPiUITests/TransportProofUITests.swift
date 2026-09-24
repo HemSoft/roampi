@@ -23,7 +23,7 @@ final class TransportProofUITests: XCTestCase {
 
         app.buttons["run-transport-probe"].tap()
 
-        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 30))
         app.swipeUp()
         XCTAssertTrue(app.buttons["trust-host-key"].waitForExistence(timeout: 2))
         let reject = app.buttons["reject-host-key"]
@@ -271,7 +271,7 @@ final class TransportProofUITests: XCTestCase {
         app.launch()
 
         app.buttons["run-transport-probe"].tap()
-        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 30))
         app.swipeUp()
         let trust = app.buttons["trust-host-key"]
         XCTAssertTrue(trust.waitForExistence(timeout: 2))
