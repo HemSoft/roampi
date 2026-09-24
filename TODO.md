@@ -59,7 +59,7 @@ Exit criterion: one physical iOS device can connect over an active network route
 
 ## Phase 2: connection and security model
 
-- [ ] Define a connection profile with display name, hostname, port, username, project directory, Pi session choice, and tmux session name.
+- [x] Define and persist a validated connection profile with display name, hostname, port, username, project directory, Pi session choice, and tmux session name. The host editor remains future work.
 - [x] Generate an Ed25519 SSH key on device and store the private key in Keychain. SwiftNIO SSH requires exportable Ed25519 key material, so Secure Enclave storage is not available for this path.
 - [ ] Support importing an existing key through the document picker. Never place private keys in logs, analytics, app state restoration, or crash metadata.
 - [x] Implement strict host-key verification and a visible first-connection fingerprint confirmation. Treat changed host keys as blocking errors.
@@ -128,7 +128,7 @@ Exit criterion: a user can configure a host once, tap a project, and return to t
 
 ## Phase 7: reliability and testing
 
-- [ ] Unit-test profile validation, command quoting, bootstrap planning, JSONL framing, reconnection state, and redaction. Command quoting, framing, reconnection, and redaction are covered; profile and bootstrap coverage remains.
+- [ ] Unit-test profile validation, command quoting, bootstrap planning, JSONL framing, reconnection state, and redaction. Profile validation, command quoting, framing, reconnection, and redaction are covered; bootstrap coverage remains.
 - [x] Integration-test SSH key authentication, host-key changes, PTY resize, tmux attach, and Pi RPC against disposable hosts. Host-key changes remain covered by the transport tests; session protocol tests use a disposable user-level SSH daemon.
 - [ ] Test IPv4 Tailscale addresses, MagicDNS short names, full `*.ts.net` names, and offline hosts.
 - [ ] Test Wi-Fi to cellular handoff, airplane mode, VPN disable and re-enable, server reboot, and app process termination.
