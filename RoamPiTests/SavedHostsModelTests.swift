@@ -136,6 +136,17 @@ struct SavedHostsModelTests {
         }
     }
 
+    @Test("Back is unavailable while a terminal connection or reconnect is in flight")
+    func terminalPresentationWaitsForSafePhase() {
+        #expect(!SavedTerminalPresentation.canLeave(.idle))
+        #expect(!SavedTerminalPresentation.canLeave(.connecting))
+        #expect(!SavedTerminalPresentation.canLeave(.reconnecting))
+        #expect(!SavedTerminalPresentation.canLeave(.closing))
+        #expect(SavedTerminalPresentation.canLeave(.attached))
+        #expect(SavedTerminalPresentation.canLeave(.detached))
+        #expect(SavedTerminalPresentation.canLeave(.failed(.connectionFailed)))
+    }
+
     @Test("Native RPC profiles cannot start a terminal from the saved-host flow")
     func nativeProfileDoesNotOfferTerminal() async throws {
         let (store, directory) = try fixture()

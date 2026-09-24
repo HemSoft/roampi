@@ -251,20 +251,10 @@ struct SavedHostsView: View {
                 }
             }
             .fullScreenCover(item: $terminalModel) { terminal in
-                NavigationStack {
-                    TerminalScreenView(model: terminal)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button("Back to hosts") {
-                                    terminal.detach()
-                                    terminalModel = nil
-                                    model.closeTerminal()
-                                }
-                                .accessibilityIdentifier("back-to-hosts")
-                            }
-                        }
+                SavedTerminalPresentation(model: terminal) {
+                    terminalModel = nil
+                    model.closeTerminal()
                 }
-                .interactiveDismissDisabled()
             }
             .onChange(of: model.activeProfile) { _, profile in
                 guard let profile, let session = profile.tmuxSessionName else { return }
@@ -315,6 +305,55 @@ struct SavedHostsView: View {
                 Button("Dismiss") { model.cancelCheck() }
             }
         }
+    }
+}
+
+/// Waits for an attached PTY to detach before dismissing it. Back is disabled
+/// during connection setup so an in-flight SSH command cannot outlive the view.
+struct SavedTerminalPresentation: View {
+    @ObservedObject var model: TerminalScreenModel
+    let onLeave: () -> Void
+    @State private var leaving = false
+
+    static func canLeave(_ phase: PiSessionPhase) -> Bool {
+        switch phase {
+        case .attached, .interrupted, .detached, .disconnected, .closed, .failed:
+            true
+        case .idle, .connecting, .reconnecting, .closing:
+            false
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            TerminalScreenView(model: model)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Back to hosts") {
+                            leaving = true
+                            Task {
+                                if model.phase != .closed {
+                                    do {
+                                        if model.canDetach {
+                                            try await model.session.detach()
+                                        } else {
+                                            try await model.session.close()
+                                        }
+                                    } catch {
+                                        // Stay on the terminal when teardown fails.
+                                        leaving = false
+                                        return
+                                    }
+                                }
+                                onLeave()
+                            }
+                        }
+                        .disabled(!Self.canLeave(model.phase) || leaving)
+                        .accessibilityIdentifier("back-to-hosts")
+                    }
+                }
+        }
+        .interactiveDismissDisabled()
     }
 }
 
