@@ -90,6 +90,10 @@ xcrun simctl launch booted com.hemsoft.RoamPi --rpc-demo
 
 SwiftTerm findings are in [`docs/SWIFTTERM_EVALUATION.md`](docs/SWIFTTERM_EVALUATION.md). Session ownership, reconnect rules, strict JSONL framing, and security boundaries are in [`docs/SESSION_ARCHITECTURE.md`](docs/SESSION_ARCHITECTURE.md).
 
+## Saved connection profiles
+
+The device-local, versioned `ConnectionStore` in `RoamPiCore` saves validated manual SSH destinations and session defaults. It does not yet have a host editor. See [`docs/CONNECTION_PROFILES.md`](docs/CONNECTION_PROFILES.md) for the format and the Keychain trust boundary.
+
 ## Pi extension bridge prototype
 
 The optional [Pi extension bridge](docs/PI_EXTENSION_BRIDGE.md) provides owner-only Unix-socket discovery and a renewable control lease for Pi processes that load it. It does not install itself on remote hosts without approval, and it does not replace tmux or Pi's session files. Its disposable test suite runs with `npm ci --prefix Remote/RoamPiExtension && npm run typecheck --prefix Remote/RoamPiExtension && npm test --prefix Remote/RoamPiExtension`.
