@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mkdtemp, lstat, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, lstat, readFile, rm, writeFile } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import { Bridge } from "../src/bridge.ts";
 import { discover, frame, Framer, live, MAX_FRAME, privateDirectory, processStart, publishRegistry } from "../src/protocol.ts";
@@ -142,6 +142,17 @@ test("discovery without an installed bridge never changes the remote filesystem"
   try {
     assert.deepEqual(await discover(missing), []);
     await assert.rejects(lstat(join(root, "agent")), { code: "ENOENT" });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("extension startup restores owner access on an existing private runtime directory", async () => {
+  const root = await mkdtemp(join("/tmp", "roampi-mode-"));
+  const dir = join(root, "roampi");
+  try {
+    await privateDirectory(dir);
+    await chmod(dir, 0o500);
+    await privateDirectory(dir);
+    assert.equal((await lstat(dir)).mode & 0o777, 0o700);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

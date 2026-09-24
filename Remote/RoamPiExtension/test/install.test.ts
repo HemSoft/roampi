@@ -16,8 +16,11 @@ test("preview makes no changes; repeated approved install repairs identical-file
     assert.equal(run(dir, true).status, 0);
     const path = join(dir, "extensions", "roampi", "index.ts");
     assert.equal((await lstat(path)).mode & 0o777, 0o600);
+    const destination = join(dir, "extensions", "roampi");
     await chmod(path, 0o666);
+    await chmod(destination, 0o500);
     assert.equal(run(dir, true).status, 0);
+    assert.equal((await lstat(destination)).mode & 0o777, 0o700);
     assert.equal((await lstat(path)).mode & 0o777, 0o600);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

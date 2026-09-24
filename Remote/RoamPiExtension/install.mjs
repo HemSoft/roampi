@@ -16,6 +16,7 @@ if (!apply) process.exit(0);
 await mkdir(destination, { recursive: true, mode: 0o700 });
 const stat = await lstat(destination);
 if (!stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== process.getuid() || (stat.mode & 0o077)) throw Error('Extension destination must be an owner-only directory');
+if ((stat.mode & 0o777) !== 0o700) await chmod(destination, 0o700);
 for (const name of files) {
   const target = join(destination, name);
   try {

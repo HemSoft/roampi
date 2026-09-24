@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -49,6 +49,8 @@ export function live(entry: Registry, currentStart = processStart(entry.pid)): b
 export async function privateDirectory(path: string): Promise<void> {
   await mkdir(path, { mode: 0o700, recursive: true });
   await validatePrivateDirectory(path);
+  const stat = await lstat(path);
+  if ((stat.mode & 0o777) !== 0o700) await chmod(path, 0o700);
 }
 
 async function validatePrivateDirectory(path: string): Promise<void> {
