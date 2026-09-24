@@ -37,6 +37,14 @@ final class TransportProofUITests: XCTestCase {
     }
 
     @MainActor
+    func testMissingDevelopmentFixtureHasAnExplicitState() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--install-development-transport-profile"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["missing-development-transport-fixture"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLivePhysicalSSHHandshake() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
@@ -276,9 +284,10 @@ final class TransportProofUITests: XCTestCase {
 
     @MainActor
     private func requireStagedTransportProof(_ app: XCUIApplication) throws {
-        guard app.navigationBars["SSH transport proof"].waitForExistence(timeout: 3) else {
+        if app.staticTexts["missing-development-transport-fixture"].waitForExistence(timeout: 3) {
             throw XCTSkip("No private development transport profile is staged.")
         }
+        XCTAssertTrue(app.navigationBars["SSH transport proof"].waitForExistence(timeout: 5))
     }
 
     @MainActor

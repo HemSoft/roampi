@@ -7,6 +7,7 @@ struct RootView: View {
     var transportDemoMode = false
     var savedHostsDemoMode = false
     var developmentTransportProfile: DevelopmentTransportProfile?
+    var missingDevelopmentTransportFixture = false
     var developmentSessionProfile: DevelopmentSessionProfile?
     var sessionRoute: SessionRoute?
 
@@ -35,6 +36,9 @@ struct RootView: View {
                 DevelopmentSessionScreen(profile: developmentSessionProfile)
             } else if !snapshot.machines.isEmpty {
                 DashboardView(snapshot: snapshot)
+            } else if missingDevelopmentTransportFixture {
+                Text("No development transport profile staged.")
+                    .accessibilityIdentifier("missing-development-transport-fixture")
             } else if transportDemoMode || developmentTransportProfile != nil {
                 TransportProofView(
                     demoMode: transportDemoMode,
