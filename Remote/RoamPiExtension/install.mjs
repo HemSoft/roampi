@@ -22,10 +22,8 @@ for (const name of files) {
   try {
     const existing = await lstat(target);
     if (!existing.isFile() || existing.isSymbolicLink() || existing.uid !== process.getuid()) throw Error('Refusing to overwrite non-owned or linked extension file');
-    if ((await readFile(target)).equals(await readFile(join(source, name)))) {
-      if ((existing.mode & 0o777) !== 0o600) await chmod(target, 0o600);
-      continue;
-    }
+    if ((existing.mode & 0o777) !== 0o600) await chmod(target, 0o600);
+    if ((await readFile(target)).equals(await readFile(join(source, name)))) continue;
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }

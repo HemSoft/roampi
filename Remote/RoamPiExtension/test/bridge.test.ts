@@ -63,6 +63,10 @@ test("strict LF JSONL rejects CR, malformed UTF-8, oversized, and partial frames
   assert.throws(() => new Framer().push(Buffer.from('{}\r\n')), /invalid_frame/);
   assert.throws(() => new Framer().push(Buffer.from([0xff, 10])), /invalid_json/);
   assert.throws(() => new Framer().push(Buffer.alloc(MAX_FRAME + 1)), /frame_too_large/);
+  const limit = Buffer.from(`"${"x".repeat(MAX_FRAME - 3)}"\n`);
+  assert.equal(limit.length, MAX_FRAME);
+  assert.equal((new Framer().push(limit)[0] as string).length, MAX_FRAME - 3);
+  assert.throws(() => new Framer().push(Buffer.concat([Buffer.from("x"), limit])), /frame_too_large/);
 });
 
 test("registry is private, bounded, excludes transcript and credentials, and rejects reused PID", async () => {

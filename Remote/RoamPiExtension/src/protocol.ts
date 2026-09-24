@@ -144,7 +144,10 @@ export class Framer {
     while (offset < chunk.length) {
       const newline = chunk.indexOf(10, offset);
       const end = newline < 0 ? chunk.length : newline;
-      if (this.pending.length + end - offset > MAX_FRAME) throw new Error("frame_too_large");
+      const bytes = this.pending.length + end - offset;
+      if (bytes + (newline < 0 ? 0 : 1) > MAX_FRAME || (newline < 0 && bytes >= MAX_FRAME)) {
+        throw new Error("frame_too_large");
+      }
       const line = Buffer.concat([this.pending, chunk.subarray(offset, end)]);
       this.pending = Buffer.alloc(0);
       if (newline < 0) { this.pending = line; break; }
