@@ -20,7 +20,7 @@ private final class TerminalBufferOverflowGate: @unchecked Sendable {
 
 /// Observable bridge between the terminal adapter and its SwiftUI screen.
 @MainActor
-final class TerminalScreenModel: ObservableObject {
+final class TerminalScreenModel: ObservableObject, Identifiable {
     @Published private(set) var phase: PiSessionPhase = .idle
     @Published private(set) var phaseDetail: String?
     @Published private(set) var identityNote: String?

@@ -28,6 +28,7 @@ struct RoamPiApp: App {
             RootView(
                 snapshot: arguments.contains("--demo") ? DemoFixture.dashboard : .empty,
                 transportDemoMode: arguments.contains("--transport-proof-demo"),
+                savedHostsDemoMode: arguments.contains("--saved-hosts-demo"),
                 developmentTransportProfile: developmentTransportProfile,
                 developmentSessionProfile: developmentSessionProfile,
                 sessionRoute: sessionRoute

@@ -1,11 +1,11 @@
 import RoamPiCore
 import SwiftUI
 
-/// Routes between the transport-proof screen, the demo dashboard, and the new
-/// terminal and RPC session screens.
+/// Routes between saved hosts, explicit development proofs, and demo screens.
 struct RootView: View {
     let snapshot: DashboardSnapshot
     var transportDemoMode = false
+    var savedHostsDemoMode = false
     var developmentTransportProfile: DevelopmentTransportProfile?
     var developmentSessionProfile: DevelopmentSessionProfile?
     var sessionRoute: SessionRoute?
@@ -33,13 +33,15 @@ struct RootView: View {
         case .none:
             if let developmentSessionProfile {
                 DevelopmentSessionScreen(profile: developmentSessionProfile)
-            } else if snapshot.machines.isEmpty {
+            } else if !snapshot.machines.isEmpty {
+                DashboardView(snapshot: snapshot)
+            } else if transportDemoMode || developmentTransportProfile != nil {
                 TransportProofView(
                     demoMode: transportDemoMode,
                     developmentProfile: developmentTransportProfile
                 )
             } else {
-                DashboardView(snapshot: snapshot)
+                SavedHostsView(demo: savedHostsDemoMode)
             }
         }
     }

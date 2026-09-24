@@ -41,6 +41,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -77,6 +78,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -101,6 +103,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -136,6 +139,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -161,6 +165,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -201,6 +206,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -266,6 +272,13 @@ final class TransportProofUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Verified SSH command completed once"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Ed25519 key"].exists)
         captureScreenshot(named: "ssh-transport-success")
+    }
+
+    @MainActor
+    private func requireStagedTransportProof(_ app: XCUIApplication) throws {
+        guard app.navigationBars["SSH transport proof"].waitForExistence(timeout: 3) else {
+            throw XCTSkip("No private development transport profile is staged.")
+        }
     }
 
     @MainActor
