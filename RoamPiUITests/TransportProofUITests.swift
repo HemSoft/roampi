@@ -61,7 +61,7 @@ final class TransportProofUITests: XCTestCase {
         let fingerprint = app.staticTexts["host-fingerprint"]
         let passed = app.staticTexts["Verified SSH command completed once"]
         let authenticationFailed = app.staticTexts[
-            "Authentication failed. Verify the selected method and remote authorization."
+            "The host did not accept this device key. Check the account or authorize its public key."
         ]
 
         if fingerprint.waitForExistence(timeout: 10) {
@@ -131,7 +131,7 @@ final class TransportProofUITests: XCTestCase {
         let messages = [
             "The SSH connection failed. Check the network route and remote SSH availability.",
             "The harmless probe did not return the expected result.",
-            "The SSH probe timed out. Check the host and try again.",
+            "The SSH check timed out. Check the network route or selected port and retry.",
         ]
         let stopped = app.staticTexts.matching(NSPredicate(format: "label IN %@", messages)).firstMatch
         XCTAssertTrue(stopped.waitForExistence(timeout: 40))
@@ -240,7 +240,7 @@ final class TransportProofUITests: XCTestCase {
         let stoppedMessages = [
             "The SSH connection failed. Check the network route and remote SSH availability.",
             "The harmless probe did not return the expected result.",
-            "The SSH probe timed out. Check the host and try again.",
+            "The SSH check timed out. Check the network route or selected port and retry.",
         ]
         let stopped = app.staticTexts.matching(
             NSPredicate(format: "label IN %@", stoppedMessages)

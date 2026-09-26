@@ -1072,7 +1072,7 @@ public final class RPCSession: @unchecked Sendable, PiSession {
             .cancelled
         case .commandFailed:
             .commandFailed
-        case .connectionFailed:
+        case .connectionFailed, .connectionRefused, .dnsFailed:
             .connectionFailed
         case .duplicateProbe:
             .invalidState

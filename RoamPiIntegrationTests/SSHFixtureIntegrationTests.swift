@@ -68,6 +68,39 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("A disposable SSH host authorizes the device key only after the reviewed manual step")
+    func setupCommandRequiresUserStep() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+        let authorized = fixture.root.appendingPathComponent(".ssh/authorized_keys")
+        let otherKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID+Maw0JeWy6XvYHfWMiYG1Tb7mXd9SkWyKiWXSwjVA5"
+        try Data(otherKey.utf8).write(to: authorized) // Existing valid key has no final LF.
+        let transport = SSHSessionTransport(credentials: fixture.credentials)
+        do {
+            let connection = try await transport.connect(endpoint: fixture.endpoint, mode: .standardKey)
+            await connection.close()
+            Issue.record("The host must not accept the device key before setup")
+        } catch let error as TransportError {
+            #expect(error == .diagnostic(.authenticationFailed))
+        }
+
+        let reviewed = try #require(AuthorizedKeySetup(publicKey: fixture.clientPublicKeyForAuthorizedKeys))
+        #expect(!FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent(".ssh/other").path))
+        let userStep = Process()
+        userStep.executableURL = URL(fileURLWithPath: "/bin/sh")
+        userStep.arguments = ["-c", reviewed.command]
+        userStep.environment = ["HOME": fixture.root.path, "PATH": "/usr/bin:/bin"]
+        userStep.standardOutput = Pipe()
+        userStep.standardError = Pipe()
+        try userStep.run()
+        userStep.waitUntilExit()
+        #expect(userStep.terminationStatus == 0)
+        let connection = try await transport.connect(endpoint: fixture.endpoint, mode: .standardKey)
+        await connection.close()
+        #expect(try String(contentsOf: authorized, encoding: .utf8)
+            == otherKey + "\n" + fixture.clientPublicKeyForAuthorizedKeys + "\n")
+    }
+
     @Test("Production Pi launcher attaches, exchanges input, and reconnects to its Node pane")
     func productionPiLauncherReconnects() async throws {
         let fixture = try makeFixture()

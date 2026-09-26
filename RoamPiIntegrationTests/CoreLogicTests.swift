@@ -1,4 +1,6 @@
+import Darwin
 import Foundation
+import NIOCore
 @testable import RoamPiCore
 import Testing
 
@@ -2598,5 +2600,94 @@ struct PiRPCMessageTests {
             Issue.record("Expected an event body")
             return
         }
+    }
+}
+
+@Suite("SSH onboarding boundaries")
+struct SSHOnboardingTests {
+    private let validKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID+Maw0JeWy6XvYHfWMiYG1Tb7mXd9SkWyKiWXSwjVA5"
+
+    @Test("The setup command accepts only a single validated Ed25519 public key")
+    func rejectsHostileKeyInput() {
+        #expect(AuthorizedKeySetup(publicKey: validKey) != nil)
+        for key in [
+            "ssh-ed25519 AAAA; touch /tmp/unsafe",
+            validKey + "' ; touch /tmp/unsafe",
+            validKey + "\ncommand",
+            "ssh-rsa " + validKey,
+            "ssh-ed25519 not-base64",
+            "ssh-ed25519 " + String(repeating: "A", count: 1024),
+        ] {
+            #expect(AuthorizedKeySetup(publicKey: key) == nil)
+        }
+    }
+
+    @Test("One reviewed command authorizes a key once in an isolated home directory")
+    func manualCommandIsIdempotent() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("roampi-authorized-key-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let command = try #require(AuthorizedKeySetup(publicKey: validKey)).command
+        let authorized = home.appendingPathComponent(".ssh/authorized_keys")
+        #expect(!FileManager.default.fileExists(atPath: authorized.path))
+        func runReviewedStep() throws {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command]
+            process.environment = ["HOME": home.path, "PATH": "/usr/bin:/bin"]
+            process.standardOutput = Pipe()
+            process.standardError = Pipe()
+            try process.run()
+            process.waitUntilExit()
+            #expect(process.terminationStatus == 0)
+        }
+        try runReviewedStep()
+        try runReviewedStep()
+        #expect(try String(contentsOf: authorized, encoding: .utf8) == validKey + "\n")
+        try Data("other authorized key without final LF".utf8).write(to: authorized)
+        try runReviewedStep()
+        try runReviewedStep()
+        #expect(try String(contentsOf: authorized, encoding: .utf8)
+            == "other authorized key without final LF\n" + validKey + "\n")
+        try Data("other authorized key with final LF\n".utf8).write(to: authorized)
+        try runReviewedStep()
+        #expect(try String(contentsOf: authorized, encoding: .utf8)
+            == "other authorized key with final LF\n" + validKey + "\n")
+        let ssh = try FileManager.default.attributesOfItem(atPath: home.appendingPathComponent(".ssh").path)
+        let keys = try FileManager.default.attributesOfItem(atPath: authorized.path)
+        #expect((ssh[.posixPermissions] as? NSNumber)?.intValue == 0o700)
+        #expect((keys[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+    }
+
+    @Test("Private route advice is limited to private and local IP literals")
+    func privateAddressClassification() throws {
+        for host in [
+            "10.1.2.3",
+            "172.16.1.1",
+            "192.168.1.1",
+            "100.64.0.1",
+            "127.0.0.1",
+            "[fc00::1]",
+            "[fe80::1%en0]",
+            "[::1]",
+        ] {
+            #expect(try RemoteEndpoint(connectionString: "test@\(host)").isPrivateAddress)
+        }
+        for host in ["8.8.8.8", "172.32.0.1", "100.128.0.1", "[2001:db8::1]", "host.example"] {
+            #expect(try !RemoteEndpoint(connectionString: "test@\(host)").isPrivateAddress)
+        }
+    }
+
+    @Test("Connect errors stay bounded and classify refusal, DNS, and timeout")
+    func connectErrors() {
+        #expect(ProbeConnectionFailure
+            .diagnostic(for: IOError(errnoCode: ECONNREFUSED, reason: "fixture")) == .connectionRefused)
+        #expect(ProbeConnectionFailure.diagnostic(for: IOError(errnoCode: ETIMEDOUT, reason: "fixture")) == .timedOut)
+        #expect(ProbeConnectionFailure.diagnostic(for: ChannelError.connectTimeout(.seconds(1))) == .timedOut)
+        #expect(ProbeConnectionFailure
+            .diagnostic(for: SocketAddressError.unknown(host: "host.invalid", port: 22)) == .dnsFailed)
+        #expect(ProbeConnectionFailure
+            .diagnostic(for: IOError(errnoCode: ENETUNREACH, reason: "fixture")) == .connectionFailed)
     }
 }
