@@ -68,8 +68,12 @@ final class SSHFixture: @unchecked Sendable {
         credentials = FixtureCredentials(privateKey: clientKey, fingerprint: hostFingerprint)
         clientPublicKeyForAuthorizedKeys = clientPublic
 
-        let authorizedKeys = root.appendingPathComponent("authorized_keys")
+        let sshDirectory = root.appendingPathComponent(".ssh")
+        try FileManager.default.createDirectory(at: sshDirectory, withIntermediateDirectories: false)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: sshDirectory.path)
+        let authorizedKeys = sshDirectory.appendingPathComponent("authorized_keys")
         try Data((clientPublic + "\n").utf8).write(to: authorizedKeys)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: authorizedKeys.path)
 
         let port = Self.reserveFreePort()
         endpoint = try RemoteEndpoint(connectionString: "\(NSUserName())@127.0.0.1:\(port)")

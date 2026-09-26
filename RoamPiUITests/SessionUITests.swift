@@ -67,6 +67,93 @@ final class SessionUITests: XCTestCase {
     }
 
     @MainActor
+    func testSavedHostReachabilityAdvice() {
+        for (failure, host, expected) in [
+            ("dns", "operator@missing.invalid", "host name could not be resolved"),
+            ("refused", "operator@127.0.0.1", "refused the SSH connection"),
+            ("timeout", "operator@100.64.0.1", "SSH check timed out"),
+            ("changed", "operator@studio.example", "saved host key changed"),
+        ] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--saved-hosts-demo", "--saved-hosts-demo-state=\(failure)"]
+            app.launch()
+            addDemoHost(to: app, connection: host)
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'open-saved-host-'"))
+                .firstMatch.tap()
+            let error = app.staticTexts["saved-host-error"]
+            XCTAssertTrue(error.waitForExistence(timeout: 10))
+            XCTAssertTrue((error.label).contains(expected))
+            XCTAssertFalse(app.buttons["launch-saved-terminal"].exists)
+            if failure == "timeout" {
+                XCTAssertTrue(app.staticTexts["private-route-help"].exists)
+            } else {
+                XCTAssertFalse(app.staticTexts["private-route-help"].exists)
+            }
+            captureScreenshot(named: "onboarding-\(failure)")
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testSavedHostManualKeyAuthorization() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--saved-hosts-demo", "--saved-hosts-demo-state=auth"]
+        app.launch()
+        addDemoHost(to: app, connection: "operator@studio.example")
+        XCTAssertTrue(app.buttons["copy-saved-public-key"].waitForExistence(timeout: 10))
+        app.buttons["copy-saved-public-key"].tap()
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'open-saved-host-'"))
+            .firstMatch.tap()
+        let fingerprint = app.staticTexts["saved-host-fingerprint"]
+        XCTAssertTrue(fingerprint.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["trust-saved-host"].isEnabled)
+        captureScreenshot(named: "onboarding-fingerprint")
+        app.buttons["reject-saved-host"].tap()
+        XCTAssertFalse(app.buttons["authorized-key-command"].exists)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'open-saved-host-'"))
+            .firstMatch.tap()
+        XCTAssertTrue(fingerprint.waitForExistence(timeout: 10))
+        let input = app.textFields["verified-fingerprint-input"]
+        input.tap()
+        input.typeText("SHA256:RoamPiDemoFingerprintNotForProduction")
+        app.swipeUp()
+        app.buttons["trust-saved-host"].tap()
+        let command = app.staticTexts["authorized-key-command"]
+        XCTAssertTrue(command.waitForExistence(timeout: 10))
+        XCTAssertTrue(command.label.contains("authorized_keys"))
+        XCTAssertFalse(app.buttons["launch-saved-terminal"].exists)
+        app.buttons["copy-authorized-key-command"].tap()
+        captureScreenshot(named: "onboarding-command-text")
+        app.swipeUp()
+        let retry = app.buttons["retry-saved-host"]
+        if !retry.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        captureScreenshot(named: "onboarding-authorize-device-key")
+        retry.tap()
+        XCTAssertTrue(app.staticTexts["saved-host-error"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    private func addDemoHost(to app: XCUIApplication, connection: String) {
+        XCTAssertTrue(app.navigationBars["SSH hosts"].waitForExistence(timeout: 10))
+        app.buttons["add-saved-host"].tap()
+        XCTAssertTrue(app.navigationBars["Add SSH host"].waitForExistence(timeout: 5))
+        app.textFields["host-display-name"].tap()
+        app.textFields["host-display-name"].typeText("Demo")
+        app.textFields["host-connection"].tap()
+        app.textFields["host-connection"].typeText(connection)
+        app.textFields["host-project"].tap()
+        app.textFields["host-project"].typeText("/work")
+        app.textFields["host-session"].tap()
+        app.textFields["host-session"].typeText("pi-demo")
+        app.buttons["save-host"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'open-saved-host-'"))
+            .firstMatch.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     func testTerminalDemoRendersAndExposesMobileKeys() {
         let app = XCUIApplication()
         app.launchArguments = ["--terminal-demo"]

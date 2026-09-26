@@ -61,7 +61,7 @@ final class TransportProofUITests: XCTestCase {
         let fingerprint = app.staticTexts["host-fingerprint"]
         let passed = app.staticTexts["Verified SSH command completed once"]
         let authenticationFailed = app.staticTexts[
-            "Authentication failed. Verify the selected method and remote authorization."
+            "The host did not accept this device key. Check the account or authorize its public key."
         ]
 
         if fingerprint.waitForExistence(timeout: 10) {

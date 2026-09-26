@@ -228,7 +228,7 @@ extension TerminalSession {
             .cancelled
         case .commandFailed:
             .commandFailed
-        case .connectionFailed:
+        case .connectionFailed, .connectionRefused, .dnsFailed:
             .connectionFailed
         case .duplicateProbe:
             .invalidState

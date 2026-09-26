@@ -155,16 +155,27 @@ final class TransportProofModel: ObservableObject {
 
 actor DemoProbeTransport: SSHProbeTransporting {
     private var trusted = false
+    private let failure: TransportDiagnostic?
+
+    init(failure: TransportDiagnostic? = nil) {
+        self.failure = failure
+    }
 
     func publicKey() -> String {
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDJvYW1waS1kZW1vLWtleS1ub3QtZm9yLXVzZQ=="
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID+Maw0JeWy6XvYHfWMiYG1Tb7mXd9SkWyKiWXSwjVA5"
     }
 
     func runProbe(endpoint _: RemoteEndpoint, mode: SSHAuthenticationMode) throws -> ProbeResult {
+        if let failure, failure != .authenticationFailed {
+            throw TransportError.diagnostic(failure)
+        }
         guard trusted else {
             throw TransportError.hostKeyConfirmationRequired(
                 fingerprint: "SHA256:RoamPiDemoFingerprintNotForProduction"
             )
+        }
+        if let failure {
+            throw TransportError.diagnostic(failure)
         }
         return ProbeResult(
             elapsedMilliseconds: 84,

@@ -5,6 +5,8 @@ public enum TransportDiagnostic: Equatable, Sendable {
     case cancelled
     case commandFailed
     case connectionFailed
+    case connectionRefused
+    case dnsFailed
     case duplicateProbe
     case hostKeyChanged
     case invalidEndpoint
@@ -14,13 +16,17 @@ public enum TransportDiagnostic: Equatable, Sendable {
     public var userMessage: String {
         switch self {
         case .authenticationFailed:
-            "Authentication failed. Verify the selected method and remote authorization."
+            "The host did not accept this device key. Check the account or authorize its public key."
         case .cancelled:
             "The probe was cancelled."
         case .commandFailed:
             "The harmless probe did not return the expected result."
         case .connectionFailed:
             "The SSH connection failed. Check the network route and remote SSH availability."
+        case .connectionRefused:
+            "The host refused the SSH connection. Check its SSH service and selected port."
+        case .dnsFailed:
+            "The host name could not be resolved. Check the name or use a reachable IP address."
         case .duplicateProbe:
             "A probe is already running."
         case .hostKeyChanged:
@@ -30,7 +36,7 @@ public enum TransportDiagnostic: Equatable, Sendable {
         case .keyUnavailable:
             "The device key is unavailable."
         case .timedOut:
-            "The SSH probe timed out. Check the host and try again."
+            "The SSH check timed out. Check the network route or selected port and retry."
         }
     }
 }

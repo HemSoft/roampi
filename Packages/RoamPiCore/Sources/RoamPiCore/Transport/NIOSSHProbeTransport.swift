@@ -78,7 +78,7 @@ public final class NIOSSHProbeTransport: SSHProbeTransporting, @unchecked Sendab
             if Task.isCancelled {
                 throw TransportError.diagnostic(.cancelled)
             }
-            throw TransportError.diagnostic(.connectionFailed)
+            throw TransportError.diagnostic(ProbeConnectionFailure.diagnostic(for: error))
         }
 
         authentication.closeChannelWhenExhausted {

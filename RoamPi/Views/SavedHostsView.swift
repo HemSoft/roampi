@@ -15,7 +15,22 @@ final class SavedHostsModel: ObservableObject {
     @Published private(set) var profiles: [ConnectionProfile] = []
     @Published private(set) var state: ConnectionState = .idle
     @Published private(set) var publicKey = ""
+    @Published private(set) var failedDiagnostic: TransportDiagnostic?
     @Published private(set) var message: String?
+
+    var setupCommand: String? {
+        AuthorizedKeySetup(publicKey: publicKey)?.command
+    }
+
+    var selectedProfile: ConnectionProfile? {
+        candidate
+    }
+
+    var offersPrivateRouteHelp: Bool {
+        guard let candidate, candidate.endpoint.isPrivateAddress else { return false }
+        return failedDiagnostic == .connectionFailed || failedDiagnostic == .timedOut
+    }
+
     @Published private(set) var activeProfile: ConnectionProfile?
 
     let isDemo: Bool
@@ -35,7 +50,8 @@ final class SavedHostsModel: ObservableObject {
                 directoryURL: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                     .appendingPathComponent("RoamPi")
             )
-        host = demo ? RemoteHost(probe: DemoProbeTransport()) : RemoteHost()
+        let demoFailure = demo ? Self.demoFailure(from: ProcessInfo.processInfo.arguments) : nil
+        host = demo ? RemoteHost(probe: DemoProbeTransport(failure: demoFailure)) : RemoteHost()
     }
 
     init(store: ConnectionStore, host: RemoteHost) {
@@ -45,6 +61,18 @@ final class SavedHostsModel: ObservableObject {
     }
 
     deinit { request?.cancel() }
+
+    private static func demoFailure(from arguments: [String]) -> TransportDiagnostic? {
+        guard let flag = arguments.first(where: { $0.hasPrefix("--saved-hosts-demo-state=") }) else { return nil }
+        switch flag.split(separator: "=").last {
+        case "dns": return .dnsFailed
+        case "refused": return .connectionRefused
+        case "timeout": return .timedOut
+        case "auth": return .authenticationFailed
+        case "changed": return .hostKeyChanged
+        default: return nil
+        }
+    }
 
     func load() {
         guard !loaded else { return }
@@ -104,6 +132,7 @@ final class SavedHostsModel: ObservableObject {
             return
         }
         candidate = profile
+        failedDiagnostic = nil
         state = .checking
         let attempt = generation
         request = Task {
@@ -116,9 +145,11 @@ final class SavedHostsModel: ObservableObject {
                 state = .fingerprint(fingerprint)
             } catch let TransportError.diagnostic(diagnostic) {
                 guard !Task.isCancelled, generation == attempt else { return }
+                failedDiagnostic = diagnostic
                 state = .failed(diagnostic.userMessage)
             } catch {
                 guard !Task.isCancelled, generation == attempt else { return }
+                failedDiagnostic = .connectionFailed
                 state = .failed(TransportDiagnostic.connectionFailed.userMessage)
             }
         }
@@ -128,6 +159,7 @@ final class SavedHostsModel: ObservableObject {
         guard case let .fingerprint(fingerprint) = state,
               typedFingerprint.trimmingCharacters(in: .whitespacesAndNewlines) == fingerprint,
               let profile = candidate else { return }
+        failedDiagnostic = nil
         state = .checking
         let attempt = generation
         request = Task {
@@ -139,9 +171,11 @@ final class SavedHostsModel: ObservableObject {
                 state = .ready
             } catch let TransportError.diagnostic(diagnostic) {
                 guard !Task.isCancelled, generation == attempt else { return }
+                failedDiagnostic = diagnostic
                 state = .failed(diagnostic.userMessage)
             } catch {
                 guard !Task.isCancelled, generation == attempt else { return }
+                failedDiagnostic = .connectionFailed
                 state = .failed(TransportDiagnostic.connectionFailed.userMessage)
             }
         }
@@ -167,6 +201,7 @@ final class SavedHostsModel: ObservableObject {
         request?.cancel()
         request = nil
         candidate = nil
+        failedDiagnostic = nil
         state = .idle
     }
 }
@@ -233,7 +268,7 @@ struct SavedHostsView: View {
                         Button("Copy public key") { UIPasteboard.general.string = model.publicKey }
                             .accessibilityIdentifier("copy-saved-public-key")
                     }
-                    Text("Install this key on the host yourself. RoamPi does not change the host during setup.")
+                    Text("Copy this key for setup on an account you are authorized to use. RoamPi never installs it.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -274,9 +309,13 @@ struct SavedHostsView: View {
         case .idle:
             EmptyView()
         case .checking:
-            Section("Connecting") { ProgressView("Checking host identity and SSH authorization") }
+            Section("Checking SSH") { ProgressView("Checking reachability, host identity, and device-key access") }
         case let .fingerprint(fingerprint):
             Section("Confirm host identity") {
+                if let profile = model.selectedProfile {
+                    Text("\(profile.endpoint.host), port \(profile.endpoint.port)")
+                        .accessibilityIdentifier("selected-ssh-endpoint")
+                }
                 Text(fingerprint).font(.body.monospaced()).textSelection(.enabled)
                     .accessibilityIdentifier("saved-host-fingerprint")
                 Text(
@@ -299,9 +338,39 @@ struct SavedHostsView: View {
                     .accessibilityIdentifier("launch-saved-terminal")
             }
         case let .failed(message):
-            Section("Connection stopped") {
+            Section("Next step") {
+                if let profile = model.selectedProfile {
+                    Text("\(profile.endpoint.host), port \(profile.endpoint.port)")
+                        .accessibilityIdentifier("selected-ssh-endpoint")
+                }
                 Label(message, systemImage: "xmark.octagon").foregroundStyle(.red)
                     .accessibilityIdentifier("saved-host-error")
+                if model.failedDiagnostic == .authenticationFailed {
+                    Text(
+                        "The host answered, but this account has not authorized the device key. Sign in to this account through a trusted channel. Review and run this command in its shell; RoamPi will not run it."
+                    )
+                    .font(.caption)
+                    if let command = model.setupCommand {
+                        Text(command).font(.caption.monospaced()).textSelection(.enabled)
+                            .accessibilityIdentifier("authorized-key-command")
+                        Button("Copy setup command") { UIPasteboard.general.string = command }
+                            .accessibilityIdentifier("copy-authorized-key-command")
+                    } else {
+                        Text("The device key is unavailable. Check the device key before setup.")
+                            .accessibilityIdentifier("setup-key-unavailable")
+                    }
+                }
+                if model.offersPrivateRouteHelp {
+                    Text(
+                        "This private address needs a reachable route. Check local network access, or enable the separately installed Tailscale app if you use it. Tailscale is optional; any reachable standard SSH route works."
+                    )
+                    .font(.caption)
+                    .accessibilityIdentifier("private-route-help")
+                }
+                if let profile = model.selectedProfile {
+                    Button("Retry SSH check") { model.check(profile) }
+                        .accessibilityIdentifier("retry-saved-host")
+                }
                 Button("Dismiss") { model.cancelCheck() }
             }
         }

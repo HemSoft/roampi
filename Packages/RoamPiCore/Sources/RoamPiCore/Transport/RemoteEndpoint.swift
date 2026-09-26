@@ -11,6 +11,27 @@ public struct RemoteEndpoint: Equatable, Sendable {
         "\(host.lowercased()):\(port)"
     }
 
+    /// Literal private/local addresses may need a route supplied by the user.
+    /// DNS names are not guessed to be private without a resolved address.
+    public var isPrivateAddress: Bool {
+        if Self.isValidIPv4Literal(host) {
+            let bytes = host.split(separator: ".").compactMap { UInt8($0) }
+            guard bytes.count == 4 else { return false }
+            return bytes[0] == 10 || bytes[0] == 127
+                || (bytes[0] == 172 && (16 ... 31).contains(bytes[1]))
+                || (bytes[0] == 192 && bytes[1] == 168)
+                || (bytes[0] == 100 && (64 ... 127).contains(bytes[1]))
+                || (bytes[0] == 169 && bytes[1] == 254)
+        }
+        let literal = String(host.split(separator: "%", maxSplits: 1)[0])
+        var address = in6_addr()
+        guard literal.withCString({ inet_pton(AF_INET6, $0, &address) == 1 }) else { return false }
+        let bytes = withUnsafeBytes(of: address) { Array($0) }
+        return (bytes[0] & 0xFE) == 0xFC
+            || (bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80)
+            || (bytes.prefix(15).allSatisfy { $0 == 0 } && bytes[15] == 1) // ::1
+    }
+
     public init(connectionString: String, advancedPort: String? = nil) throws {
         let input = connectionString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty,

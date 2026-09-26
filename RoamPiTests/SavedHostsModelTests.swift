@@ -4,7 +4,7 @@ import RoamPiCore
 import Testing
 
 private actor FixtureHostProbe: SSHProbeTransporting {
-    enum Behavior { case firstUse, changedKey, rejectedKey, unreachable }
+    enum Behavior { case firstUse, changedKey, rejectedKey, unreachable, dnsFailed, refused, timedOut }
     let behavior: Behavior
     private var trusted = false
     private(set) var probeCount = 0
@@ -15,7 +15,7 @@ private actor FixtureHostProbe: SSHProbeTransporting {
     }
 
     func publicKey() -> String {
-        "ssh-ed25519 fixture-key"
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID+Maw0JeWy6XvYHfWMiYG1Tb7mXd9SkWyKiWXSwjVA5"
     }
 
     func runProbe(endpoint _: RemoteEndpoint, mode _: SSHAuthenticationMode) throws -> ProbeResult {
@@ -29,6 +29,12 @@ private actor FixtureHostProbe: SSHProbeTransporting {
             throw TransportError.diagnostic(.authenticationFailed)
         case .unreachable:
             throw TransportError.diagnostic(.connectionFailed)
+        case .dnsFailed:
+            throw TransportError.diagnostic(.dnsFailed)
+        case .refused:
+            throw TransportError.diagnostic(.connectionRefused)
+        case .timedOut:
+            throw TransportError.diagnostic(.timedOut)
         default:
             return ProbeResult(elapsedMilliseconds: 1, authentication: .publicKey)
         }
@@ -107,7 +113,14 @@ struct SavedHostsModelTests {
 
     @Test("Host-key change, rejected key, and offline host never launch or overwrite trust")
     func failureStates() async throws {
-        for behavior in [FixtureHostProbe.Behavior.changedKey, .rejectedKey, .unreachable] {
+        for behavior in [
+            FixtureHostProbe.Behavior.changedKey,
+            .rejectedKey,
+            .unreachable,
+            .dnsFailed,
+            .refused,
+            .timedOut,
+        ] {
             let (store, directory) = try fixture()
             defer { try? FileManager.default.removeItem(at: directory) }
             let probe = FixtureHostProbe(behavior)
@@ -134,6 +147,57 @@ struct SavedHostsModelTests {
             #expect(model.activeProfile == nil)
             #expect(await probe.trustCount == 0)
         }
+    }
+
+    @Test("A private route failure offers optional route help, not an authorization command")
+    func privateRouteHelp() async throws {
+        let (store, directory) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let model = SavedHostsModel(store: store, host: RemoteHost(probe: FixtureHostProbe(.timedOut)))
+        #expect(await model.save(
+            existing: nil, name: "Private", connection: "me@100.64.0.1", port: "2222",
+            directory: "/work", session: "pi"
+        ) == nil)
+        let profile = try #require(model.profiles.first)
+        model.check(profile)
+        await awaitState(model) {
+            if case .failed = $0 {
+                true
+            } else {
+                false
+            }
+        }
+        #expect(model.failedDiagnostic == .timedOut)
+        #expect(model.offersPrivateRouteHelp)
+        model.cancelCheck()
+        #expect(!model.offersPrivateRouteHelp)
+    }
+
+    @Test("A rejected device key offers a command only when the public key loads")
+    func keyAuthorizationHelp() async throws {
+        let (store, directory) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let model = SavedHostsModel(store: store, host: RemoteHost(probe: FixtureHostProbe(.rejectedKey)))
+        model.load()
+        for _ in 0 ..< 100 where model.setupCommand == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.setupCommand?.contains("authorized_keys") == true)
+        #expect(await model.save(
+            existing: nil, name: "Host", connection: "me@host.example", port: "",
+            directory: "/work", session: "pi"
+        ) == nil)
+        try model.check(#require(model.profiles.first))
+        await awaitState(model) {
+            if case .failed = $0 {
+                true
+            } else {
+                false
+            }
+        }
+        #expect(model.failedDiagnostic == .authenticationFailed)
+        #expect(!model.offersPrivateRouteHelp)
+        #expect(model.activeProfile == nil)
     }
 
     @Test("Back is unavailable while a terminal connection or reconnect is in flight")

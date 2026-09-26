@@ -208,6 +208,8 @@ struct TransportFoundationTests {
             .cancelled,
             .commandFailed,
             .connectionFailed,
+            .connectionRefused,
+            .dnsFailed,
             .duplicateProbe,
             .hostKeyChanged,
             .invalidEndpoint,
