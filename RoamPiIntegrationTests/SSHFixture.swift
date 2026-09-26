@@ -134,6 +134,24 @@ final class SSHFixture: @unchecked Sendable {
         )
     }
 
+    /// Installs a harmless Node-backed Pi stand-in for the production terminal
+    /// launcher. It echoes input and never reads provider credentials.
+    func installTerminalPiStub() throws {
+        let bin = root.appendingPathComponent("stubbin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        guard let node = Self.locateExecutable("node") else {
+            throw FixtureError.prerequisitesMissing("Node is unavailable on this host")
+        }
+        let script = bin.appendingPathComponent("pi")
+        let body = """
+        #!/bin/sh
+        exec \(ShellQuoting.quote(node)) -e 'process.stdout.write("ready\\n"); process.stdin.on("data", d => process.stdout.write(d))'
+
+        """
+        try Data(body.utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    }
+
     /// An RPC transport whose remote command runs the fixture stub directly,
     /// so the framing test does not depend on the remote login PATH.
     func makeRPCTransport(
