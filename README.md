@@ -121,9 +121,10 @@ xcodegen generate
 
 Review the generated diff before committing it.
 
-## Release records
+## Product plan and release records
 
+- [GitHub Issues](https://github.com/HemSoft/roampi/issues) own tasks, acceptance criteria, and status. The [first POC milestone](https://github.com/HemSoft/roampi/milestone/1) has the ordered path to a real remote Pi session.
+- [`docs/PRODUCT_DIRECTION.md`](docs/PRODUCT_DIRECTION.md) keeps durable product decisions separate from the work tracker. [`TODO.md`](TODO.md) is only a pointer for old links.
 - [`CHANGELOG.md`](CHANGELOG.md) records user-visible and developer-experience changes.
-- [`docs/APP_STORE.md`](docs/APP_STORE.md) tracks TestFlight and App Store readiness.
+- [`docs/APP_STORE.md`](docs/APP_STORE.md) holds release boundaries and links to the owning issues, not a second checklist.
 - [`PRIVACY.md`](PRIVACY.md) states the current data-handling baseline.
-- [`TODO.md`](TODO.md) contains the product phases and open technical proofs.

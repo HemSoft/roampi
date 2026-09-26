@@ -2,7 +2,7 @@
 
 ## Project
 
-RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. Read `TODO.md` before making architectural or security decisions.
+RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and Linux machines. Read [product direction](docs/PRODUCT_DIRECTION.md) and the relevant architecture/security documents before changing those boundaries. Use [GitHub Issues](https://github.com/HemSoft/roampi/issues), not `TODO.md`, for task status and acceptance criteria.
 
 ## First-release architecture
 
@@ -36,6 +36,12 @@ RoamPi is an iPhone and iPad client for Pi sessions running on remote macOS and 
 - Keep production tests independent of the live tailnet. Use a disposable SSH fixture for protocol tests.
 - Cover reconnection, host-key changes, PTY resizing, tmux attachment, RPC framing, and secret redaction with tests.
 
-## Current priority
+## Plan of attack
 
-Phase 0 in `TODO.md` is complete. Preserve route-neutral standard SSH, with Tailscale as an optional route. Define the versioned `.roampi` contract before building dashboard configuration or action execution.
+The [first POC milestone](https://github.com/HemSoft/roampi/milestone/1) and its ordered `poc/` labels are the live plan. Aim for a simple terminal connection to an already prepared, user-authorized host. SSH, Node, tmux, Pi, and Pi login are ready on that host. Do not make remote installation, the optional extension bridge, native RPC conversation screens, tailnet discovery, or TestFlight prerequisites for this proof.
+
+1. [#14](https://github.com/HemSoft/roampi/issues/14): finish saved-host Pi terminal and same-process reconnect. Require an authorized disposable-host smoke on a signed physical device, including a harmless prompt; simulator or earlier transport proofs cannot replace it. Keep an unmerged PR open if that gate fails.
+2. [#15](https://github.com/HemSoft/roampi/issues/15): guide reachability, independent host-key verification, and one-time device-key authorization. An already authorized host should go straight to connection.
+3. [#19](https://github.com/HemSoft/roampi/issues/19): let the user choose a project and existing tmux Pi session instead of memorizing a name. Prove the complete flow and reconnect on a signed physical device.
+
+[#40](https://github.com/HemSoft/roampi/issues/40) retires the old checklist independently. The versioned `.roampi` contract is already defined in [remote configuration](docs/ROAMPI_CONFIGURATION.md); do not redo it as a POC prerequisite. Everything labeled `after-poc` is deferred unless the live issues change. Before starting work, re-read the milestone, selected issue, linked PRs, and review gates. GitHub state wins over this orientation text if the sequence or status changes.
