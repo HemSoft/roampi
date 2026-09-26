@@ -131,7 +131,7 @@ final class TransportProofUITests: XCTestCase {
         let messages = [
             "The SSH connection failed. Check the network route and remote SSH availability.",
             "The harmless probe did not return the expected result.",
-            "The SSH probe timed out. Check the host and try again.",
+            "The SSH check timed out. Check the network route or selected port and retry.",
         ]
         let stopped = app.staticTexts.matching(NSPredicate(format: "label IN %@", messages)).firstMatch
         XCTAssertTrue(stopped.waitForExistence(timeout: 40))
@@ -240,7 +240,7 @@ final class TransportProofUITests: XCTestCase {
         let stoppedMessages = [
             "The SSH connection failed. Check the network route and remote SSH availability.",
             "The harmless probe did not return the expected result.",
-            "The SSH probe timed out. Check the host and try again.",
+            "The SSH check timed out. Check the network route or selected port and retry.",
         ]
         let stopped = app.staticTexts.matching(
             NSPredicate(format: "label IN %@", stoppedMessages)
