@@ -2479,6 +2479,19 @@ struct PaneProcessIdentityTests {
         #expect(collector.creationIdentifier == "create-1")
     }
 
+    @Test("Pane identity accepts the longest validated Pi project path")
+    func acceptsMaximumPiPath() throws {
+        let directory = try #require(RemoteWorkingDirectory("/" + String(repeating: "a", count: 255)))
+        let startCommand = SSHPTYTransport.reportedStartCommand(
+            for: PiTerminalCommand.start(workingDirectory: directory)
+        )
+        let collector = PaneProcessIDCollector()
+        collector.feed(Data("12345|node|\(startCommand)|creation-id\n".utf8))
+        #expect(collector.isComplete)
+        #expect(!collector.failed)
+        #expect(collector.paneStartCommand == startCommand)
+    }
+
     @Test("Pane PID collection rejects oversized output immediately")
     func rejectsOversizedOutput() {
         let collector = PaneProcessIDCollector()

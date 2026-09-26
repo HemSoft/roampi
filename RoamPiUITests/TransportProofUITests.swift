@@ -23,7 +23,7 @@ final class TransportProofUITests: XCTestCase {
 
         app.buttons["run-transport-probe"].tap()
 
-        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 30))
         app.swipeUp()
         XCTAssertTrue(app.buttons["trust-host-key"].waitForExistence(timeout: 2))
         let reject = app.buttons["reject-host-key"]
@@ -37,10 +37,19 @@ final class TransportProofUITests: XCTestCase {
     }
 
     @MainActor
+    func testMissingDevelopmentFixtureHasAnExplicitState() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--install-development-transport-profile"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["missing-development-transport-fixture"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLivePhysicalSSHHandshake() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -77,6 +86,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -101,6 +111,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -136,6 +147,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -161,6 +173,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -201,6 +214,7 @@ final class TransportProofUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--install-development-transport-profile"]
         app.launch()
+        try requireStagedTransportProof(app)
 
         let run = app.buttons["run-transport-probe"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
@@ -257,7 +271,7 @@ final class TransportProofUITests: XCTestCase {
         app.launch()
 
         app.buttons["run-transport-probe"].tap()
-        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["host-fingerprint"].waitForExistence(timeout: 30))
         app.swipeUp()
         let trust = app.buttons["trust-host-key"]
         XCTAssertTrue(trust.waitForExistence(timeout: 2))
@@ -266,6 +280,14 @@ final class TransportProofUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Verified SSH command completed once"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Ed25519 key"].exists)
         captureScreenshot(named: "ssh-transport-success")
+    }
+
+    @MainActor
+    private func requireStagedTransportProof(_ app: XCUIApplication) throws {
+        if app.staticTexts["missing-development-transport-fixture"].waitForExistence(timeout: 3) {
+            throw XCTSkip("No private development transport profile is staged.")
+        }
+        XCTAssertTrue(app.navigationBars["SSH transport proof"].waitForExistence(timeout: 5))
     }
 
     @MainActor

@@ -471,7 +471,9 @@ final class SSHPTYTransport: @unchecked Sendable, TerminalTransport {
 
 /// Collects one strictly bounded decimal pane process ID from an exec channel.
 final class PaneProcessIDCollector: @unchecked Sendable {
-    private static let maxResponseBytes = 192
+    // The reported launcher includes the validated project path (up to 256
+    // bytes) plus tmux's quoting, the pane PID, executable and creation UUID.
+    private static let maxResponseBytes = 1024
     private static let whitespace = CharacterSet(charactersIn: " \t\r\n")
 
     private let lock = NSLock()
@@ -578,7 +580,7 @@ final class PaneProcessIDCollector: @unchecked Sendable {
               !command.isEmpty,
               command.utf8.count <= 32,
               !startCommand.isEmpty,
-              startCommand.utf8.count <= 128,
+              startCommand.utf8.count <= 768,
               creationIdentifier.utf8.count <= 64
         else {
             return nil

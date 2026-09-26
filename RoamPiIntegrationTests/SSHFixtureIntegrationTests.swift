@@ -68,6 +68,40 @@ struct SSHFixtureIntegrationTests {
         try await fixture.killSession(name: sessionName)
     }
 
+    @Test("Production Pi launcher attaches, exchanges input, and reconnects to its Node pane")
+    func productionPiLauncherReconnects() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.stop() }
+        try fixture.installTerminalPiStub()
+
+        let sessionName = fixture.sessionName("pi-launcher")
+        let output = LockedTerminalOutput()
+        let session = try TerminalSession(
+            endpoint: fixture.endpoint,
+            sessionName: #require(TmuxSessionName(sessionName)),
+            workingDirectory: #require(RemoteWorkingDirectory(fixture.workDirectory.path)),
+            credentials: fixture.credentials
+        )
+        session.onOutput = { output.append($0) }
+        try await session.start()
+        #expect(session.phase == .attached)
+        guard session.phase == .attached else { return }
+        let firstPID = try await #require(fixture.paneProcessID(sessionName: sessionName))
+        try await session.send(Data("harmless fixture input\n".utf8))
+        for _ in 0 ..< 40 where !output.text.contains("harmless fixture input") {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(output.text.contains("harmless fixture input"))
+        try await session.detach()
+        try await session.reconnect()
+        #expect(session.phase == .attached)
+        #expect(session.lastProcessIdentityUnchanged == true)
+        #expect(try await fixture.paneProcessID(sessionName: sessionName) == firstPID)
+        #expect(try await fixture.tmuxSessionCount(name: sessionName) == 1)
+        try await session.close()
+        try await fixture.killSession(name: sessionName)
+    }
+
     @Test("Reconnect attaches the same tmux session without creating a duplicate")
     func reconnectSameSessionNoDuplicate() async throws {
         let fixture = try makeFixture()
