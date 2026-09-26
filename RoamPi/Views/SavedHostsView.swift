@@ -313,8 +313,10 @@ struct SavedHostsView: View {
         case let .fingerprint(fingerprint):
             Section("Confirm host identity") {
                 if let profile = model.selectedProfile {
-                    Text("\(profile.endpoint.host), port \(profile.endpoint.port)")
-                        .accessibilityIdentifier("selected-ssh-endpoint")
+                    Text(
+                        "Account \(profile.endpoint.username) on \(profile.endpoint.host), port \(profile.endpoint.port)"
+                    )
+                    .accessibilityIdentifier("selected-ssh-endpoint")
                 }
                 Text(fingerprint).font(.body.monospaced()).textSelection(.enabled)
                     .accessibilityIdentifier("saved-host-fingerprint")
@@ -340,8 +342,10 @@ struct SavedHostsView: View {
         case let .failed(message):
             Section("Next step") {
                 if let profile = model.selectedProfile {
-                    Text("\(profile.endpoint.host), port \(profile.endpoint.port)")
-                        .accessibilityIdentifier("selected-ssh-endpoint")
+                    Text(
+                        "Account \(profile.endpoint.username) on \(profile.endpoint.host), port \(profile.endpoint.port)"
+                    )
+                    .accessibilityIdentifier("selected-ssh-endpoint")
                 }
                 Label(message, systemImage: "xmark.octagon").foregroundStyle(.red)
                     .accessibilityIdentifier("saved-host-error")

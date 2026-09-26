@@ -22,7 +22,7 @@ public struct AuthorizedKeySetup: Equatable, Sendable {
 
         let key = ShellQuoting.quote(publicKey)
         command = """
-        umask 077; mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh" && touch "$HOME/.ssh/authorized_keys" && chmod 600 "$HOME/.ssh/authorized_keys" && { grep -Fqx -- \(key) "$HOME/.ssh/authorized_keys" || printf '%s\\n' \(key) >> "$HOME/.ssh/authorized_keys"; }
+        umask 077; mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh" && touch "$HOME/.ssh/authorized_keys" && chmod 600 "$HOME/.ssh/authorized_keys" && { grep -Fqx -- \(key) "$HOME/.ssh/authorized_keys" || { if [ -s "$HOME/.ssh/authorized_keys" ] && ! tail -c 1 "$HOME/.ssh/authorized_keys" | grep -qx ''; then printf '\\n' >> "$HOME/.ssh/authorized_keys"; fi; printf '%s\\n' \(key) >> "$HOME/.ssh/authorized_keys"; }; }
         """
     }
 }

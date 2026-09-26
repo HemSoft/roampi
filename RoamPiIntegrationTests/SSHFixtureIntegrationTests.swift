@@ -73,7 +73,8 @@ struct SSHFixtureIntegrationTests {
         let fixture = try makeFixture()
         defer { fixture.stop() }
         let authorized = fixture.root.appendingPathComponent(".ssh/authorized_keys")
-        try Data().write(to: authorized)
+        let otherKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID+Maw0JeWy6XvYHfWMiYG1Tb7mXd9SkWyKiWXSwjVA5"
+        try Data(otherKey.utf8).write(to: authorized) // Existing valid key has no final LF.
         let transport = SSHSessionTransport(credentials: fixture.credentials)
         do {
             let connection = try await transport.connect(endpoint: fixture.endpoint, mode: .standardKey)
@@ -97,7 +98,7 @@ struct SSHFixtureIntegrationTests {
         let connection = try await transport.connect(endpoint: fixture.endpoint, mode: .standardKey)
         await connection.close()
         #expect(try String(contentsOf: authorized, encoding: .utf8)
-            == fixture.clientPublicKeyForAuthorizedKeys + "\n")
+            == otherKey + "\n" + fixture.clientPublicKeyForAuthorizedKeys + "\n")
     }
 
     @Test("Production Pi launcher attaches, exchanges input, and reconnects to its Node pane")

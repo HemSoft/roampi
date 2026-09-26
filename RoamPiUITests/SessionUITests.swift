@@ -106,6 +106,10 @@ final class SessionUITests: XCTestCase {
             .firstMatch.tap()
         let fingerprint = app.staticTexts["saved-host-fingerprint"]
         XCTAssertTrue(fingerprint.waitForExistence(timeout: 10))
+        XCTAssertEqual(
+            app.staticTexts["selected-ssh-endpoint"].label,
+            "Account operator on studio.example, port 22"
+        )
         XCTAssertFalse(app.buttons["trust-saved-host"].isEnabled)
         captureScreenshot(named: "onboarding-fingerprint")
         app.buttons["reject-saved-host"].tap()
@@ -120,11 +124,20 @@ final class SessionUITests: XCTestCase {
         app.buttons["trust-saved-host"].tap()
         let command = app.staticTexts["authorized-key-command"]
         XCTAssertTrue(command.waitForExistence(timeout: 10))
+        XCTAssertEqual(
+            app.staticTexts["selected-ssh-endpoint"].label,
+            "Account operator on studio.example, port 22"
+        )
         XCTAssertTrue(command.label.contains("authorized_keys"))
         XCTAssertFalse(app.buttons["launch-saved-terminal"].exists)
-        app.buttons["copy-authorized-key-command"].tap()
         captureScreenshot(named: "onboarding-command-text")
         app.swipeUp()
+        let copy = app.buttons["copy-authorized-key-command"]
+        if !copy.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        copy.tap()
         let retry = app.buttons["retry-saved-host"]
         if !retry.exists {
             app.swipeUp()

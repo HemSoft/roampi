@@ -2631,7 +2631,7 @@ struct SSHOnboardingTests {
         let command = try #require(AuthorizedKeySetup(publicKey: validKey)).command
         let authorized = home.appendingPathComponent(".ssh/authorized_keys")
         #expect(!FileManager.default.fileExists(atPath: authorized.path))
-        for _ in 0 ..< 2 {
+        func runReviewedStep() throws {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/sh")
             process.arguments = ["-c", command]
@@ -2642,7 +2642,18 @@ struct SSHOnboardingTests {
             process.waitUntilExit()
             #expect(process.terminationStatus == 0)
         }
+        try runReviewedStep()
+        try runReviewedStep()
         #expect(try String(contentsOf: authorized, encoding: .utf8) == validKey + "\n")
+        try Data("other authorized key without final LF".utf8).write(to: authorized)
+        try runReviewedStep()
+        try runReviewedStep()
+        #expect(try String(contentsOf: authorized, encoding: .utf8)
+            == "other authorized key without final LF\n" + validKey + "\n")
+        try Data("other authorized key with final LF\n".utf8).write(to: authorized)
+        try runReviewedStep()
+        #expect(try String(contentsOf: authorized, encoding: .utf8)
+            == "other authorized key with final LF\n" + validKey + "\n")
         let ssh = try FileManager.default.attributesOfItem(atPath: home.appendingPathComponent(".ssh").path)
         let keys = try FileManager.default.attributesOfItem(atPath: authorized.path)
         #expect((ssh[.posixPermissions] as? NSNumber)?.intValue == 0o700)
